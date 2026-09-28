@@ -12,5 +12,9 @@ fn main() -> Result<()> {
     for global in tvert_wayland::globals()? {
         println!("{global}");
     }
+
+    for output in tvert_wayland::outputs()? {
+        println!("{output}");
+    }
     Ok(())
 }

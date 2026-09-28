@@ -1,7 +1,13 @@
-use std::fmt::Display;
+mod output;
+
+use crate::output::{Output, OutputData, OutputId, OutputState, PhysicalSize};
+use std::{collections::HashMap, fmt::Display};
 use wayland_client::{
-    ConnectError, Connection, Dispatch, DispatchError,
-    protocol::wl_registry::{Event, WlRegistry},
+    ConnectError, Connection, Dispatch, DispatchError, Proxy, WEnum,
+    protocol::{
+        wl_output::{Event as OutputEvent, Mode, WlOutput},
+        wl_registry::{Event, WlRegistry},
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +29,8 @@ pub enum Error {
 #[derive(Debug, Default)]
 struct State {
     globals: Vec<Global>,
+    output_states: HashMap<OutputId, OutputState>,
+    outputs: HashMap<OutputId, Output>,
 }
 
 /// Returns the globals currently advertised by the Wayland compositor.
@@ -48,14 +56,36 @@ pub fn globals() -> Result<Vec<Global>, Error> {
     Ok(state.globals)
 }
 
+/// Returns the outputs currently advertised by the Wayland compositor.
+///
+/// # Errors
+///
+/// Returns an error if connecting to or communicating with the Wayland
+/// compositor fails.
+pub fn outputs() -> Result<Vec<Output>, Error> {
+    let connection = Connection::connect_to_env()?;
+    let mut event_queue = connection.new_event_queue();
+    let queue_handle = event_queue.handle();
+
+    let display = connection.display();
+    let _registry = display.get_registry(&queue_handle, ());
+
+    let mut state = State::default();
+
+    event_queue.roundtrip(&mut state)?;
+    event_queue.roundtrip(&mut state)?;
+
+    Ok(state.outputs.into_values().collect())
+}
+
 impl Dispatch<WlRegistry, ()> for State {
     fn event(
         state: &mut Self,
-        _proxy: &WlRegistry,
+        registry: &WlRegistry,
         event: <WlRegistry as wayland_client::Proxy>::Event,
         _data: &(),
         _conn: &wayland_client::Connection,
-        _qhandle: &wayland_client::QueueHandle<Self>,
+        qh: &wayland_client::QueueHandle<Self>,
     ) {
         match event {
             Event::Global {
@@ -65,12 +95,76 @@ impl Dispatch<WlRegistry, ()> for State {
             } => {
                 state.globals.push(Global {
                     name,
-                    interface,
+                    interface: interface.clone(),
                     version,
                 });
+
+                if interface == WlOutput::interface().name {
+                    let id = OutputId(name);
+                    let proxy = registry.bind(name, version.min(4), qh, OutputData { id });
+                    state.output_states.insert(id, OutputState::new(proxy));
+                }
             }
             Event::GlobalRemove { name } => {
+                let id = OutputId(name);
+
                 state.globals.retain(|global| global.name != name);
+                state.output_states.remove(&id);
+                state.outputs.remove(&id);
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<WlOutput, OutputData> for State {
+    fn event(
+        state: &mut Self,
+        _output: &WlOutput,
+        event: <WlOutput as Proxy>::Event,
+        data: &OutputData,
+        _conn: &Connection,
+        _qh: &wayland_client::QueueHandle<Self>,
+    ) {
+        let Some(output) = state.output_states.get_mut(&data.id) else {
+            return;
+        };
+
+        match event {
+            OutputEvent::Name { name } => {
+                output.name = Some(name);
+            }
+            OutputEvent::Scale { factor } => {
+                output.scale = factor;
+            }
+            OutputEvent::Mode {
+                flags,
+                width,
+                height,
+                ..
+            } => {
+                let WEnum::Value(flags) = flags else {
+                    return;
+                };
+
+                if !flags.contains(Mode::Current) {
+                    return;
+                }
+
+                let Ok(width) = u32::try_from(width) else {
+                    return;
+                };
+
+                let Ok(height) = u32::try_from(height) else {
+                    return;
+                };
+
+                output.size = Some(PhysicalSize { width, height });
+            }
+            OutputEvent::Done => {
+                if let Some(snapshot) = output.snapshot(data.id) {
+                    state.outputs.insert(data.id, snapshot);
+                }
             }
             _ => {}
         }
@@ -80,5 +174,11 @@ impl Dispatch<WlRegistry, ()> for State {
 impl Display for Global {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {} v{}", self.name, self.interface, self.version)
+    }
+}
+
+impl Display for Output {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {} scale {}", self.name, self.size, self.scale)
     }
 }

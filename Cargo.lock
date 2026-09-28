@@ -364,7 +364,6 @@ name = "tvert"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
- "thiserror",
  "tracing",
  "tracing-subscriber",
 ]
@@ -372,6 +371,10 @@ dependencies = [
 [[package]]
 name = "tvert-wayland"
 version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "tracing",
+]
 
 [[package]]
 name = "unicode-ident"

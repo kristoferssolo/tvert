@@ -14,13 +14,10 @@ impl Wayland {
     /// Obtain `output_id` from this instance's [`Self::outputs`] method.
     ///
     /// # Errors
-    ///
-    /// Returns [`Error::MissingGlobal`] if the output capture source manager
-    /// was not discovered.
-    ///
-    /// Returns [`Error::UnknownOutput`] if the output is no longer tracked.
-    ///
-    /// Returns [`Error::Dispatch`] if communicating with the compositor fails.
+    /// Returns
+    /// - [`Error::MissingGlobal`] if the output capture source manager was not discovered;
+    /// - [`Error::UnknownOutput`] if the output is no longer tracked;
+    /// - [`Error::Dispatch`] if communicating with the compositor fails.
     pub fn create_output_source(&mut self, output_id: OutputId) -> Result<(), Error> {
         let Some(manager) = self.state.output_capture_source_manager.as_ref() else {
             return Err(Error::MissingGlobal {

@@ -1,0 +1,28 @@
+use crate::OutputId;
+use wayland_client::{ConnectError, DispatchError};
+
+/// An error connecting to or communicating with the Wayland compositor
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("failed to connect to the Wayland compositor")]
+    Connect(#[from] ConnectError),
+
+    #[error("failed to dispatch Wayland events")]
+    Dispatch(#[from] DispatchError),
+
+    /// A required protocol global was not discovered
+    #[error("required Wayland global is unavailable: {interface}")]
+    MissingGlobal { interface: &'static str },
+
+    /// The output is not present in this connection's tracked outputs
+    #[error("unknown Wayland output: {0:?}")]
+    UnknownOutput(OutputId),
+
+    /// The compositor rejected or aborted the screencopy frame
+    #[error("the compositor failed to prepare the screencopy frame")]
+    ScreencopyFailed,
+
+    /// The frame does not advertise a shared-memory buffer
+    #[error("the screencopy frame does not support SHM buffers")]
+    ScreencopyShmUnavailable,
+}

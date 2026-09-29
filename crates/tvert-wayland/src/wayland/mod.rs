@@ -1,7 +1,9 @@
 mod capture;
 mod dispatch;
+mod screencopy;
 
 use crate::{Error, Global, Output, State};
+pub use screencopy::ScreencopyState;
 use tracing::debug;
 use wayland_client::{Connection, EventQueue};
 use wayland_protocols::ext::image_capture_source::v1::client::ext_image_capture_source_v1::ExtImageCaptureSourceV1;
@@ -18,10 +20,9 @@ impl Wayland {
     /// Connects to the compositor and discovers globals and initial output metadata.
     ///
     /// # Errors
-    ///
-    /// Returns [`Error::Connect`] if the connection cannot be established.
-    ///
-    /// Returns [`Error::Dispatch`] if dispatching the initial events fails.
+    /// Returns
+    /// - [`Error::Connect`] if the connection cannot be established;
+    /// - [`Error::Dispatch`] if dispatching the initial events fails.
     pub fn connect() -> Result<Self, Error> {
         let connection = Connection::connect_to_env()?;
         let event_queue = connection.new_event_queue();

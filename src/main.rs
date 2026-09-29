@@ -28,7 +28,7 @@ fn main() -> Result<ExitCode> {
         .finish()
         .try_init()?;
 
-    let wayland = Wayland::connect()?;
+    let mut wayland = Wayland::connect()?;
 
     for global in wayland.globals() {
         println!("{global}");
@@ -49,7 +49,18 @@ fn main() -> Result<ExitCode> {
     debug!(
         ?output_id,
         output_name = %args.output,
-        "selected output");
+        "selected output"
+    );
+
+    let requirements = wayland.prepare_output_capture(output_id)?;
+
+    debug!(
+        format = ?requirements.format,
+        width = requirements.width,
+        height = requirements.height,
+        stride = requirements.stride,
+        "received screencopy SHM requirements"
+    );
 
     Ok(ExitCode::SUCCESS)
 }

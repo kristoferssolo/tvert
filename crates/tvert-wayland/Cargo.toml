@@ -8,7 +8,9 @@ license.workspace = true
 [dependencies]
 thiserror.workspace = true
 tracing.workspace = true
+
 wayland-client.workspace = true
+wayland-protocols-wlr.workspace = true
 wayland-protocols.workspace = true
 
 [lints]

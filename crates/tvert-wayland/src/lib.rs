@@ -3,6 +3,7 @@ mod wayland;
 
 pub use crate::output::{Output, OutputId, PhysicalSize};
 pub use wayland::Wayland;
+use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 use crate::output::OutputState;
 use std::{collections::HashMap, fmt::Display};
@@ -47,6 +48,7 @@ struct State {
     shm: Option<WlShm>,
     output_capture_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
     capture_manager: Option<ExtImageCopyCaptureManagerV1>,
+    screencopy_manager: Option<ZwlrScreencopyManagerV1>,
 }
 
 impl Display for Global {

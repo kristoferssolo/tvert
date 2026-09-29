@@ -1,5 +1,5 @@
 use tracing::debug;
-use wayland_client::Proxy;
+use wayland_client::{Proxy, delegate_noop};
 use wayland_protocols::ext::image_capture_source::v1::client::{
     ext_image_capture_source_v1::ExtImageCaptureSourceV1,
     ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
@@ -46,4 +46,4 @@ impl Wayland {
     }
 }
 
-wayland_client::delegate_noop!(State: ignore ExtImageCaptureSourceV1);
+delegate_noop!(State: ignore ExtImageCaptureSourceV1);

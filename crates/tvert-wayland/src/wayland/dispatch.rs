@@ -4,7 +4,7 @@ use crate::{
 };
 use tracing::debug;
 use wayland_client::{
-    Connection, Dispatch, Proxy, WEnum,
+    Connection, Dispatch, Proxy, WEnum, delegate_noop,
     protocol::{
         wl_output::{Event as OutputEvent, Mode, WlOutput},
         wl_registry::{Event, WlRegistry},
@@ -15,6 +15,7 @@ use wayland_protocols::ext::{
     image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
     image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
 };
+use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
 
 impl Dispatch<WlRegistry, ()> for State {
     fn event(
@@ -64,6 +65,14 @@ impl Dispatch<WlRegistry, ()> for State {
                         return;
                     }
                     state.capture_manager = Some(registry.bind(name, 1, qh, ()));
+                    return;
+                }
+
+                if interface == ZwlrScreencopyManagerV1::interface().name {
+                    if state.screencopy_manager.is_some() {
+                        return;
+                    }
+                    state.screencopy_manager = Some(registry.bind(name, version.min(3), qh, ()));
                 }
             }
             Event::GlobalRemove { name } => {
@@ -147,10 +156,6 @@ impl Dispatch<WlShm, ()> for State {
     }
 }
 
-wayland_client::delegate_noop!(
-    State: ignore ExtOutputImageCaptureSourceManagerV1
-);
-
-wayland_client::delegate_noop!(
-    State: ignore ExtImageCopyCaptureManagerV1
-);
+delegate_noop!(State: ignore ExtImageCopyCaptureManagerV1);
+delegate_noop!(State: ignore ExtOutputImageCaptureSourceManagerV1);
+delegate_noop!(State: ignore ZwlrScreencopyManagerV1);

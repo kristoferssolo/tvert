@@ -36,7 +36,7 @@ pub enum Error {
 
     /// The output is not present in this connection's tracked outputs
     #[error("unknown Wayland output: {0:?}")]
-    UnknownOuput(OutputId),
+    UnknownOutput(OutputId),
 }
 
 #[derive(Debug, Default)]

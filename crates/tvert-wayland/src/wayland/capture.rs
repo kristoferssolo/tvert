@@ -29,7 +29,7 @@ impl Wayland {
         };
 
         let Some(output) = self.state.output_states.get(&output_id) else {
-            return Err(Error::UnknownOuput(output_id));
+            return Err(Error::UnknownOutput(output_id));
         };
 
         let queue_handle = self.event_queue.handle();

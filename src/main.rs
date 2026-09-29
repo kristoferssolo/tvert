@@ -19,7 +19,7 @@ fn main() -> Result<ExitCode> {
             if error.use_stderr() {
                 return Ok(ExitCode::from(2));
             }
-            return Ok(ExitCode::from(2));
+            return Ok(ExitCode::SUCCESS);
         }
     };
 

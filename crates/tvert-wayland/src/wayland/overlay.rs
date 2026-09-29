@@ -31,10 +31,17 @@ enum OverlayStatus {
 
 #[derive(Debug)]
 pub struct OverlayState {
+    output_id: OutputId,
     surface: WlSurface,
     layer_surface: ZwlrLayerSurfaceV1,
     viewport: WpViewport,
     status: OverlayStatus,
+}
+
+impl OverlayState {
+    pub const fn output_id(&self) -> OutputId {
+        self.output_id
+    }
 }
 
 impl Drop for OverlayState {
@@ -100,6 +107,7 @@ impl Wayland {
         layer_surface.set_keyboard_interactivity(KeyboardInteractivity::None);
 
         self.state.overlay = Some(OverlayState {
+            output_id,
             surface,
             layer_surface,
             viewport,

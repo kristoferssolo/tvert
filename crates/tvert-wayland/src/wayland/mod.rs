@@ -2,6 +2,7 @@ mod capture;
 mod dispatch;
 mod overlay;
 mod pixels;
+mod registry;
 mod screencopy;
 mod shm;
 
@@ -11,15 +12,13 @@ pub use screencopy::ScreencopyState;
 
 use crate::{Error, Global, Output, State};
 use tracing::debug;
-use wayland_client::{Connection, EventQueue};
-use wayland_protocols::ext::image_capture_source::v1::client::ext_image_capture_source_v1::ExtImageCaptureSourceV1;
+use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
 
 /// Owns the Wayland event queue and protocol state
 #[derive(Debug)]
 pub struct Wayland {
     event_queue: EventQueue<State>,
     state: State,
-    capture_source: Option<ExtImageCaptureSourceV1>,
 }
 
 impl Wayland {
@@ -31,19 +30,26 @@ impl Wayland {
     /// - [`Error::Dispatch`] if dispatching the initial events fails.
     pub fn connect() -> Result<Self, Error> {
         let connection = Connection::connect_to_env()?;
-        let event_queue = connection.new_event_queue();
+        let (globals, event_queue) = registry_queue_init::<State>(&connection)?;
         let queue_handle = event_queue.handle();
 
-        let display = connection.display();
-        let _registry = display.get_registry(&queue_handle, ());
-
-        let mut wayland = Self {
-            event_queue,
-            state: State::default(),
-            capture_source: None,
+        let mut state = State {
+            globals: globals
+                .contents()
+                .clone_list()
+                .into_iter()
+                .map(|global| Global {
+                    name: global.name,
+                    interface: global.interface,
+                    version: global.version,
+                })
+                .collect(),
+            ..Default::default()
         };
 
-        wayland.event_queue.roundtrip(&mut wayland.state)?;
+        state.bind_advertised_globals(globals.registry(), &queue_handle);
+
+        let mut wayland = Self { event_queue, state };
 
         wayland.event_queue.roundtrip(&mut wayland.state)?;
         debug!(

@@ -17,7 +17,10 @@ use wayland_client::protocol::{
 };
 use wayland_protocols::{
     ext::{
-        image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
+        image_capture_source::v1::client::{
+            ext_image_capture_source_v1::ExtImageCaptureSourceV1,
+            ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
+        },
         image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
     },
     wp::viewporter::client::wp_viewporter::WpViewporter,
@@ -38,6 +41,8 @@ pub struct Global {
 #[derive(Debug, Default)]
 struct State {
     globals: Vec<Global>,
+    bound_globals: HashMap<&'static str, u32>,
+
     output_states: HashMap<OutputId, OutputState>,
     outputs: HashMap<OutputId, Output>,
 
@@ -54,6 +59,7 @@ struct State {
     layer_shell: Option<ZwlrLayerShellV1>,
     overlay: Option<OverlayState>,
     viewporter: Option<WpViewporter>,
+    capture_source: Option<(OutputId, ExtImageCaptureSourceV1)>,
 }
 
 impl Display for Global {

@@ -31,6 +31,7 @@ enum ScreencopyStatus {
 
 #[derive(Debug, Default)]
 pub struct ScreencopyState {
+    output_id: Option<OutputId>,
     frame: Option<ZwlrScreencopyFrameV1>,
     buffer: Option<ShmRequirements>,
     shm_buffer: Option<ShmBuffer>,
@@ -185,6 +186,23 @@ impl Wayland {
                 }
             }
         }
+    }
+}
+
+impl ScreencopyState {
+    pub fn cancel_for_output(&mut self, output_id: OutputId) {
+        if self.output_id != Some(output_id) {
+            return;
+        }
+
+        self.output_id = None;
+        self.status = ScreencopyStatus::Failed;
+
+        if let Some(frame) = self.frame.take() {
+            frame.destroy();
+        }
+
+        drop(self.shm_buffer.take());
     }
 }
 

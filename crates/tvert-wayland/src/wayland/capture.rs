@@ -1,11 +1,10 @@
+use crate::{Error, OutputId, State, Wayland};
 use tracing::debug;
 use wayland_client::{Proxy, delegate_noop};
 use wayland_protocols::ext::image_capture_source::v1::client::{
     ext_image_capture_source_v1::ExtImageCaptureSourceV1,
     ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
 };
-
-use crate::{Error, OutputId, State, Wayland};
 
 impl Wayland {
     /// Creates and retains an image source for an output on this connection.
@@ -32,10 +31,14 @@ impl Wayland {
         let queue_handle = self.event_queue.handle();
         let source = manager.create_source(&output.proxy, &queue_handle, ());
 
-        if let Some(previous) = self.capture_source.replace(source) {
+        if let Some((_, previous)) = self.state.capture_source.replace((output_id, source)) {
             previous.destroy();
         }
         self.event_queue.roundtrip(&mut self.state)?;
+
+        if !self.state.output_states.contains_key(&output_id) {
+            return Err(Error::UnknownOutput(output_id));
+        }
 
         debug!(?output_id, "created output image capture source");
 

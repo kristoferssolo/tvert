@@ -1,14 +1,10 @@
-use crate::{
-    Global, OutputId, PhysicalSize, State,
-    output::{OutputData, OutputState},
-};
+use crate::{PhysicalSize, State, output::OutputData};
 use tracing::debug;
 use wayland_client::{
     Connection, Dispatch, Proxy, WEnum, delegate_noop,
     protocol::{
         wl_compositor::WlCompositor,
         wl_output::{Event as OutputEvent, Mode, WlOutput},
-        wl_registry::{Event, WlRegistry},
         wl_shm::{Event as ShmEvent, WlShm},
     },
 };
@@ -23,100 +19,6 @@ use wayland_protocols_wlr::{
     layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1,
     screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
-
-impl Dispatch<WlRegistry, ()> for State {
-    fn event(
-        state: &mut Self,
-        registry: &WlRegistry,
-        event: <WlRegistry as wayland_client::Proxy>::Event,
-        _data: &(),
-        _conn: &wayland_client::Connection,
-        qh: &wayland_client::QueueHandle<Self>,
-    ) {
-        match event {
-            Event::Global {
-                name,
-                interface,
-                version,
-            } => {
-                state.globals.push(Global {
-                    name,
-                    interface: interface.clone(),
-                    version,
-                });
-
-                if interface == WlOutput::interface().name {
-                    let id = OutputId(name);
-                    let proxy = registry.bind(name, version.min(4), qh, OutputData { id });
-                    state.output_states.insert(id, OutputState::new(proxy));
-                    return;
-                }
-                if interface == WlShm::interface().name {
-                    if state.shm.is_some() {
-                        return;
-                    }
-                    state.shm = Some(registry.bind(name, 1, qh, ()));
-                    return;
-                }
-
-                if interface == ExtOutputImageCaptureSourceManagerV1::interface().name {
-                    if state.output_capture_source_manager.is_some() {
-                        return;
-                    }
-                    state.output_capture_source_manager = Some(registry.bind(name, 1, qh, ()));
-                    return;
-                }
-
-                if interface == ExtImageCopyCaptureManagerV1::interface().name {
-                    if state.capture_manager.is_some() {
-                        return;
-                    }
-                    state.capture_manager = Some(registry.bind(name, 1, qh, ()));
-                    return;
-                }
-
-                if interface == ZwlrScreencopyManagerV1::interface().name {
-                    if state.screencopy_manager.is_some() {
-                        return;
-                    }
-                    state.screencopy_manager = Some(registry.bind(name, version.min(3), qh, ()));
-                    return;
-                }
-
-                if interface == WlCompositor::interface().name {
-                    if state.compositor.is_some() {
-                        return;
-                    }
-                    state.compositor = Some(registry.bind(name, version.min(4), qh, ()));
-                    return;
-                }
-
-                if interface == ZwlrLayerShellV1::interface().name {
-                    if state.layer_shell.is_some() {
-                        return;
-                    }
-                    state.layer_shell = Some(registry.bind(name, version.min(4), qh, ()));
-                    return;
-                }
-
-                if interface == WpViewporter::interface().name {
-                    if state.viewporter.is_some() {
-                        return;
-                    }
-                    state.viewporter = Some(registry.bind(name, 1, qh, ()));
-                }
-            }
-            Event::GlobalRemove { name } => {
-                let id = OutputId(name);
-
-                state.globals.retain(|global| global.name != name);
-                state.output_states.remove(&id);
-                state.outputs.remove(&id);
-            }
-            _ => {}
-        }
-    }
-}
 
 impl Dispatch<WlOutput, OutputData> for State {
     fn event(

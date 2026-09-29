@@ -1,5 +1,7 @@
 use crate::OutputId;
-use wayland_client::{ConnectError, DispatchError, WEnum, protocol::wl_shm::Format};
+use wayland_client::{
+    ConnectError, DispatchError, WEnum, globals::GlobalError, protocol::wl_shm::Format,
+};
 
 /// An error connecting to or communicating with the Wayland compositor
 #[derive(Debug, thiserror::Error)]
@@ -52,4 +54,8 @@ pub enum Error {
     /// The compositor closed the overlay before preparation completed
     #[error("the compositor closed the selection overlay")]
     OverlayClosed,
+
+    /// Initial registry discovery failed
+    #[error("failed to initialize the Wayland registry")]
+    RegistryInit(#[from] GlobalError),
 }

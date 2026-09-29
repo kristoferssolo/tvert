@@ -1,9 +1,11 @@
 mod capture;
 mod dispatch;
+mod overlay;
 mod pixels;
 mod screencopy;
 mod shm;
 
+pub use overlay::{OverlayConfigure, OverlayState};
 pub use pixels::CapturedImage;
 pub use screencopy::ScreencopyState;
 

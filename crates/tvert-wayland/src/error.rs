@@ -13,7 +13,6 @@ pub enum Error {
     /// A required protocol global was not discovered
     #[error("required Wayland global is unavailable: {interface}")]
     MissingGlobal { interface: &'static str },
-
     /// The output is not present in this connection's tracked outputs
     #[error("unknown Wayland output: {0:?}")]
     UnknownOutput(OutputId),
@@ -49,4 +48,8 @@ pub enum Error {
     /// The compositor returned flags this implementation cannot interpret
     #[error("unsupported screencopy flags: {0:#x}")]
     UnsupportedScreencopyFlags(u32),
+
+    /// The compositor closed the overlay before preparation completed
+    #[error("the compositor closed the selection overlay")]
+    OverlayClosed,
 }

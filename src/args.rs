@@ -12,12 +12,18 @@ pub struct Args {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     CaptureOutput {
-        /// Name of the output to select, such as DP-1
+        /// Output name, such as DP-1
         #[arg(value_name = "OUTPUT")]
         output: String,
 
         /// Destination PNG file. Must not already exist
         #[arg(value_name = "FILE")]
         path: PathBuf,
+    },
+    /// Check overlay configuration without displaying it.
+    ProbeOverlay {
+        /// Output name, such as DP-1.
+        #[arg(value_name = "OUTPUT")]
+        output: String,
     },
 }

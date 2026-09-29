@@ -6,7 +6,10 @@ pub use crate::output::{Output, OutputId, PhysicalSize};
 pub use error::Error;
 pub use wayland::{CapturedImage, Wayland};
 
-use crate::{output::OutputState, wayland::ScreencopyState};
+use crate::{
+    output::OutputState,
+    wayland::{OverlayState, ScreencopyState},
+};
 use std::{collections::HashMap, fmt::Display};
 use wayland_client::protocol::{
     wl_compositor::WlCompositor,
@@ -46,6 +49,7 @@ struct State {
 
     compositor: Option<WlCompositor>,
     layer_shell: Option<ZwlrLayerShellV1>,
+    overlay: Option<OverlayState>,
 }
 
 impl Display for Global {

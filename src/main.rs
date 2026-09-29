@@ -27,10 +27,9 @@ fn main() -> Result<ExitCode> {
         }
     };
 
-    let Command::CaptureOutput {
-        output: output_name,
-        path,
-    } = args.command;
+    let output_name = match &args.command {
+        Command::CaptureOutput { output, .. } | Command::ProbeOverlay { output } => output,
+    };
 
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
@@ -51,7 +50,7 @@ fn main() -> Result<ExitCode> {
 
     let output_id = wayland
         .outputs()
-        .find(|output| output.name == output_name)
+        .find(|output| output.name == output_name.as_ref())
         .map(|output| output.id)
         .ok_or_else(|| eyre!("output not found: {output_name}"))?;
 
@@ -71,8 +70,18 @@ fn main() -> Result<ExitCode> {
         "read captured output into RGBA image"
     );
 
-    save_png(&path, &image)?;
-    println!("Saved {}", path.display());
+    match args.command {
+        Command::CaptureOutput { path, .. } => {
+            let image = wayland.capture_output(output_id)?;
+            save_png(&path, &image)?;
+            println!("Saved {}", path.display());
+        }
+        Command::ProbeOverlay { .. } => {
+            let configure = wayland.prepare_overlay(output_id)?;
+
+            println!("Overlay configure: {configure} surface-local units");
+        }
+    }
 
     Ok(ExitCode::SUCCESS)
 }

@@ -6,6 +6,7 @@ use tracing::debug;
 use wayland_client::{
     Connection, Dispatch, Proxy, WEnum, delegate_noop,
     protocol::{
+        wl_compositor::WlCompositor,
         wl_output::{Event as OutputEvent, Mode, WlOutput},
         wl_registry::{Event, WlRegistry},
         wl_shm::{Event as ShmEvent, WlShm},
@@ -15,7 +16,10 @@ use wayland_protocols::ext::{
     image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
     image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
 };
-use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+use wayland_protocols_wlr::{
+    layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1,
+    screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
+};
 
 impl Dispatch<WlRegistry, ()> for State {
     fn event(
@@ -73,6 +77,21 @@ impl Dispatch<WlRegistry, ()> for State {
                         return;
                     }
                     state.screencopy_manager = Some(registry.bind(name, version.min(3), qh, ()));
+                }
+
+                if interface == WlCompositor::interface().name {
+                    if state.compositor.is_some() {
+                        return;
+                    }
+                    state.compositor = Some(registry.bind(name, version.min(4), qh, ()));
+                    return;
+                }
+
+                if interface == ZwlrLayerShellV1::interface().name {
+                    if state.layer_shell.is_some() {
+                        return;
+                    }
+                    state.layer_shell = Some(registry.bind(name, version.min(4), qh, ()));
                 }
             }
             Event::GlobalRemove { name } => {
@@ -166,4 +185,6 @@ impl Dispatch<WlShm, ()> for State {
 
 delegate_noop!(State: ignore ExtImageCopyCaptureManagerV1);
 delegate_noop!(State: ignore ExtOutputImageCaptureSourceManagerV1);
+delegate_noop!(State: ignore WlCompositor);
+delegate_noop!(State: ignore ZwlrLayerShellV1);
 delegate_noop!(State: ignore ZwlrScreencopyManagerV1);

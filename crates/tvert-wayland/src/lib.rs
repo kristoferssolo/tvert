@@ -8,12 +8,18 @@ pub use wayland::{CapturedImage, Wayland};
 
 use crate::{output::OutputState, wayland::ScreencopyState};
 use std::{collections::HashMap, fmt::Display};
-use wayland_client::protocol::wl_shm::{Format, WlShm};
+use wayland_client::protocol::{
+    wl_compositor::WlCompositor,
+    wl_shm::{Format, WlShm},
+};
 use wayland_protocols::ext::{
     image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
     image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
 };
-use wayland_protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1;
+use wayland_protocols_wlr::{
+    layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1,
+    screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
+};
 
 /// A global advertised by the Wayland compositor
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,10 +37,15 @@ struct State {
 
     shm: Option<WlShm>,
     shm_formats: Vec<Format>,
+
     output_capture_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
     capture_manager: Option<ExtImageCopyCaptureManagerV1>,
+
     screencopy_manager: Option<ZwlrScreencopyManagerV1>,
     screencopy: ScreencopyState,
+
+    compositor: Option<WlCompositor>,
+    layer_shell: Option<ZwlrLayerShellV1>,
 }
 
 impl Display for Global {

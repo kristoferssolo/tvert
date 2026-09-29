@@ -19,7 +19,7 @@ pub enum Error {
     UnknownOutput(OutputId),
 
     /// The compositor rejected or aborted the screencopy frame
-    #[error("the compositor failed to prepare the screencopy frame")]
+    #[error("the compositor failed to capture the frame")]
     ScreencopyFailed,
 
     /// The frame does not advertise a shared-memory buffer
@@ -37,4 +37,8 @@ pub enum Error {
     /// Creating or sizing the backing file failed
     #[error("failed to allocate the SHM backing file")]
     ShmIo(#[from] std::io::Error),
+
+    /// The retained frame is not in the state required for the operation
+    #[error("invalid screencopy frame state")]
+    InvalidScreencopyState,
 }

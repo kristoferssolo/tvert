@@ -1,10 +1,11 @@
 use crate::{Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
+use tracing::debug;
 use wayland_client::{
     Dispatch, Proxy, WEnum,
     protocol::wl_shm::{Format, WlShm},
 };
 use wayland_protocols_wlr::screencopy::v1::client::{
-    zwlr_screencopy_frame_v1::{Event, ZwlrScreencopyFrameV1},
+    zwlr_screencopy_frame_v1::{Event, Flags, ZwlrScreencopyFrameV1},
     zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
 
@@ -24,6 +25,8 @@ enum ScreencopyStatus {
     #[default]
     Pending,
     ReadyToCopy,
+    Copying,
+    Complete,
     Failed,
 }
 
@@ -33,6 +36,7 @@ pub struct ScreencopyState {
     buffer: Option<ShmRequirements>,
     shm_buffer: Option<ShmBuffer>,
     status: ScreencopyStatus,
+    flags: Option<WEnum<Flags>>,
 }
 
 impl Wayland {
@@ -111,6 +115,68 @@ impl Wayland {
                     return Ok(requirements);
                 }
                 ScreencopyStatus::Failed => return Err(Error::ScreencopyFailed),
+                ScreencopyStatus::Copying | ScreencopyStatus::Complete => {
+                    return Err(Error::InvalidScreencopyState);
+                }
+            }
+        }
+    }
+
+    /// Captures an output into an internally retained SHM buffer.
+    ///
+    /// Returns the buffer layout after the compositor confirms completion.
+    /// The pixels remain owned by this instance until another capture replaces
+    /// them or the instance is dropped.
+    ///
+    /// Obtain `output_id` from this instance's [`Self::outputs`] method.
+    /// The cursor is excluded.
+    ///
+    /// # Errors
+    /// Returns
+    /// - [`Error::MissingGlobal`] if a required protocol is unavailable, or [`Error::UnknownOutput`] if the output is no longer tracked;
+    /// - [`Error::ScreencopyShmUnavailable`], [`Error::UnsupportedShmFormat`], or [`Error::InvalidShmLayout`] if the advertised buffer requirements cannot be used;
+    /// - [`Error::ShmIo`] if allocating the backing file fails;
+    /// - [`Error::ScreencopyFailed`] if the compositor rejects or aborts capture, or [`Error::Dispatch`] if communication fails;
+    /// - [`Error::InvalidScreencopyState`] if the retained capture state is inconsistent.
+    pub fn capture_output(&mut self, output_id: OutputId) -> Result<ShmRequirements, Error> {
+        let requirements = self.prepare_output_capture(output_id)?;
+
+        let capture = &mut self.state.screencopy;
+
+        if capture.status != ScreencopyStatus::ReadyToCopy {
+            return Err(Error::InvalidScreencopyState);
+        }
+
+        let Some(frame) = capture.frame.as_ref() else {
+            return Err(Error::InvalidScreencopyState);
+        };
+
+        let Some(buffer) = capture.shm_buffer.as_ref() else {
+            return Err(Error::InvalidScreencopyState);
+        };
+
+        frame.copy(buffer.proxy());
+        capture.status = ScreencopyStatus::Copying;
+
+        loop {
+            match self.state.screencopy.status {
+                ScreencopyStatus::Copying => {
+                    self.event_queue.blocking_dispatch(&mut self.state)?;
+                }
+                ScreencopyStatus::Complete => {
+                    debug!(
+                        flags = ?self.state.screencopy.flags,
+                        "compositor completed screencopy"
+                    );
+
+                    return Ok(requirements);
+                }
+                ScreencopyStatus::Failed => {
+                    return Err(Error::ScreencopyFailed);
+                }
+                ScreencopyStatus::ReadyToCopy | ScreencopyStatus::Pending => {
+                    return Err(Error::InvalidScreencopyState);
+                }
             }
         }
     }
@@ -152,12 +218,24 @@ impl Dispatch<ZwlrScreencopyFrameV1, ()> for State {
             Event::BufferDone => {
                 capture.status = ScreencopyStatus::ReadyToCopy;
             }
+            Event::Flags { flags } => {
+                capture.flags = Some(flags);
+            }
+            Event::Ready { .. } => {
+                capture.status = ScreencopyStatus::Complete;
+
+                if let Some(frame) = capture.frame.take() {
+                    frame.destroy();
+                }
+            }
             Event::Failed => {
                 capture.status = ScreencopyStatus::Failed;
 
                 if let Some(frame) = capture.frame.take() {
                     frame.destroy();
                 }
+
+                drop(capture.shm_buffer.take());
             }
             _ => {}
         }

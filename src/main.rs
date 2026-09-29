@@ -52,14 +52,14 @@ fn main() -> Result<ExitCode> {
         "selected output"
     );
 
-    let requirements = wayland.prepare_output_capture(output_id)?;
+    let requirements = wayland.capture_output(output_id)?;
 
     debug!(
         format = ?requirements.format,
         width = requirements.width,
         height = requirements.height,
         stride = requirements.stride,
-        "allocated screencopy SHM buffer"
+        "captured output into SHM buffer"
     );
 
     Ok(ExitCode::SUCCESS)

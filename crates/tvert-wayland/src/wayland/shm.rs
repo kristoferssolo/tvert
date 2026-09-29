@@ -75,6 +75,10 @@ impl ShmBuffer {
             _file: file,
         })
     }
+
+    pub const fn proxy(&self) -> &WlBuffer {
+        &self.buffer
+    }
 }
 
 impl Drop for ShmBuffer {

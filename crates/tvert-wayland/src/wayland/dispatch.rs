@@ -12,9 +12,12 @@ use wayland_client::{
         wl_shm::{Event as ShmEvent, WlShm},
     },
 };
-use wayland_protocols::ext::{
-    image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
-    image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
+use wayland_protocols::{
+    ext::{
+        image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
+        image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
+    },
+    wp::viewporter::client::wp_viewporter::WpViewporter,
 };
 use wayland_protocols_wlr::{
     layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1,
@@ -77,6 +80,7 @@ impl Dispatch<WlRegistry, ()> for State {
                         return;
                     }
                     state.screencopy_manager = Some(registry.bind(name, version.min(3), qh, ()));
+                    return;
                 }
 
                 if interface == WlCompositor::interface().name {
@@ -92,6 +96,14 @@ impl Dispatch<WlRegistry, ()> for State {
                         return;
                     }
                     state.layer_shell = Some(registry.bind(name, version.min(4), qh, ()));
+                    return;
+                }
+
+                if interface == WpViewporter::interface().name {
+                    if state.viewporter.is_some() {
+                        return;
+                    }
+                    state.viewporter = Some(registry.bind(name, 1, qh, ()));
                 }
             }
             Event::GlobalRemove { name } => {
@@ -186,5 +198,6 @@ impl Dispatch<WlShm, ()> for State {
 delegate_noop!(State: ignore ExtImageCopyCaptureManagerV1);
 delegate_noop!(State: ignore ExtOutputImageCaptureSourceManagerV1);
 delegate_noop!(State: ignore WlCompositor);
+delegate_noop!(State: ignore WpViewporter);
 delegate_noop!(State: ignore ZwlrLayerShellV1);
 delegate_noop!(State: ignore ZwlrScreencopyManagerV1);

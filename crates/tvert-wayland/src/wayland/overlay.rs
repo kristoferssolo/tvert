@@ -5,6 +5,9 @@ use wayland_client::{
     Dispatch, Proxy, delegate_noop,
     protocol::{wl_compositor::WlCompositor, wl_surface::WlSurface},
 };
+use wayland_protocols::wp::viewporter::client::{
+    wp_viewport::WpViewport, wp_viewporter::WpViewporter,
+};
 use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
     zwlr_layer_surface_v1::{Anchor, Event, KeyboardInteractivity, ZwlrLayerSurfaceV1},
@@ -30,11 +33,13 @@ enum OverlayStatus {
 pub struct OverlayState {
     surface: WlSurface,
     layer_surface: ZwlrLayerSurfaceV1,
+    viewport: WpViewport,
     status: OverlayStatus,
 }
 
 impl Drop for OverlayState {
     fn drop(&mut self) {
+        self.viewport.destroy();
         self.layer_surface.destroy();
         self.surface.destroy();
     }
@@ -67,6 +72,12 @@ impl Wayland {
             });
         };
 
+        let Some(viewporter) = self.state.viewporter.as_ref() else {
+            return Err(Error::MissingGlobal {
+                interface: WpViewporter::interface().name,
+            });
+        };
+
         let Some(output) = self.state.output_states.get(&output_id) else {
             return Err(Error::UnknownOutput(output_id));
         };
@@ -81,6 +92,7 @@ impl Wayland {
             &queue_handle,
             (),
         );
+        let viewport = viewporter.get_viewport(&surface, &queue_handle, ());
 
         layer_surface.set_anchor(Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right);
         layer_surface.set_size(0, 0);
@@ -90,6 +102,7 @@ impl Wayland {
         self.state.overlay = Some(OverlayState {
             surface,
             layer_surface,
+            viewport,
             status: OverlayStatus::Waiting,
         });
 
@@ -153,6 +166,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
 }
 
 delegate_noop!(State: ignore WlSurface);
+delegate_noop!(State: ignore WpViewport);
 
 impl Display for SuggestedSurfaceSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -54,12 +54,7 @@ fn main() -> Result<ExitCode> {
         .map(|output| output.id)
         .ok_or_else(|| eyre!("output not found: {output_name}"))?;
 
-    debug!(
-        ?output_id,
-        output_name = %output_name,
-        ?output_name,
-        "selected output"
-    );
+    debug!(?output_id, ?output_name, "selected output");
 
     match args.command {
         Command::CaptureOutput { path, .. } => {

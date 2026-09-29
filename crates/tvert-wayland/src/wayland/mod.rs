@@ -5,7 +5,7 @@ mod pixels;
 mod screencopy;
 mod shm;
 
-pub use overlay::{OverlayState, SuggestedSurfaceSize};
+pub use overlay::OverlayState;
 pub use pixels::CapturedImage;
 pub use screencopy::ScreencopyState;
 
@@ -54,6 +54,7 @@ impl Wayland {
             screencopy_manager_bound = wayland.state.screencopy_manager.is_some(),
             compositor_bound = wayland.state.compositor.is_some(),
             layer_shell_bound = wayland.state.layer_shell.is_some(),
+            viewporter_bound = wayland.state.viewporter.is_some(),
             "capture global binding status"
         );
 

@@ -15,9 +15,12 @@ use wayland_client::protocol::{
     wl_compositor::WlCompositor,
     wl_shm::{Format, WlShm},
 };
-use wayland_protocols::ext::{
-    image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
-    image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
+use wayland_protocols::{
+    ext::{
+        image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
+        image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
+    },
+    wp::viewporter::client::wp_viewporter::WpViewporter,
 };
 use wayland_protocols_wlr::{
     layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1,
@@ -50,6 +53,7 @@ struct State {
     compositor: Option<WlCompositor>,
     layer_shell: Option<ZwlrLayerShellV1>,
     overlay: Option<OverlayState>,
+    viewporter: Option<WpViewporter>,
 }
 
 impl Display for Global {

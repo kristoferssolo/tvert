@@ -1,5 +1,4 @@
-use crate::{Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
-use tracing::debug;
+use crate::{CapturedImage, Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
 use wayland_client::{
     Dispatch, Proxy, WEnum,
     protocol::wl_shm::{Format, WlShm},
@@ -122,23 +121,22 @@ impl Wayland {
         }
     }
 
-    /// Captures an output into an internally retained SHM buffer.
+    /// Captures an output and returns an owned RGBA8 image.
     ///
-    /// Returns the buffer layout after the compositor confirms completion.
-    /// The pixels remain owned by this instance until another capture replaces
-    /// them or the instance is dropped.
+    /// Rows are ordered top-to-bottom without padding, and alpha is straight. The image remains
+    /// valid after another capture or after this instance is dropped.
     ///
-    /// Obtain `output_id` from this instance's [`Self::outputs`] method.
-    /// The cursor is excluded.
+    /// Obtain `output_id` from this instance's [`Self::outputs`] method. The cursor is excluded.
     ///
     /// # Errors
     /// Returns
     /// - [`Error::MissingGlobal`] if a required protocol is unavailable, or [`Error::UnknownOutput`] if the output is no longer tracked;
     /// - [`Error::ScreencopyShmUnavailable`], [`Error::UnsupportedShmFormat`], or [`Error::InvalidShmLayout`] if the advertised buffer requirements cannot be used;
-    /// - [`Error::ShmIo`] if allocating the backing file fails;
+    /// - [`Error::ImageAllocation`] if allocating image storage fails.
+    /// - [`Error::UnsupportedScreencopyFlags`] if the frame flags cannot be interpreted.
     /// - [`Error::ScreencopyFailed`] if the compositor rejects or aborts capture, or [`Error::Dispatch`] if communication fails;
     /// - [`Error::InvalidScreencopyState`] if the retained capture state is inconsistent.
-    pub fn capture_output(&mut self, output_id: OutputId) -> Result<ShmRequirements, Error> {
+    pub fn capture_output(&mut self, output_id: OutputId) -> Result<CapturedImage, Error> {
         let requirements = self.prepare_output_capture(output_id)?;
 
         let capture = &mut self.state.screencopy;
@@ -164,12 +162,20 @@ impl Wayland {
                     self.event_queue.blocking_dispatch(&mut self.state)?;
                 }
                 ScreencopyStatus::Complete => {
-                    debug!(
-                        flags = ?self.state.screencopy.flags,
-                        "compositor completed screencopy"
-                    );
+                    let flags = match self.state.screencopy.flags {
+                        Some(WEnum::Value(flags)) => flags,
+                        Some(WEnum::Unknown(bits)) => {
+                            return Err(Error::UnsupportedScreencopyFlags(bits));
+                        }
+                        None => return Err(Error::InvalidScreencopyState),
+                    };
+                    let y_inverted = flags.contains(Flags::YInvert);
 
-                    return Ok(requirements);
+                    let Some(buffer) = self.state.screencopy.shm_buffer.take() else {
+                        return Err(Error::InvalidScreencopyState);
+                    };
+
+                    return buffer.read_image(requirements, y_inverted);
                 }
                 ScreencopyStatus::Failed => {
                     return Err(Error::ScreencopyFailed);

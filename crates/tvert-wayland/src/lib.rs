@@ -4,7 +4,7 @@ mod wayland;
 
 pub use crate::output::{Output, OutputId, PhysicalSize};
 pub use error::Error;
-pub use wayland::Wayland;
+pub use wayland::{CapturedImage, Wayland};
 
 use crate::{output::OutputState, wayland::ScreencopyState};
 use std::{collections::HashMap, fmt::Display};

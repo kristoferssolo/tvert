@@ -52,14 +52,13 @@ fn main() -> Result<ExitCode> {
         "selected output"
     );
 
-    let requirements = wayland.capture_output(output_id)?;
+    let image = wayland.capture_output(output_id)?;
 
     debug!(
-        format = ?requirements.format,
-        width = requirements.width,
-        height = requirements.height,
-        stride = requirements.stride,
-        "captured output into SHM buffer"
+        width = image.width,
+        height = image.height,
+        bytes = image.rgba.len(),
+        "read captured output into RGBA image"
     );
 
     Ok(ExitCode::SUCCESS)

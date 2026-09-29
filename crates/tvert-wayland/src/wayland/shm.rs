@@ -1,3 +1,7 @@
+use crate::{
+    CapturedImage, Error, State,
+    wayland::{pixels, screencopy::ShmRequirements},
+};
 use rustix::fs::{MemfdFlags, memfd_create};
 use std::{fs::File, os::fd::AsFd};
 use wayland_client::{
@@ -9,13 +13,11 @@ use wayland_client::{
     },
 };
 
-use crate::{Error, State, wayland::screencopy::ShmRequirements};
-
 #[derive(Debug)]
 pub struct ShmBuffer {
     buffer: WlBuffer,
     // Retained for reading pixels after capture completes
-    _file: File,
+    file: File,
 }
 
 impl ShmBuffer {
@@ -70,14 +72,19 @@ impl ShmBuffer {
 
         pool.destroy();
 
-        Ok(Self {
-            buffer,
-            _file: file,
-        })
+        Ok(Self { buffer, file })
     }
 
     pub const fn proxy(&self) -> &WlBuffer {
         &self.buffer
+    }
+
+    pub fn read_image(
+        &self,
+        requirements: ShmRequirements,
+        y_inverted: bool,
+    ) -> Result<CapturedImage, Error> {
+        pixels::read_image(&self.file, requirements, y_inverted)
     }
 }
 

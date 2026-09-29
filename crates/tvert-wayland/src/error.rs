@@ -34,11 +34,19 @@ pub enum Error {
     #[error("unsupported SHM pixel format: {0:?}")]
     UnsupportedShmFormat(WEnum<Format>),
 
-    /// Creating or sizing the backing file failed
-    #[error("failed to allocate the SHM backing file")]
+    /// Creating, sizing, or reading the backing file failed
+    #[error("failed to access the SHM backing file")]
     ShmIo(#[from] std::io::Error),
 
     /// The retained frame is not in the state required for the operation
     #[error("invalid screencopy frame state")]
     InvalidScreencopyState,
+
+    /// Allocating storage for the captured image failed
+    #[error("failed to allocate captured image storage")]
+    ImageAllocation(#[from] std::collections::TryReserveError),
+
+    /// The compositor returned flags this implementation cannot interpret
+    #[error("unsupported screencopy flags: {0:#x}")]
+    UnsupportedScreencopyFlags(u32),
 }

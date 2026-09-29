@@ -1,10 +1,13 @@
 mod capture;
 mod dispatch;
+mod pixels;
 mod screencopy;
 mod shm;
 
-use crate::{Error, Global, Output, State};
+pub use pixels::CapturedImage;
 pub use screencopy::ScreencopyState;
+
+use crate::{Error, Global, Output, State};
 use tracing::debug;
 use wayland_client::{Connection, EventQueue};
 use wayland_protocols::ext::image_capture_source::v1::client::ext_image_capture_source_v1::ExtImageCaptureSourceV1;

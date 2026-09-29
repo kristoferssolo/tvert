@@ -1,6 +1,10 @@
 mod args;
+mod export;
 
-use crate::args::Args;
+use crate::{
+    args::{Args, Command},
+    export::save_png,
+};
 use clap::Parser;
 use color_eyre::{Result, eyre::eyre};
 use std::process::ExitCode;
@@ -23,6 +27,11 @@ fn main() -> Result<ExitCode> {
         }
     };
 
+    let Command::CaptureOutput {
+        output: output_name,
+        path,
+    } = args.command;
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .finish()
@@ -42,13 +51,14 @@ fn main() -> Result<ExitCode> {
 
     let output_id = wayland
         .outputs()
-        .find(|output| output.name == args.output)
+        .find(|output| output.name == output_name)
         .map(|output| output.id)
-        .ok_or_else(|| eyre!("output not found: {}", args.output))?;
+        .ok_or_else(|| eyre!("output not found: {output_name}"))?;
 
     debug!(
         ?output_id,
-        output_name = %args.output,
+        output_name = %output_name,
+        ?output_name,
         "selected output"
     );
 
@@ -60,6 +70,9 @@ fn main() -> Result<ExitCode> {
         bytes = image.rgba.len(),
         "read captured output into RGBA image"
     );
+
+    save_png(&path, &image)?;
+    println!("Saved {}", path.display());
 
     Ok(ExitCode::SUCCESS)
 }

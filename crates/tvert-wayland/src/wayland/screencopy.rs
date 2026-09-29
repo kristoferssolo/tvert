@@ -1,10 +1,12 @@
-use wayland_client::{Dispatch, Proxy, WEnum, protocol::wl_shm::Format};
+use crate::{Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
+use wayland_client::{
+    Dispatch, Proxy, WEnum,
+    protocol::wl_shm::{Format, WlShm},
+};
 use wayland_protocols_wlr::screencopy::v1::client::{
     zwlr_screencopy_frame_v1::{Event, ZwlrScreencopyFrameV1},
     zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
-
-use crate::{Error, OutputId, State, Wayland};
 
 /// SHM buffer requirements advertised for a screencopy frame
 #[derive(Debug, Clone, Copy)]
@@ -29,14 +31,15 @@ enum ScreencopyStatus {
 pub struct ScreencopyState {
     frame: Option<ZwlrScreencopyFrameV1>,
     buffer: Option<ShmRequirements>,
+    shm_buffer: Option<ShmBuffer>,
     status: ScreencopyStatus,
 }
 
 impl Wayland {
-    /// Prepares a screencopy frame and returns its SHM requirements.
+    /// Prepares a screencopy frame and allocates its SHM buffer.
     ///
-    /// Retains the frame for a subsequent copy request. Calling this again
-    /// destroys the previously retained frame.
+    /// Retains both objects for a subsequent copy request. Calling this again
+    /// destroys the previously retained frame and buffer.
     ///
     /// Obtain `output_id` from this instance's [`Self::outputs`] method.
     /// The cursor is excluded from the requested frame.
@@ -80,14 +83,32 @@ impl Wayland {
                     self.event_queue.blocking_dispatch(&mut self.state)?;
                 }
                 ScreencopyStatus::ReadyToCopy => {
-                    if let Some(buffer) = self.state.screencopy.buffer {
-                        return Ok(buffer);
+                    let Some(requirements) = self.state.screencopy.buffer else {
+                        if let Some(frame) = self.state.screencopy.frame.take() {
+                            frame.destroy();
+                        }
+                        return Err(Error::ScreencopyShmUnavailable);
+                    };
+
+                    let Some(shm) = self.state.shm.as_ref() else {
+                        return Err(Error::MissingGlobal {
+                            interface: WlShm::interface().name,
+                        });
+                    };
+
+                    let queue_handle = self.event_queue.handle();
+                    let buffer =
+                        ShmBuffer::new(shm, &self.state.shm_formats, requirements, &queue_handle)?;
+
+                    self.state.screencopy.shm_buffer = Some(buffer);
+
+                    self.event_queue.roundtrip(&mut self.state)?;
+
+                    if self.state.screencopy.status == ScreencopyStatus::Failed {
+                        return Err(Error::ScreencopyFailed);
                     }
 
-                    if let Some(frame) = self.state.screencopy.frame.take() {
-                        frame.destroy();
-                    }
-                    return Err(Error::ScreencopyShmUnavailable);
+                    return Ok(requirements);
                 }
                 ScreencopyStatus::Failed => return Err(Error::ScreencopyFailed),
             }

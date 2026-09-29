@@ -8,7 +8,7 @@ pub use wayland::Wayland;
 
 use crate::{output::OutputState, wayland::ScreencopyState};
 use std::{collections::HashMap, fmt::Display};
-use wayland_client::protocol::wl_shm::WlShm;
+use wayland_client::protocol::wl_shm::{Format, WlShm};
 use wayland_protocols::ext::{
     image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
     image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
@@ -30,6 +30,7 @@ struct State {
     outputs: HashMap<OutputId, Output>,
 
     shm: Option<WlShm>,
+    shm_formats: Vec<Format>,
     output_capture_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
     capture_manager: Option<ExtImageCopyCaptureManagerV1>,
     screencopy_manager: Option<ZwlrScreencopyManagerV1>,

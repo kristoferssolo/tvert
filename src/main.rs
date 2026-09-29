@@ -59,7 +59,7 @@ fn main() -> Result<ExitCode> {
         width = requirements.width,
         height = requirements.height,
         stride = requirements.stride,
-        "received screencopy SHM requirements"
+        "allocated screencopy SHM buffer"
     );
 
     Ok(ExitCode::SUCCESS)

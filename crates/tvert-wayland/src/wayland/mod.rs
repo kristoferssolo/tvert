@@ -1,6 +1,7 @@
 mod capture;
 mod dispatch;
 mod screencopy;
+mod shm;
 
 use crate::{Error, Global, Output, State};
 pub use screencopy::ScreencopyState;

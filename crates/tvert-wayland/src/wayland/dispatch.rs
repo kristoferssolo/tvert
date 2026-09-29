@@ -143,7 +143,7 @@ impl Dispatch<WlOutput, OutputData> for State {
 
 impl Dispatch<WlShm, ()> for State {
     fn event(
-        _state: &mut Self,
+        state: &mut Self,
         _proxy: &WlShm,
         event: <WlShm as Proxy>::Event,
         _data: &(),
@@ -152,6 +152,14 @@ impl Dispatch<WlShm, ()> for State {
     ) {
         if let ShmEvent::Format { format } = event {
             debug!(?format, "compositor advertised a wl_shm format");
+
+            let WEnum::Value(format) = format else {
+                return;
+            };
+
+            if !state.shm_formats.contains(&format) {
+                state.shm_formats.push(format);
+            }
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::OutputId;
-use wayland_client::{ConnectError, DispatchError};
+use wayland_client::{ConnectError, DispatchError, WEnum, protocol::wl_shm::Format};
 
 /// An error connecting to or communicating with the Wayland compositor
 #[derive(Debug, thiserror::Error)]
@@ -25,4 +25,16 @@ pub enum Error {
     /// The frame does not advertise a shared-memory buffer
     #[error("the screencopy frame does not support SHM buffers")]
     ScreencopyShmUnavailable,
+
+    /// The advertised SHM layout cannot be represented or is invalid
+    #[error("invalid or oversized SHM buffer layout")]
+    InvalidShmLayout,
+
+    /// The format is unsupported by Tvert or unavailable through `wl_shm`
+    #[error("unsupported SHM pixel format: {0:?}")]
+    UnsupportedShmFormat(WEnum<Format>),
+
+    /// Creating or sizing the backing file failed
+    #[error("failed to allocate the SHM backing file")]
+    ShmIo(#[from] std::io::Error),
 }

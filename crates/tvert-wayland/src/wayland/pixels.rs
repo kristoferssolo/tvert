@@ -113,3 +113,149 @@ fn unpremultiply(channel: u8, alpha: u8) -> Result<u8, Error> {
 
     u8::try_from(channel.min(255)).map_err(|_| Error::InvalidShmLayout)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::{assert_err, assert_matches, assert_ok};
+    use rstest::rstest;
+    use rustix::fs::{MemfdFlags, memfd_create};
+    use std::io::{ErrorKind, Write};
+
+    fn read_fixture(
+        bytes: &[u8],
+        requirements: ShmRequirements,
+        y_inverted: bool,
+    ) -> Result<CapturedImage, Error> {
+        let fd =
+            memfd_create(c"tvert-pixel-test", MemfdFlags::CLOEXEC).map_err(std::io::Error::from)?;
+
+        let mut file = File::from(fd);
+        file.write_all(bytes)?;
+
+        read_image(&file, requirements, y_inverted)
+    }
+
+    #[rstest]
+    #[case(Format::Argb8888, [30, 20, 10, 255])]
+    #[case(Format::Xrgb8888, [30, 20, 10, 0])]
+    #[case(Format::Abgr8888, [10, 20, 30, 255])]
+    #[case(Format::Xbgr8888, [10, 20, 30, 0])]
+    fn converts_supported_channel_orders(#[case] format: Format, #[case] bytes: [u8; 4]) {
+        let image = assert_ok!(read_fixture(
+            &bytes,
+            ShmRequirements {
+                format: WEnum::Value(format),
+                width: 1,
+                height: 1,
+                stride: 4,
+            },
+            false
+        ));
+        assert_eq!(image.rgba, [10, 20, 30, 255], "{format:?}");
+    }
+
+    #[test]
+    fn converts_premultiplied_alpha() {
+        let image = assert_ok!(read_fixture(
+            &[0, 32, 64, 128],
+            ShmRequirements {
+                format: WEnum::Value(Format::Argb8888),
+                width: 1,
+                height: 1,
+                stride: 4,
+            },
+            false,
+        ));
+        assert_eq!(image.rgba, [128, 64, 0, 128]);
+    }
+
+    #[test]
+    fn handles_fully_transparent_pixels() {
+        let image = assert_ok!(read_fixture(
+            &[0, 0, 0, 0],
+            ShmRequirements {
+                format: WEnum::Value(Format::Argb8888),
+                width: 1,
+                height: 1,
+                stride: 4,
+            },
+            false
+        ));
+        assert_eq!(image.rgba, [0, 0, 0, 0]);
+    }
+
+    #[rstest]
+    #[case(false, [255, 0, 0, 255, 0, 0, 255, 255])]
+    #[case(true, [0, 0, 255, 255, 255, 0, 0, 255])]
+    fn skips_padding_and_normalizes_row_order(#[case] y_inverted: bool, #[case] expected: [u8; 8]) {
+        let bytes = [0, 0, 255, 0, 99, 98, 97, 96, 255, 0, 0, 0, 95, 94, 93, 92];
+
+        let image = assert_ok!(read_fixture(
+            &bytes,
+            ShmRequirements {
+                format: WEnum::Value(Format::Xrgb8888),
+                width: 1,
+                height: 2,
+                stride: 8,
+            },
+            y_inverted,
+        ));
+
+        assert_eq!(image.width.get(), 1);
+        assert_eq!(image.height.get(), 2);
+        assert_eq!(image.rgba, expected, "y_inverted={y_inverted}");
+    }
+
+    #[rstest]
+    #[case(0, 1)]
+    #[case(1, 0)]
+    fn rejects_zero_dimensions(#[case] width: u32, #[case] height: u32) {
+        let error = assert_err!(read_fixture(
+            &[],
+            ShmRequirements {
+                format: WEnum::Value(Format::Xrgb8888),
+                width,
+                height,
+                stride: 4,
+            },
+            false,
+        ));
+        assert_matches!(error, Error::InvalidShmLayout);
+    }
+
+    #[test]
+    fn rejects_stride_smaller_than_a_row() {
+        let error = assert_err!(read_fixture(
+            &[],
+            ShmRequirements {
+                format: WEnum::Value(Format::Xrgb8888),
+                width: 2,
+                height: 1,
+                stride: 4,
+            },
+            false,
+        ));
+
+        assert_matches!(error, Error::InvalidShmLayout);
+    }
+
+    #[test]
+    fn reports_truncated_backing_storage() {
+        let result = assert_err!(read_fixture(
+            &[0, 0, 0, 255],
+            ShmRequirements {
+                format: WEnum::Value(Format::Xrgb8888),
+                width: 1,
+                height: 2,
+                stride: 4,
+            },
+            false,
+        ));
+
+        assert_matches!(
+            result,
+            Error::ShmIo(error) if error.kind() == ErrorKind::UnexpectedEof
+        );
+    }
+}

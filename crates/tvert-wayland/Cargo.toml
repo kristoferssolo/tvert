@@ -14,5 +14,9 @@ wayland-client.workspace = true
 wayland-protocols-wlr.workspace = true
 wayland-protocols.workspace = true
 
+[dev-dependencies]
+claims.workspace = true
+rstest.workspace = true
+
 [lints]
 workspace = true

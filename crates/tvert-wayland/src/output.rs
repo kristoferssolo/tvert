@@ -25,7 +25,6 @@ pub struct OutputData {
 
 #[derive(Debug, Clone)]
 pub struct OutputState {
-    #[expect(dead_code, reason = "retained for output capture")]
     pub proxy: WlOutput,
     pub name: Option<String>,
     pub size: Option<PhysicalSize>,

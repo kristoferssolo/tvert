@@ -1,14 +1,17 @@
+mod capture;
 mod dispatch;
 
 use crate::{Error, Global, Output, State};
 use tracing::debug;
 use wayland_client::{Connection, EventQueue};
+use wayland_protocols::ext::image_capture_source::v1::client::ext_image_capture_source_v1::ExtImageCaptureSourceV1;
 
 /// Owns the Wayland event queue and protocol state
 #[derive(Debug)]
 pub struct Wayland {
     event_queue: EventQueue<State>,
     state: State,
+    capture_source: Option<ExtImageCaptureSourceV1>,
 }
 
 impl Wayland {
@@ -30,6 +33,7 @@ impl Wayland {
         let mut wayland = Self {
             event_queue,
             state: State::default(),
+            capture_source: None,
         };
 
         wayland.event_queue.roundtrip(&mut wayland.state)?;

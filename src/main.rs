@@ -1,4 +1,4 @@
-use color_eyre::Result;
+use color_eyre::{Result, eyre::eyre};
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 use tvert_wayland::Wayland;
 
@@ -10,7 +10,7 @@ fn main() -> Result<()> {
         .finish()
         .try_init()?;
 
-    let wayland = Wayland::connect()?;
+    let mut wayland = Wayland::connect()?;
 
     for global in wayland.globals() {
         println!("{global}");
@@ -21,5 +21,18 @@ fn main() -> Result<()> {
     for output in wayland.outputs() {
         println!("{output}");
     }
+
+    let output_name = std::env::args()
+        .nth(1)
+        .ok_or_else(|| eyre!("usage: tvert <output-name>"))?;
+
+    let output_id = wayland
+        .outputs()
+        .find(|output| output.name == output_name)
+        .map(|output| output.id)
+        .ok_or_else(|| eyre!("output not found: {output_name}"))?;
+
+    wayland.create_output_source(output_id)?;
+
     Ok(())
 }

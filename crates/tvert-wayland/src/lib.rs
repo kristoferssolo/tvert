@@ -12,6 +12,7 @@ use wayland_protocols::ext::{
     image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
 };
 
+/// A global advertised by the Wayland compositor
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Global {
     pub name: u32,
@@ -19,6 +20,7 @@ pub struct Global {
     pub version: u32,
 }
 
+/// An error connecting to or communicating with the Wayland compositor
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("failed to connect to the Wayland compositor")]
@@ -26,6 +28,14 @@ pub enum Error {
 
     #[error("failed to dispatch Wayland events")]
     Dispatch(#[from] DispatchError),
+
+    /// A required protocol global was not discovered
+    #[error("required Wayland global is unavailable: {interface}")]
+    MissingGlobal { interface: &'static str },
+
+    /// The output is not present in this connection's tracked outputs
+    #[error("unknown Wayland output: {0:?}")]
+    UnknownOuput(OutputId),
 }
 
 #[derive(Debug, Default)]

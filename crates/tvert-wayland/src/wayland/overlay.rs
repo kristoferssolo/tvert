@@ -10,11 +10,11 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{Anchor, Event, KeyboardInteractivity, ZwlrLayerSurfaceV1},
 };
 
-/// Dimensions suggested by the compositor, in surface-local coordinates.
+/// Suggested dimensions in surface-local coordinates.
 ///
 /// A zero dimension means the client must choose that dimension.
 #[derive(Debug, Clone, Copy)]
-pub struct OverlayConfigure {
+pub struct SuggestedSurfaceSize {
     pub width: u32,
     pub height: u32,
 }
@@ -22,7 +22,7 @@ pub struct OverlayConfigure {
 #[derive(Debug, Clone, Copy)]
 enum OverlayStatus {
     Waiting,
-    Configured(OverlayConfigure),
+    Configured(SuggestedSurfaceSize),
     Closed,
 }
 
@@ -54,7 +54,7 @@ impl Wayland {
     /// - [`Error::UnknownOutput`] if the output is no longer tracked.
     /// - [`Error::OverlayClosed`] if the compositor closes the overlay.
     /// - [`Error::Dispatch`] if communicating with the compositor fails.
-    pub fn prepare_overlay(&mut self, output_id: OutputId) -> Result<OverlayConfigure, Error> {
+    pub fn prepare_overlay(&mut self, output_id: OutputId) -> Result<SuggestedSurfaceSize, Error> {
         let Some(compositor) = self.state.compositor.as_ref() else {
             return Err(Error::MissingGlobal {
                 interface: WlCompositor::interface().name,
@@ -142,7 +142,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
                 height,
             } => {
                 layer_surface.ack_configure(serial);
-                overlay.status = OverlayStatus::Configured(OverlayConfigure { width, height });
+                overlay.status = OverlayStatus::Configured(SuggestedSurfaceSize { width, height });
             }
             Event::Closed => {
                 overlay.status = OverlayStatus::Closed;
@@ -154,7 +154,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
 
 delegate_noop!(State: ignore WlSurface);
 
-impl Display for OverlayConfigure {
+impl Display for SuggestedSurfaceSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}x{}", self.width, self.height)
     }

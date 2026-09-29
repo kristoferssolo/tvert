@@ -61,15 +61,6 @@ fn main() -> Result<ExitCode> {
         "selected output"
     );
 
-    let image = wayland.capture_output(output_id)?;
-
-    debug!(
-        width = image.width,
-        height = image.height,
-        bytes = image.rgba.len(),
-        "read captured output into RGBA image"
-    );
-
     match args.command {
         Command::CaptureOutput { path, .. } => {
             let image = wayland.capture_output(output_id)?;

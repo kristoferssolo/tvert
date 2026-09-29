@@ -1,10 +1,11 @@
 mod output;
 
-use crate::output::{Output, OutputData, OutputId, OutputState, PhysicalSize};
+pub use crate::output::{Output, OutputId, PhysicalSize};
+use crate::output::{OutputData, OutputState};
 use std::{collections::HashMap, fmt::Display};
 use tracing::debug;
 use wayland_client::{
-    ConnectError, Connection, Dispatch, DispatchError, Proxy, WEnum,
+    ConnectError, Connection, Dispatch, DispatchError, EventQueue, Proxy, WEnum,
     protocol::{
         wl_output::{Event as OutputEvent, Mode, WlOutput},
         wl_registry::{Event, WlRegistry},
@@ -43,56 +44,55 @@ struct State {
     capture_manager: Option<ExtImageCopyCaptureManagerV1>,
 }
 
-/// Returns the globals currently advertised by the Wayland compositor.
-///
-/// # Errors
-///
-/// Returns [`Error::Connect`] if a connection to the Wayland compositor cannot
-/// be established.
-///
-/// Returns [`Error::Dispatch`] if dispatching the initial Wayland events fails.
-pub fn globals() -> Result<Vec<Global>, Error> {
-    let connection = Connection::connect_to_env()?;
-    let mut event_queue = connection.new_event_queue();
-    let queue_handle = event_queue.handle();
-
-    let display = connection.display();
-    let _registry = display.get_registry(&queue_handle, ());
-
-    let mut state = State::default();
-
-    event_queue.roundtrip(&mut state)?;
-
-    Ok(state.globals)
+#[derive(Debug)]
+pub struct Wayland {
+    event_queue: EventQueue<State>,
+    state: State,
 }
 
-/// Returns the outputs currently advertised by the Wayland compositor.
-///
-/// # Errors
-///
-/// Returns an error if connecting to or communicating with the Wayland
-/// compositor fails.
-pub fn outputs() -> Result<Vec<Output>, Error> {
-    let connection = Connection::connect_to_env()?;
-    let mut event_queue = connection.new_event_queue();
-    let queue_handle = event_queue.handle();
+impl Wayland {
+    /// Connects to the compositor and discovers globals and initial output metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Connect`] if the connection cannot be established.
+    ///
+    /// Returns [`Error::Dispatch`] if dispatching the initial events fails.
+    pub fn connect() -> Result<Self, Error> {
+        let connection = Connection::connect_to_env()?;
+        let event_queue = connection.new_event_queue();
+        let queue_handle = event_queue.handle();
 
-    let display = connection.display();
-    let _registry = display.get_registry(&queue_handle, ());
+        let display = connection.display();
+        let _registry = display.get_registry(&queue_handle, ());
 
-    let mut state = State::default();
+        let mut wayland = Self {
+            event_queue,
+            state: State::default(),
+        };
 
-    event_queue.roundtrip(&mut state)?;
-    event_queue.roundtrip(&mut state)?;
+        wayland.event_queue.roundtrip(&mut wayland.state)?;
 
-    debug!(
-        shm_bound = state.shm.is_some(),
-        output_capture_source_manager_bound = state.output_capture_source_manager.is_some(),
-        capture_manager_bound = state.capture_manager.is_some(),
-        "capture global binding status"
-    );
+        wayland.event_queue.roundtrip(&mut wayland.state)?;
+        debug!(
+            shm_bound = wayland.state.shm.is_some(),
+            output_capture_source_manager_bound =
+                wayland.state.output_capture_source_manager.is_some(),
+            capture_manager_bound = wayland.state.capture_manager.is_some(),
+            "capture global binding status"
+        );
 
-    Ok(state.outputs.into_values().collect())
+        Ok(wayland)
+    }
+
+    #[must_use]
+    pub fn globals(&self) -> &[Global] {
+        &self.state.globals
+    }
+
+    pub fn outputs(&self) -> impl Iterator<Item = &Output> {
+        self.state.outputs.values()
+    }
 }
 
 impl Dispatch<WlRegistry, ()> for State {

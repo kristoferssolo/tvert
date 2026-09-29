@@ -1,5 +1,6 @@
 use color_eyre::Result;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
+use tvert_wayland::Wayland;
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -9,11 +10,15 @@ fn main() -> Result<()> {
         .finish()
         .try_init()?;
 
-    for global in tvert_wayland::globals()? {
+    let wayland = Wayland::connect()?;
+
+    for global in wayland.globals() {
         println!("{global}");
     }
 
-    for output in tvert_wayland::outputs()? {
+    println!(" ");
+
+    for output in wayland.outputs() {
         println!("{output}");
     }
     Ok(())

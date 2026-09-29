@@ -17,12 +17,8 @@ use tvert_wayland::CapturedImage;
 /// Returns an error if the image layout is invalid, the destination cannot
 /// be created, or encoding or writing fails.
 pub fn save_png(path: &Path, image: &CapturedImage) -> Result<()> {
-    if image.width == 0 || image.height == 0 {
-        bail!("cannot encode an image with zero dimenstions");
-    }
-
-    let width = usize::try_from(image.width)?;
-    let height = usize::try_from(image.height)?;
+    let width = usize::try_from(image.width.get())?;
+    let height = usize::try_from(image.height.get())?;
     let expected_len = width
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(4))
@@ -39,7 +35,7 @@ pub fn save_png(path: &Path, image: &CapturedImage) -> Result<()> {
         File::create_new(path).wrap_err_with(|| format!("failed to create {}", path.display()))?;
     let mut output = BufWriter::new(file);
 
-    let mut encoder = Encoder::new(&mut output, image.width, image.height);
+    let mut encoder = Encoder::new(&mut output, image.width.get(), image.height.get());
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
 

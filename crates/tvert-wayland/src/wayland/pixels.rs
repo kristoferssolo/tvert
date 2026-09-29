@@ -1,5 +1,5 @@
 use crate::{Error, wayland::screencopy::ShmRequirements};
-use std::{fs::File, os::unix::fs::FileExt};
+use std::{fs::File, num::NonZeroU32, os::unix::fs::FileExt};
 use wayland_client::{WEnum, protocol::wl_shm::Format};
 
 /// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
@@ -7,8 +7,8 @@ use wayland_client::{WEnum, protocol::wl_shm::Format};
 /// Alpha is straight, not premultiplied.
 #[derive(Debug)]
 pub struct CapturedImage {
-    pub width: u32,
-    pub height: u32,
+    pub width: NonZeroU32,
+    pub height: NonZeroU32,
     /// Consecutive red, green, blue, and alpha bytes, without row padding
     pub rgba: Vec<u8>,
 }
@@ -25,33 +25,29 @@ pub fn read_image(
         other => return Err(Error::UnsupportedShmFormat(other)),
     };
 
-    if requirements.width == 0 || requirements.height == 0 {
-        return Err(Error::InvalidShmLayout);
-    }
+    let width = NonZeroU32::new(requirements.width).ok_or(Error::InvalidShmLayout)?;
+    let height = NonZeroU32::new(requirements.height).ok_or(Error::InvalidShmLayout)?;
 
-    let row_bytes = requirements
-        .width
-        .checked_mul(4)
-        .ok_or(Error::InvalidShmLayout)?;
+    let row_bytes = width.get().checked_mul(4).ok_or(Error::InvalidShmLayout)?;
 
     if requirements.stride < row_bytes {
         return Err(Error::InvalidShmLayout);
     }
 
     let row_bytes = usize::try_from(row_bytes).map_err(|_| Error::InvalidShmLayout)?;
-    let height = usize::try_from(requirements.height).map_err(|_| Error::InvalidShmLayout)?;
+    let row_count = usize::try_from(height.get()).map_err(|_| Error::InvalidShmLayout)?;
     let byte_len = row_bytes
-        .checked_mul(height)
+        .checked_mul(row_count)
         .ok_or(Error::InvalidShmLayout)?;
 
     let mut rgba = Vec::new();
     rgba.try_reserve_exact(byte_len)?;
     rgba.resize(byte_len, 0);
 
-    for (mut source_row, row) in (0..requirements.height).zip(rgba.chunks_exact_mut(row_bytes)) {
+    for (mut source_row, row) in (0..height.get()).zip(rgba.chunks_exact_mut(row_bytes)) {
         if y_inverted {
-            source_row = requirements
-                .height
+            source_row = height
+                .get()
                 .checked_sub(1)
                 .and_then(|last| last.checked_sub(source_row))
                 .ok_or(Error::InvalidShmLayout)?;
@@ -70,8 +66,8 @@ pub fn read_image(
     }
 
     Ok(CapturedImage {
-        width: requirements.width,
-        height: requirements.height,
+        width,
+        height,
         rgba,
     })
 }

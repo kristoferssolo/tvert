@@ -56,3 +56,9 @@ impl Display for PhysicalSize {
         write!(f, "{}x{}", self.width, self.height)
     }
 }
+
+impl Display for Output {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {} scale {}", self.name, self.size, self.scale)
+    }
+}

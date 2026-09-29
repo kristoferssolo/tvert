@@ -14,9 +14,9 @@ tvert-wayland = { path = "crates/tvert-wayland" }
 color-eyre = "0.6.5"
 thiserror = "2"
 tracing = "0.1"
-tracing-subscriber = "0.3"
 
 wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
 [workspace.lints.clippy]
 pedantic = { level = "deny", priority = -1 }
@@ -47,7 +47,7 @@ tvert-wayland.workspace = true
 
 color-eyre.workspace = true
 tracing.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [lints]
 workspace = true

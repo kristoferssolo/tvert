@@ -2,12 +2,18 @@ mod output;
 
 use crate::output::{Output, OutputData, OutputId, OutputState, PhysicalSize};
 use std::{collections::HashMap, fmt::Display};
+use tracing::debug;
 use wayland_client::{
     ConnectError, Connection, Dispatch, DispatchError, Proxy, WEnum,
     protocol::{
         wl_output::{Event as OutputEvent, Mode, WlOutput},
         wl_registry::{Event, WlRegistry},
+        wl_shm::{Event as ShmEvent, WlShm},
     },
+};
+use wayland_protocols::ext::{
+    image_capture_source::v1::client::ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
+    image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +37,10 @@ struct State {
     globals: Vec<Global>,
     output_states: HashMap<OutputId, OutputState>,
     outputs: HashMap<OutputId, Output>,
+
+    shm: Option<WlShm>,
+    output_capture_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
+    capture_manager: Option<ExtImageCopyCaptureManagerV1>,
 }
 
 /// Returns the globals currently advertised by the Wayland compositor.
@@ -75,6 +85,13 @@ pub fn outputs() -> Result<Vec<Output>, Error> {
     event_queue.roundtrip(&mut state)?;
     event_queue.roundtrip(&mut state)?;
 
+    debug!(
+        shm_bound = state.shm.is_some(),
+        output_capture_source_manager_bound = state.output_capture_source_manager.is_some(),
+        capture_manager_bound = state.capture_manager.is_some(),
+        "capture global binding status"
+    );
+
     Ok(state.outputs.into_values().collect())
 }
 
@@ -103,6 +120,29 @@ impl Dispatch<WlRegistry, ()> for State {
                     let id = OutputId(name);
                     let proxy = registry.bind(name, version.min(4), qh, OutputData { id });
                     state.output_states.insert(id, OutputState::new(proxy));
+                    return;
+                }
+                if interface == WlShm::interface().name {
+                    if state.shm.is_some() {
+                        return;
+                    }
+                    state.shm = Some(registry.bind(name, 1, qh, ()));
+                    return;
+                }
+
+                if interface == ExtOutputImageCaptureSourceManagerV1::interface().name {
+                    if state.output_capture_source_manager.is_some() {
+                        return;
+                    }
+                    state.output_capture_source_manager = Some(registry.bind(name, 1, qh, ()));
+                    return;
+                }
+
+                if interface == ExtImageCopyCaptureManagerV1::interface().name {
+                    if state.capture_manager.is_some() {
+                        return;
+                    }
+                    state.capture_manager = Some(registry.bind(name, 1, qh, ()));
                 }
             }
             Event::GlobalRemove { name } => {
@@ -170,6 +210,29 @@ impl Dispatch<WlOutput, OutputData> for State {
         }
     }
 }
+
+impl Dispatch<WlShm, ()> for State {
+    fn event(
+        _state: &mut Self,
+        _proxy: &WlShm,
+        event: <WlShm as Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qh: &wayland_client::QueueHandle<Self>,
+    ) {
+        if let ShmEvent::Format { format } = event {
+            debug!(?format, "compositor advertised a wl_shm format");
+        }
+    }
+}
+
+wayland_client::delegate_noop!(
+    State: ignore ExtOutputImageCaptureSourceManagerV1
+);
+
+wayland_client::delegate_noop!(
+    State: ignore ExtImageCopyCaptureManagerV1
+);
 
 impl Display for Global {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

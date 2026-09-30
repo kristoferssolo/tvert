@@ -1,9 +1,13 @@
+mod layout;
+
+pub use layout::Stride;
+
 use crate::{
     CapturedImage, Error, State,
     wayland::{pixels, screencopy::ShmRequirements},
 };
 use rustix::fs::{MemfdFlags, memfd_create};
-use std::{fs::File, io::Write, os::fd::AsFd};
+use std::{fs::File, io::Write, num::NonZeroU32, os::fd::AsFd};
 use wayland_client::{
     QueueHandle, WEnum, delegate_noop,
     protocol::{
@@ -39,33 +43,21 @@ impl ShmBuffer {
             return Err(Error::UnsupportedShmFormat(requirements.format));
         }
 
-        if requirements.width == 0 || requirements.height == 0 {
-            return Err(Error::InvalidShmLayout);
-        }
+        let width = NonZeroU32::new(requirements.width).ok_or(Error::InvalidShmLayout)?;
+        let height = NonZeroU32::new(requirements.height).ok_or(Error::InvalidShmLayout)?;
+        let stride = Stride::new(requirements.stride, width)?;
 
-        let minimum_stride = requirements
-            .width
-            .checked_mul(4)
-            .ok_or(Error::InvalidShmLayout)?;
+        let pool_size = stride.buffer_len(height)?;
+        let file_len = u64::try_from(pool_size).map_err(|_| Error::InvalidShmLayout)?;
 
-        if requirements.stride < minimum_stride || !requirements.stride.is_multiple_of(4) {
-            return Err(Error::InvalidShmLayout);
-        }
-
-        let byte_len = requirements
-            .stride
-            .checked_mul(requirements.height)
-            .ok_or(Error::InvalidShmLayout)?;
-
-        let pool_size = shm_dimensions(byte_len)?;
-        let width = shm_dimensions(requirements.width)?;
-        let height = shm_dimensions(requirements.height)?;
-        let stride = shm_dimensions(requirements.stride)?;
+        let width = shm_dimensions(width.get())?;
+        let height = shm_dimensions(height.get())?;
+        let stride = shm_dimensions(stride.bytes())?;
 
         let fd =
             memfd_create(c"tvert-screenshot", MemfdFlags::CLOEXEC).map_err(std::io::Error::from)?;
         let file = File::from(fd);
-        file.set_len(u64::from(byte_len))?;
+        file.set_len(file_len)?;
 
         let pool = shm.create_pool(file.as_fd(), pool_size, queue_handle, ());
         let buffer = pool.create_buffer(0, width, height, stride, format, queue_handle, ());
@@ -93,11 +85,9 @@ impl ShmBuffer {
         image: &CapturedImage,
         queue_handle: &QueueHandle<State>,
     ) -> Result<Self, Error> {
-        let width = image.width.get();
-        let height = image.height.get();
-        let stride = width.checked_mul(4).ok_or(Error::InvalidShmLayout)?;
-        let byte_len = stride.checked_mul(height).ok_or(Error::InvalidShmLayout)?;
-        let byte_len = usize::try_from(byte_len).map_err(|_| Error::InvalidShmLayout)?;
+        let stride = Stride::packed(image.width)?;
+        let byte_len = usize::try_from(stride.buffer_len(image.height)?)
+            .map_err(|_| Error::InvalidShmLayout)?;
 
         if image.rgba.len() != byte_len {
             return Err(Error::InvalidShmLayout);
@@ -105,9 +95,9 @@ impl ShmBuffer {
 
         let requirements = ShmRequirements {
             format: WEnum::Value(Format::Argb8888),
-            height,
-            width,
-            stride,
+            width: image.width.get(),
+            height: image.height.get(),
+            stride: stride.bytes(),
         };
 
         let mut buffer = Self::new(shm, advertised_formats, requirements, queue_handle)?;

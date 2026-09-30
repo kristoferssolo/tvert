@@ -1,5 +1,8 @@
 use std::fmt::Display;
-use wayland_client::protocol::wl_output::WlOutput;
+use wayland_client::{
+    WEnum,
+    protocol::wl_output::{Transform, WlOutput},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OutputId(pub u32);
@@ -29,6 +32,7 @@ pub struct OutputState {
     pub name: Option<String>,
     pub size: Option<PhysicalSize>,
     pub scale: i32,
+    pub transform: WEnum<Transform>,
 }
 
 impl OutputState {
@@ -38,6 +42,7 @@ impl OutputState {
             name: None,
             size: None,
             scale: 1,
+            transform: WEnum::Value(Transform::Normal),
         }
     }
     pub fn snapshot(&self, id: OutputId) -> Option<Output> {

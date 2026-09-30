@@ -64,6 +64,9 @@ impl Dispatch<WlOutput, OutputData> for State {
 
                 output.size = Some(PhysicalSize { width, height });
             }
+            OutputEvent::Geometry { transform, .. } => {
+                output.transform = transform;
+            }
             OutputEvent::Done => {
                 if let Some(snapshot) = output.snapshot(data.id) {
                     state.outputs.insert(data.id, snapshot);

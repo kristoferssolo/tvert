@@ -62,4 +62,8 @@ pub enum Error {
     /// The preview cannot resolve the suggested surface dimensions
     #[error("unsupported overlay surface size: {width}x{height}")]
     UnsupportedOverlaySize { width: u32, height: u32 },
+
+    /// The output advertises a transform this client cannot interpret
+    #[error("unsupported output transform: {0}")]
+    UnsupportedOutputTransform(u32),
 }

@@ -1,7 +1,7 @@
 use crate::{Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
 use std::fmt::Display;
 use wayland_client::{
-    Dispatch, Proxy, delegate_noop,
+    Dispatch, Proxy, WEnum, delegate_noop,
     protocol::{wl_compositor::WlCompositor, wl_shm::WlShm, wl_surface::WlSurface},
 };
 use wayland_protocols::wp::viewporter::client::{
@@ -178,6 +178,9 @@ impl Wayland {
     /// Returns [`Error::UnsupportedOverlaySize`] if the suggested surface
     /// dimensions cannot be used, [`Error::OverlayClosed`] if the overlay
     /// disappears before mapping, or [`Error::Dispatch`] if communication fails.
+    ///
+    /// Returns [`Error::UnsupportedOutputTransform`] if the output advertises
+    /// an unknown transform.
     pub fn preview_output(&mut self, output_id: OutputId) -> Result<(), Error> {
         drop(self.state.overlay.take());
 
@@ -189,6 +192,18 @@ impl Wayland {
 
     fn run_preview(&mut self, output_id: OutputId) -> Result<(), Error> {
         let image = self.capture_output(output_id)?;
+
+        let Some(output) = self.state.output_states.get(&output_id) else {
+            return Err(Error::UnknownOutput(output_id));
+        };
+
+        let transform = match output.transform {
+            WEnum::Value(transform) => transform,
+            WEnum::Unknown(value) => {
+                return Err(Error::UnsupportedOutputTransform(value));
+            }
+        };
+
         let size = self.prepare_overlay(output_id)?;
 
         let Some(shm) = self.state.shm.as_ref() else {
@@ -207,6 +222,7 @@ impl Wayland {
             return Err(Error::OverlayClosed);
         };
 
+        overlay.surface.set_buffer_transform(transform);
         overlay.set_destination(size)?;
         overlay.surface.attach(Some(buffer.proxy()), 0, 0);
         overlay.surface.damage_buffer(0, 0, width, height);

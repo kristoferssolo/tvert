@@ -1,7 +1,4 @@
-use crate::{
-    Error,
-    wayland::{screencopy::ShmRequirements, shm::Stride},
-};
+use crate::{Error, wayland::shm::ShmLayout};
 use std::{fs::File, num::NonZeroU32, os::unix::fs::FileExt};
 use wayland_client::{WEnum, protocol::wl_shm::Format};
 
@@ -18,51 +15,36 @@ pub struct CapturedImage {
 
 pub fn read_image(
     file: &File,
-    requirements: ShmRequirements,
+    layout: &ShmLayout,
     y_inverted: bool,
 ) -> Result<CapturedImage, Error> {
-    let format = match requirements.format {
-        WEnum::Value(
-            format @ (Format::Argb8888 | Format::Xrgb8888 | Format::Abgr8888 | Format::Xbgr8888),
-        ) => format,
-        other => return Err(Error::UnsupportedShmFormat(other)),
-    };
-
-    let width = NonZeroU32::new(requirements.width).ok_or(Error::InvalidShmLayout)?;
-    let height = NonZeroU32::new(requirements.height).ok_or(Error::InvalidShmLayout)?;
-
-    let source_stride = Stride::new(requirements.stride, width)?;
-    let packed_stride = Stride::packed(width)?;
-
-    let row_bytes = usize::try_from(packed_stride.bytes()).map_err(|_| Error::InvalidShmLayout)?;
-    let byte_len =
-        usize::try_from(packed_stride.buffer_len(height)?).map_err(|_| Error::InvalidShmLayout)?;
-
     let mut rgba = Vec::new();
-    rgba.try_reserve_exact(byte_len)?;
-    rgba.resize(byte_len, 0);
+    rgba.try_reserve_exact(layout.rgba_len())?;
+    rgba.resize(layout.rgba_len(), 0);
 
-    for (mut source_row, row) in (0..height.get()).zip(rgba.chunks_exact_mut(row_bytes)) {
+    for (mut source_row, row) in
+        (0..layout.height().get()).zip(rgba.chunks_exact_mut(layout.row_bytes()))
+    {
         if y_inverted {
-            source_row = height
+            source_row = layout
+                .height()
                 .get()
                 .checked_sub(1)
                 .and_then(|last| last.checked_sub(source_row))
                 .ok_or(Error::InvalidShmLayout)?;
         }
 
-        let offset = source_stride.row_offset(source_row)?;
-        file.read_exact_at(row, offset)?;
+        file.read_exact_at(row, layout.row_offset(source_row)?)?;
 
         for pixel in row.as_chunks_mut::<4>().0 {
-            let converted = rgba_pixel(pixel, format)?;
+            let converted = rgba_pixel(pixel, layout.format())?;
             pixel.copy_from_slice(&converted);
         }
     }
 
     Ok(CapturedImage {
-        width,
-        height,
+        width: layout.width(),
+        height: layout.height(),
         rgba,
     })
 }
@@ -112,6 +94,7 @@ fn unpremultiply(channel: u8, alpha: u8) -> Result<u8, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wayland::screencopy::ShmRequirements;
     use claims::{assert_err, assert_matches, assert_ok};
     use rstest::rstest;
     use rustix::fs::{MemfdFlags, memfd_create};
@@ -122,13 +105,14 @@ mod tests {
         requirements: ShmRequirements,
         y_inverted: bool,
     ) -> Result<CapturedImage, Error> {
+        let layout = ShmLayout::try_from(requirements)?;
         let fd =
             memfd_create(c"tvert-pixel-test", MemfdFlags::CLOEXEC).map_err(std::io::Error::from)?;
 
         let mut file = File::from(fd);
         file.write_all(bytes)?;
 
-        read_image(&file, requirements, y_inverted)
+        read_image(&file, &layout, y_inverted)
     }
 
     #[rstest]

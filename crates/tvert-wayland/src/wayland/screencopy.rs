@@ -55,10 +55,7 @@ impl Wayland {
     /// - [`Error::ScreencopyFailed`] if the compositor rejects the frame;
     /// - [`Error::ScreencopyShmUnavailable`] if no SHM buffer is advertised;
     /// - [`Error::Dispatch`] if communicating with the compositor fails.
-    pub fn prepare_output_capture(
-        &mut self,
-        output_id: OutputId,
-    ) -> Result<ShmRequirements, Error> {
+    pub fn prepare_output_capture(&mut self, output_id: OutputId) -> Result<(), Error> {
         let Some(manager) = self.state.screencopy_manager.as_ref() else {
             return Err(Error::MissingGlobal {
                 interface: ZwlrScreencopyManagerV1::interface().name,
@@ -77,6 +74,7 @@ impl Wayland {
         }
 
         self.state.screencopy = ScreencopyState {
+            output_id: Some(output_id),
             frame: Some(frame),
             ..Default::default()
         };
@@ -112,7 +110,7 @@ impl Wayland {
                         return Err(Error::ScreencopyFailed);
                     }
 
-                    return Ok(requirements);
+                    return Ok(());
                 }
                 ScreencopyStatus::Failed => return Err(Error::ScreencopyFailed),
                 ScreencopyStatus::Copying | ScreencopyStatus::Complete => {
@@ -138,7 +136,7 @@ impl Wayland {
     /// - [`Error::ScreencopyFailed`] if the compositor rejects or aborts capture, or [`Error::Dispatch`] if communication fails;
     /// - [`Error::InvalidScreencopyState`] if the retained capture state is inconsistent.
     pub fn capture_output(&mut self, output_id: OutputId) -> Result<CapturedImage, Error> {
-        let requirements = self.prepare_output_capture(output_id)?;
+        self.prepare_output_capture(output_id)?;
 
         let capture = &mut self.state.screencopy;
 
@@ -176,7 +174,7 @@ impl Wayland {
                         return Err(Error::InvalidScreencopyState);
                     };
 
-                    return buffer.read_image(requirements, y_inverted);
+                    return buffer.read_image(y_inverted);
                 }
                 ScreencopyStatus::Failed => {
                     return Err(Error::ScreencopyFailed);

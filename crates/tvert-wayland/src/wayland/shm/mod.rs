@@ -1,13 +1,13 @@
 mod layout;
 
-pub use layout::Stride;
+pub use layout::{ShmLayout, Stride};
 
 use crate::{
     CapturedImage, Error, State,
     wayland::{pixels, screencopy::ShmRequirements},
 };
 use rustix::fs::{MemfdFlags, memfd_create};
-use std::{fs::File, io::Write, num::NonZeroU32, os::fd::AsFd};
+use std::{fs::File, io::Write, os::fd::AsFd};
 use wayland_client::{
     QueueHandle, WEnum, delegate_noop,
     protocol::{
@@ -20,65 +20,53 @@ use wayland_client::{
 #[derive(Debug)]
 pub struct ShmBuffer {
     buffer: WlBuffer,
-    // Retained for reading pixels after capture completes
     file: File,
+    layout: ShmLayout,
 }
 
 impl ShmBuffer {
+    /// Allocates a SHM buffer from compositor-advertised requirements.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedShmFormat`] if the format is unsupported
+    /// or was not advertised by this connection's SHM global.
+    ///
+    /// Returns [`Error::InvalidShmLayout`] if the layout cannot be used,
+    /// or [`Error::ShmIo`] if creating or sizing the backing file fails.
     pub fn new(
         shm: &WlShm,
         advertised_formats: &[Format],
         requirements: ShmRequirements,
         queue_handle: &QueueHandle<State>,
     ) -> Result<Self, Error> {
-        let format = match requirements.format {
-            WEnum::Value(
-                format
-                @ (Format::Argb8888 | Format::Xrgb8888 | Format::Abgr8888 | Format::Xbgr8888),
-            ) => format,
-            other => return Err(Error::UnsupportedShmFormat(other)),
-        };
-
-        if !advertised_formats.contains(&format) {
-            return Err(Error::UnsupportedShmFormat(requirements.format));
-        }
-
-        let width = NonZeroU32::new(requirements.width).ok_or(Error::InvalidShmLayout)?;
-        let height = NonZeroU32::new(requirements.height).ok_or(Error::InvalidShmLayout)?;
-        let stride = Stride::new(requirements.stride, width)?;
-
-        let pool_size = stride.buffer_len(height)?;
-        let file_len = u64::try_from(pool_size).map_err(|_| Error::InvalidShmLayout)?;
-
-        let width = shm_dimensions(width.get())?;
-        let height = shm_dimensions(height.get())?;
-        let stride = shm_dimensions(stride.bytes())?;
-
-        let fd =
-            memfd_create(c"tvert-screenshot", MemfdFlags::CLOEXEC).map_err(std::io::Error::from)?;
-        let file = File::from(fd);
-        file.set_len(file_len)?;
-
-        let pool = shm.create_pool(file.as_fd(), pool_size, queue_handle, ());
-        let buffer = pool.create_buffer(0, width, height, stride, format, queue_handle, ());
-
-        pool.destroy();
-
-        Ok(Self { buffer, file })
+        let layout = ShmLayout::try_from(requirements)?;
+        Self::from_layout(shm, advertised_formats, layout, queue_handle)
     }
 
     pub const fn proxy(&self) -> &WlBuffer {
         &self.buffer
     }
 
-    pub fn read_image(
-        &self,
-        requirements: ShmRequirements,
-        y_inverted: bool,
-    ) -> Result<CapturedImage, Error> {
-        pixels::read_image(&self.file, requirements, y_inverted)
+    /// Reads pixels using the layout that created this buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::ShmIo`] if reading fails, [`Error::ImageAllocation`]
+    /// if allocating image storage fails, or [`Error::InvalidShmLayout`]
+    /// if row addressing or pixel conversion fails.
+    pub fn read_image(&self, y_inverted: bool) -> Result<CapturedImage, Error> {
+        pixels::read_image(&self.file, &self.layout, y_inverted)
     }
 
+    /// Creates a display buffer from a tightly packed RGBA8 image.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidShmLayout`] for invalid dimensions or pixel
+    /// length, [`Error::UnsupportedShmFormat`] if ARGB8888 is unavailable,
+    /// [`Error::ImageAllocation`] if temporary storage allocation fails,
+    /// or [`Error::ShmIo`] if creating or writing the backing file fails.
     pub fn from_image(
         shm: &WlShm,
         advertised_formats: &[Format],
@@ -86,21 +74,20 @@ impl ShmBuffer {
         queue_handle: &QueueHandle<State>,
     ) -> Result<Self, Error> {
         let stride = Stride::packed(image.width)?;
-        let byte_len = usize::try_from(stride.buffer_len(image.height)?)
-            .map_err(|_| Error::InvalidShmLayout)?;
+        let layout = ShmLayout::new(
+            WEnum::Value(Format::Argb8888),
+            image.width.get(),
+            image.height.get(),
+            stride.bytes(),
+        )?;
+
+        let byte_len = layout.rgba_len();
 
         if image.rgba.len() != byte_len {
             return Err(Error::InvalidShmLayout);
         }
 
-        let requirements = ShmRequirements {
-            format: WEnum::Value(Format::Argb8888),
-            width: image.width.get(),
-            height: image.height.get(),
-            stride: stride.bytes(),
-        };
-
-        let mut buffer = Self::new(shm, advertised_formats, requirements, queue_handle)?;
+        let mut buffer = Self::from_layout(shm, advertised_formats, layout, queue_handle)?;
 
         let mut bytes = Vec::new();
         bytes.try_reserve_exact(byte_len)?;
@@ -120,6 +107,38 @@ impl ShmBuffer {
         buffer.file.write_all(&bytes)?;
 
         Ok(buffer)
+    }
+
+    fn from_layout(
+        shm: &WlShm,
+        advertised_formats: &[Format],
+        layout: ShmLayout,
+        queue_handle: &QueueHandle<State>,
+    ) -> Result<Self, Error> {
+        if !advertised_formats.contains(&layout.format()) {
+            return Err(Error::UnsupportedShmFormat(WEnum::Value(layout.format())));
+        }
+
+        let width = shm_dimensions(layout.width().get())?;
+        let height = shm_dimensions(layout.height().get())?;
+        let stride = shm_dimensions(layout.stride().bytes())?;
+
+        let fd =
+            memfd_create(c"tvert-screenshot", MemfdFlags::CLOEXEC).map_err(std::io::Error::from)?;
+        let file = File::from(fd);
+        file.set_len(layout.file_len())?;
+
+        let pool = shm.create_pool(file.as_fd(), layout.pool_size(), queue_handle, ());
+        let buffer =
+            pool.create_buffer(0, width, height, stride, layout.format(), queue_handle, ());
+
+        pool.destroy();
+
+        Ok(Self {
+            buffer,
+            file,
+            layout,
+        })
     }
 }
 

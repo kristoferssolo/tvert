@@ -83,7 +83,7 @@ fn unpremultiply(channel: u8, alpha: u8) -> Result<u8, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wayland::screencopy::ShmRequirements;
+    use crate::wayland::shm::ShmRequirements;
     use claims::{assert_err, assert_matches, assert_ok};
     use rstest::rstest;
     use rustix::fs::{MemfdFlags, memfd_create};

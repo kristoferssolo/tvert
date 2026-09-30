@@ -29,13 +29,11 @@ impl Wayland {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::MissingGlobal`] if the compositor or layer-shell global is unavailable.
-    ///
-    /// Returns [`Error::UnknownOutput`] if the output is no longer tracked.
-    ///
-    /// Returns [`Error::OverlayClosed`] if the compositor closes the overlay.
-    ///
-    /// Returns [`Error::Dispatch`] if communicating with the compositor fails.
+    /// Returns
+    /// - [`Error::MissingGlobal`] if the compositor or layer-shell global is unavailable.
+    /// - [`Error::UnknownOutput`] if the output is no longer tracked.
+    /// - [`Error::OverlayClosed`] if the compositor closes the overlay.
+    /// - [`Error::Dispatch`] if communicating with the compositor fails.
     pub fn prepare_overlay(&mut self, output_id: OutputId) -> Result<SuggestedSurfaceSize, Error> {
         let Some(compositor) = self.state.compositor.as_ref() else {
             return Err(Error::MissingGlobal {

@@ -1,4 +1,4 @@
-use crate::{Error, wayland::screencopy::ShmRequirements};
+use crate::{Error, wayland::shm::ShmRequirements};
 use std::num::NonZeroU32;
 use tvert_image::PixelSize;
 use wayland_client::{WEnum, protocol::wl_shm::Format};

@@ -25,6 +25,7 @@ impl Wayland {
     /// Connects to the compositor and discovers globals and initial output metadata.
     ///
     /// # Errors
+    ///
     /// Returns
     /// - [`Error::Connect`] if the connection cannot be established;
     /// - [`Error::Dispatch`] if dispatching the initial events fails.

@@ -1,11 +1,10 @@
 mod layout;
+mod requirements;
 
 pub use layout::{ShmLayout, Stride};
+pub use requirements::ShmRequirements;
 
-use crate::{
-    Error, State,
-    wayland::{pixels, screencopy::ShmRequirements},
-};
+use crate::{Error, State, wayland::pixels};
 use rustix::fs::{MemfdFlags, memfd_create};
 use std::{fs::File, io::Write, os::fd::AsFd};
 use tvert_image::CapturedImage;

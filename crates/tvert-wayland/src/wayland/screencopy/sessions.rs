@@ -1,44 +1,15 @@
-use crate::{Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
+use crate::{
+    Error, OutputId, Wayland,
+    wayland::{
+        screencopy::state::{ScreencopyState, ScreencopyStatus},
+        shm::ShmBuffer,
+    },
+};
 use tvert_image::CapturedImage;
-use wayland_client::{
-    Dispatch, Proxy, WEnum,
-    protocol::wl_shm::{Format, WlShm},
-};
+use wayland_client::{Proxy, WEnum, protocol::wl_shm::WlShm};
 use wayland_protocols_wlr::screencopy::v1::client::{
-    zwlr_screencopy_frame_v1::{Event, Flags, ZwlrScreencopyFrameV1},
-    zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
+    zwlr_screencopy_frame_v1::Flags, zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
-
-/// SHM buffer requirements advertised for a screencopy frame
-#[derive(Debug, Clone, Copy)]
-pub struct ShmRequirements {
-    /// Pixel format, including formats unknown to this client
-    pub format: WEnum<Format>,
-    pub width: u32,
-    pub height: u32,
-    /// Number of bytes between consecutive rows
-    pub stride: u32,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-enum ScreencopyStatus {
-    #[default]
-    Pending,
-    ReadyToCopy,
-    Copying,
-    Complete,
-    Failed,
-}
-
-#[derive(Debug, Default)]
-pub struct ScreencopyState {
-    output_id: Option<OutputId>,
-    frame: Option<ZwlrScreencopyFrameV1>,
-    buffer: Option<ShmRequirements>,
-    shm_buffer: Option<ShmBuffer>,
-    status: ScreencopyStatus,
-    flags: Option<WEnum<Flags>>,
-}
 
 impl Wayland {
     /// Prepares a screencopy frame and allocates its SHM buffer.
@@ -50,12 +21,16 @@ impl Wayland {
     /// The cursor is excluded from the requested frame.
     ///
     /// # Errors
+    ///
     /// Returns
     /// - [`Error::MissingGlobal`] if the screencopy manager is unavailable;
     /// - [`Error::UnknownOutput`] if the output is no longer tracked;
     /// - [`Error::ScreencopyFailed`] if the compositor rejects the frame;
     /// - [`Error::ScreencopyShmUnavailable`] if no SHM buffer is advertised;
-    /// - [`Error::Dispatch`] if communicating with the compositor fails.
+    /// - [`Error::Dispatch`] if communicating with the compositor fails;
+    /// - [`Error::UnsupportedShmFormat`] or [`Error::InvalidShmLayout`] if the advertised SHM requirements cannot be used;
+    /// - [`Error::ShmIo`] if creating or sizing the backing file fails;
+    /// - [`Error::InvalidScreencopyState`] if preparation encounters an inconsistent capture state.
     pub fn prepare_output_capture(&mut self, output_id: OutputId) -> Result<(), Error> {
         let Some(manager) = self.state.screencopy_manager.as_ref() else {
             return Err(Error::MissingGlobal {
@@ -129,6 +104,7 @@ impl Wayland {
     /// Obtain `output_id` from this instance's [`Self::outputs`] method. The cursor is excluded.
     ///
     /// # Errors
+    ///
     /// Returns
     /// - [`Error::MissingGlobal`] if a required protocol is unavailable, or [`Error::UnknownOutput`] if the output is no longer tracked;
     /// - [`Error::ScreencopyShmUnavailable`], [`Error::UnsupportedShmFormat`], or [`Error::InvalidShmLayout`] if the advertised buffer requirements cannot be used;
@@ -184,83 +160,6 @@ impl Wayland {
                     return Err(Error::InvalidScreencopyState);
                 }
             }
-        }
-    }
-}
-
-impl ScreencopyState {
-    pub fn cancel_for_output(&mut self, output_id: OutputId) {
-        if self.output_id != Some(output_id) {
-            return;
-        }
-
-        self.output_id = None;
-        self.status = ScreencopyStatus::Failed;
-
-        if let Some(frame) = self.frame.take() {
-            frame.destroy();
-        }
-
-        drop(self.shm_buffer.take());
-    }
-}
-
-impl Dispatch<ZwlrScreencopyFrameV1, ()> for State {
-    fn event(
-        state: &mut Self,
-        frame: &ZwlrScreencopyFrameV1,
-        event: <ZwlrScreencopyFrameV1 as Proxy>::Event,
-        _data: &(),
-        _conn: &wayland_client::Connection,
-        _qh: &wayland_client::QueueHandle<Self>,
-    ) {
-        let capture = &mut state.screencopy;
-
-        if capture.frame.as_ref() != Some(frame) {
-            return;
-        }
-
-        match event {
-            Event::Buffer {
-                format,
-                width,
-                height,
-                stride,
-            } => {
-                capture.buffer = Some(ShmRequirements {
-                    format,
-                    width,
-                    height,
-                    stride,
-                });
-
-                if frame.version() < 3 {
-                    capture.status = ScreencopyStatus::ReadyToCopy;
-                }
-            }
-            Event::BufferDone => {
-                capture.status = ScreencopyStatus::ReadyToCopy;
-            }
-            Event::Flags { flags } => {
-                capture.flags = Some(flags);
-            }
-            Event::Ready { .. } => {
-                capture.status = ScreencopyStatus::Complete;
-
-                if let Some(frame) = capture.frame.take() {
-                    frame.destroy();
-                }
-            }
-            Event::Failed => {
-                capture.status = ScreencopyStatus::Failed;
-
-                if let Some(frame) = capture.frame.take() {
-                    frame.destroy();
-                }
-
-                drop(capture.shm_buffer.take());
-            }
-            _ => {}
         }
     }
 }

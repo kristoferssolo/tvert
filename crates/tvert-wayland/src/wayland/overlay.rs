@@ -25,7 +25,7 @@ pub struct SuggestedSurfaceSize {
 enum OverlayStatus {
     Waiting,
     Configured(SuggestedSurfaceSize),
-    UnsupoortedSize(SuggestedSurfaceSize),
+    UnsupportedSize(SuggestedSurfaceSize),
     Closed,
 }
 
@@ -145,7 +145,7 @@ impl Wayland {
                 OverlayStatus::Configured(configure) => {
                     return Ok(configure);
                 }
-                OverlayStatus::UnsupoortedSize(size) => {
+                OverlayStatus::UnsupportedSize(size) => {
                     drop(self.state.overlay.take());
 
                     return Err(Error::UnsupportedOverlaySize {
@@ -215,8 +215,9 @@ impl Wayland {
         let queue_handle = self.event_queue.handle();
         let buffer = ShmBuffer::from_image(shm, &self.state.shm_formats, &image, &queue_handle)?;
 
-        let width = i32::try_from(image.width.get()).map_err(|_| Error::InvalidShmLayout)?;
-        let height = i32::try_from(image.height.get()).map_err(|_| Error::InvalidShmLayout)?;
+        let width = i32::try_from(image.size.width().get()).map_err(|_| Error::InvalidShmLayout)?;
+        let height =
+            i32::try_from(image.size.height().get()).map_err(|_| Error::InvalidShmLayout)?;
 
         let Some(overlay) = self.state.overlay.as_mut() else {
             return Err(Error::OverlayClosed);
@@ -236,7 +237,7 @@ impl Wayland {
 
             match overlay.status {
                 OverlayStatus::Closed => return Ok(()),
-                OverlayStatus::UnsupoortedSize(size) => {
+                OverlayStatus::UnsupportedSize(size) => {
                     return Err(Error::UnsupportedOverlaySize {
                         width: size.width,
                         height: size.height,
@@ -279,7 +280,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
 
                 if overlay.buffer.is_some() {
                     if overlay.set_destination(size).is_err() {
-                        overlay.status = OverlayStatus::UnsupoortedSize(size);
+                        overlay.status = OverlayStatus::UnsupportedSize(size);
                         return;
                     }
                     overlay.surface.commit();

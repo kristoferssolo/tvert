@@ -1,5 +1,5 @@
-use crate::{Error, wayland::shm::ShmLayout};
-use std::{fs::File, num::NonZeroU32, os::unix::fs::FileExt};
+use crate::{Error, PixelSize, wayland::shm::ShmLayout};
+use std::{fs::File, os::unix::fs::FileExt};
 use wayland_client::{WEnum, protocol::wl_shm::Format};
 
 /// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
@@ -7,8 +7,7 @@ use wayland_client::{WEnum, protocol::wl_shm::Format};
 /// Alpha is straight, not premultiplied.
 #[derive(Debug)]
 pub struct CapturedImage {
-    pub width: NonZeroU32,
-    pub height: NonZeroU32,
+    pub size: PixelSize,
     /// Consecutive red, green, blue, and alpha bytes, without row padding
     pub rgba: Vec<u8>,
 }
@@ -43,8 +42,7 @@ pub fn read_image(
     }
 
     Ok(CapturedImage {
-        width: layout.width(),
-        height: layout.height(),
+        size: layout.size(),
         rgba,
     })
 }
@@ -181,8 +179,8 @@ mod tests {
             y_inverted,
         ));
 
-        assert_eq!(image.width.get(), 1);
-        assert_eq!(image.height.get(), 2);
+        assert_eq!(image.size.width().get(), 1);
+        assert_eq!(image.size.height().get(), 2);
         assert_eq!(image.rgba, expected, "y_inverted={y_inverted}");
     }
 

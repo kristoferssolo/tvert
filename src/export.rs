@@ -1,8 +1,8 @@
 use color_eyre::{
     Result,
-    eyre::{Context, Ok, bail, eyre},
+    eyre::{Context, bail},
 };
-use png::Encoder;
+use png::{BitDepth, ColorType, Encoder};
 use std::{
     fs::File,
     io::{BufWriter, Write},
@@ -17,12 +17,10 @@ use tvert_wayland::CapturedImage;
 /// Returns an error if the image layout is invalid, the destination cannot
 /// be created, or encoding or writing fails.
 pub fn save_png(path: &Path, image: &CapturedImage) -> Result<()> {
-    let width = usize::try_from(image.width.get())?;
-    let height = usize::try_from(image.height.get())?;
-    let expected_len = width
-        .checked_mul(height)
-        .and_then(|pixels| pixels.checked_mul(4))
-        .ok_or_else(|| eyre!("image dimensions exceed the supported size"))?;
+    let expected_len = image
+        .size
+        .rgba_len()
+        .wrap_err("image dimensions exceed the supported size")?;
 
     if image.rgba.len() != expected_len {
         bail!(
@@ -35,9 +33,13 @@ pub fn save_png(path: &Path, image: &CapturedImage) -> Result<()> {
         File::create_new(path).wrap_err_with(|| format!("failed to create {}", path.display()))?;
     let mut output = BufWriter::new(file);
 
-    let mut encoder = Encoder::new(&mut output, image.width.get(), image.height.get());
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
+    let mut encoder = Encoder::new(
+        &mut output,
+        image.size.width().get(),
+        image.size.height().get(),
+    );
+    encoder.set_color(ColorType::Rgba);
+    encoder.set_depth(BitDepth::Eight);
 
     let mut writer = encoder
         .write_header()

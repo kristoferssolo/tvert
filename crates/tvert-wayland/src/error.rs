@@ -66,4 +66,8 @@ pub enum Error {
     /// The output advertises a transform this client cannot interpret
     #[error("unsupported output transform: {0}")]
     UnsupportedOutputTransform(u32),
+
+    /// Pixel dimensions exceed the addressable RGBA image size
+    #[error("image dimensions exceed the supported RGBA size")]
+    ImageSizeOverflow,
 }

@@ -1,9 +1,11 @@
 mod error;
+mod image;
 mod output;
 mod wayland;
 
 pub use crate::output::{Output, OutputId, PhysicalSize};
 pub use error::Error;
+pub use image::PixelSize;
 pub use wayland::{CapturedImage, Wayland};
 
 use crate::{

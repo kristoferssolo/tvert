@@ -1,4 +1,4 @@
-use crate::{Error, wayland::screencopy::ShmRequirements};
+use crate::{Error, PixelSize, wayland::screencopy::ShmRequirements};
 use std::num::NonZeroU32;
 use wayland_client::{WEnum, protocol::wl_shm::Format};
 
@@ -74,8 +74,7 @@ impl Stride {
 #[derive(Debug, Clone, Copy)]
 pub struct ShmLayout {
     format: Format,
-    width: NonZeroU32,
-    height: NonZeroU32,
+    size: PixelSize,
     stride: Stride,
     pool_size: i32,
     file_len: u64,
@@ -117,8 +116,7 @@ impl ShmLayout {
 
         Ok(Self {
             format,
-            width,
-            height,
+            size: PixelSize::new(width, height),
             stride,
             pool_size,
             file_len,
@@ -131,12 +129,16 @@ impl ShmLayout {
         self.format
     }
 
+    pub const fn size(self) -> PixelSize {
+        self.size
+    }
+
     pub const fn width(self) -> NonZeroU32 {
-        self.width
+        self.size.width()
     }
 
     pub const fn height(self) -> NonZeroU32 {
-        self.height
+        self.size.height()
     }
 
     pub const fn stride(self) -> Stride {
@@ -170,7 +172,7 @@ impl ShmLayout {
     /// Returns [`Error::InvalidShmLayout`] if the row is outside the image
     /// or its offset cannot be represented.
     pub fn row_offset(self, row: u32) -> Result<u64, Error> {
-        if row >= self.height.get() {
+        if row >= self.height().get() {
             return Err(Error::InvalidShmLayout);
         }
 

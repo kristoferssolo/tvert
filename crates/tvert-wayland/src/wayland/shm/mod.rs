@@ -73,11 +73,11 @@ impl ShmBuffer {
         image: &CapturedImage,
         queue_handle: &QueueHandle<State>,
     ) -> Result<Self, Error> {
-        let stride = Stride::packed(image.width)?;
+        let stride = Stride::packed(image.size.width())?;
         let layout = ShmLayout::new(
             WEnum::Value(Format::Argb8888),
-            image.width.get(),
-            image.height.get(),
+            image.size.width().get(),
+            image.size.height().get(),
             stride.bytes(),
         )?;
 

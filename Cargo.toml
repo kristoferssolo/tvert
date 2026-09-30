@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [".", "crates/*"]
+default-members = ["crates/tvert-cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,8 +10,9 @@ authors = ["Kristofers Solo <dev@kristofers.xyz>"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-tvert-wayland = { path = "crates/tvert-wayland" }
+tvert-cli = { path = "crates/tvert-cli" }
 tvert-image = { path = "crates/tvert-image" }
+tvert-wayland = { path = "crates/tvert-wayland" }
 
 clap = { version = "4.6" }
 color-eyre = "0.6"
@@ -45,23 +47,3 @@ panic_in_result_fn = "deny"
 panic = "deny"
 exit = "deny"
 as_conversions = "deny"
-
-[package]
-name = "tvert"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-
-[dependencies]
-tvert-wayland.workspace = true
-tvert-image.workspace = true
-
-clap = { workspace = true, features = ["derive"] }
-color-eyre.workspace = true
-png.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-tracing.workspace = true
-
-[lints]
-workspace = true

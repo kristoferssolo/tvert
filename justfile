@@ -58,12 +58,12 @@ doc *ARGS:
 # Run Tvert
 [group("run")]
 run *ARGS:
-    cargo run --package tvert -- {{ ARGS }}
+    cargo run --package tvert-cli -- {{ ARGS }}
 
 # Run an optimized build of Tvert
 [group("run")]
 run-release *ARGS:
-    cargo run --release --package tvert -- {{ ARGS }}
+    cargo run --release --package tvert-cli -- {{ ARGS }}
 
 # Build the entire workspace
 [group("build")]
@@ -78,7 +78,7 @@ build-release:
 # Install Tvert from this checkout
 [group("build")]
 install:
-    cargo install --path . --locked
+    cargo install --path crates/tvert-cli --locked
 
 # Watch the workspace during development
 [group("development")]

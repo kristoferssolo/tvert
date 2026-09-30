@@ -66,4 +66,8 @@ pub enum Error {
     /// The output advertises a transform this client cannot interpret
     #[error("unsupported output transform: {0}")]
     UnsupportedOutputTransform(u32),
+
+    /// Constructing the captured image failed
+    #[error("failed to construct the captured image")]
+    Image(#[from] tvert_image::Error),
 }

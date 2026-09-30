@@ -32,10 +32,7 @@ pub fn read_image(
         }
     }
 
-    Ok(CapturedImage {
-        size: layout.size(),
-        rgba,
-    })
+    CapturedImage::new(layout.size(), rgba).map_err(Error::from)
 }
 
 fn rgba_pixel(pixel: &[u8], format: Format) -> Result<[u8; 4], Error> {
@@ -120,7 +117,7 @@ mod tests {
             },
             false
         ));
-        assert_eq!(image.rgba, [10, 20, 30, 255], "{format:?}");
+        assert_eq!(image.rgba(), [10, 20, 30, 255], "{format:?}");
     }
 
     #[test]
@@ -135,7 +132,7 @@ mod tests {
             },
             false,
         ));
-        assert_eq!(image.rgba, [128, 64, 0, 128]);
+        assert_eq!(image.rgba(), [128, 64, 0, 128]);
     }
 
     #[test]
@@ -150,7 +147,7 @@ mod tests {
             },
             false
         ));
-        assert_eq!(image.rgba, [0, 0, 0, 0]);
+        assert_eq!(image.rgba(), [0, 0, 0, 0]);
     }
 
     #[rstest]
@@ -170,9 +167,10 @@ mod tests {
             y_inverted,
         ));
 
-        assert_eq!(image.size.width().get(), 1);
-        assert_eq!(image.size.height().get(), 2);
-        assert_eq!(image.rgba, expected, "y_inverted={y_inverted}");
+        let size = image.size();
+        assert_eq!(size.width().get(), 1);
+        assert_eq!(size.height().get(), 2);
+        assert_eq!(image.rgba(), expected, "y_inverted={y_inverted}");
     }
 
     #[rstest]

@@ -55,6 +55,8 @@ impl ShmBuffer {
     /// Returns [`Error::ShmIo`] if reading fails, [`Error::ImageAllocation`]
     /// if allocating image storage fails, or [`Error::InvalidShmLayout`]
     /// if row addressing or pixel conversion fails.
+    ///
+    /// Returns [`Error::Image`] if constructing the captured image fails.
     pub fn read_image(&self, y_inverted: bool) -> Result<CapturedImage, Error> {
         pixels::read_image(&self.file, &self.layout, y_inverted)
     }
@@ -63,27 +65,30 @@ impl ShmBuffer {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidShmLayout`] for invalid dimensions or pixel
-    /// length, [`Error::UnsupportedShmFormat`] if ARGB8888 is unavailable,
-    /// [`Error::ImageAllocation`] if temporary storage allocation fails,
-    /// or [`Error::ShmIo`] if creating or writing the backing file fails.
+    /// Returns [`Error::InvalidShmLayout`] if the dimensions cannot be
+    /// represented by the SHM protocol, , [`Error::UnsupportedShmFormat`]
+    /// if ARGB8888 is unavailable, [`Error::ImageAllocation`] if temporary
+    /// storage allocation fails, or [`Error::ShmIo`] if creating or
+    /// writing the backing file fails.
     pub fn from_image(
         shm: &WlShm,
         advertised_formats: &[Format],
         image: &CapturedImage,
         queue_handle: &QueueHandle<State>,
     ) -> Result<Self, Error> {
-        let stride = Stride::packed(image.size.width())?;
+        let stride = Stride::packed(image.size().width())?;
+        let size = image.size();
+
         let layout = ShmLayout::new(
             WEnum::Value(Format::Argb8888),
-            image.size.width().get(),
-            image.size.height().get(),
+            size.width().get(),
+            size.height().get(),
             stride.bytes(),
         )?;
 
         let byte_len = layout.rgba_len();
 
-        if image.rgba.len() != byte_len {
+        if image.rgba().len() != byte_len {
             return Err(Error::InvalidShmLayout);
         }
 
@@ -91,7 +96,7 @@ impl ShmBuffer {
 
         let mut bytes = Vec::new();
         bytes.try_reserve_exact(byte_len)?;
-        bytes.extend_from_slice(&image.rgba);
+        bytes.extend_from_slice(image.rgba());
 
         for pixel in bytes.as_chunks_mut::<4>().0 {
             let [red, green, blue, alpha] = *pixel;

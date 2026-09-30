@@ -14,14 +14,14 @@ use std::io::Write;
 ///
 /// Returns [`Error::PngEncoding`] if encoding or writing fails.
 pub fn write_png(output: impl Write, image: &CapturedImage) -> Result<(), Error> {
-    image.validate()?;
+    let size = image.size();
 
-    let mut encoder = Encoder::new(output, image.size.width().get(), image.size.height().get());
+    let mut encoder = Encoder::new(output, size.width().get(), size.height().get());
     encoder.set_color(ColorType::Rgba);
     encoder.set_depth(BitDepth::Eight);
 
     let mut writer = encoder.write_header()?;
-    writer.write_image_data(&image.rgba)?;
+    writer.write_image_data(image.rgba())?;
     writer.finish()?;
 
     Ok(())

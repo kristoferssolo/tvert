@@ -173,9 +173,10 @@ impl Wayland {
         let queue_handle = self.event_queue.handle();
         let buffer = ShmBuffer::from_image(shm, &self.state.shm_formats, &image, &queue_handle)?;
 
-        let width = i32::try_from(image.size.width().get()).map_err(|_| Error::InvalidShmLayout)?;
+        let image_size = image.size();
+        let width = i32::try_from(image_size.width().get()).map_err(|_| Error::InvalidShmLayout)?;
         let height =
-            i32::try_from(image.size.height().get()).map_err(|_| Error::InvalidShmLayout)?;
+            i32::try_from(image_size.height().get()).map_err(|_| Error::InvalidShmLayout)?;
 
         let Some(overlay) = self.state.overlay.as_mut() else {
             return Err(Error::OverlayClosed);

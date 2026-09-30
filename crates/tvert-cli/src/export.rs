@@ -10,11 +10,9 @@ use tvert_image::{CapturedImage, write_png};
 ///
 /// # Errors
 ///
-/// Returns an error if the image layout is invalid, the destination cannot
-/// be created, or encoding or writing fails.
+/// Returns an error if the destination cannot be created,
+/// or encoding or writing fails.
 pub fn save_png(path: &Path, image: &CapturedImage) -> Result<()> {
-    image.validate().wrap_err("invalid image fro PNG export")?;
-
     let file =
         File::create_new(path).wrap_err_with(|| format!("failed to create {}", path.display()))?;
     let mut output = BufWriter::new(file);

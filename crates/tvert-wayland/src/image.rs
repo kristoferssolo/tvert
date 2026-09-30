@@ -1,6 +1,5 @@
-use std::num::NonZeroU32;
-
 use crate::Error;
+use std::num::NonZeroU32;
 
 /// Nonzero dimensions measured in pixels.
 ///

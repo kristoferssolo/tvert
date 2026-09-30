@@ -1,5 +1,9 @@
+mod size;
+
+pub use size::SuggestedSurfaceSize;
+
 use crate::{Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
-use std::fmt::Display;
+use size::SurfaceSize;
 use wayland_client::{
     Dispatch, Proxy, WEnum, delegate_noop,
     protocol::{wl_compositor::WlCompositor, wl_shm::WlShm, wl_surface::WlSurface},
@@ -11,15 +15,6 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
     zwlr_layer_surface_v1::{Anchor, Event, KeyboardInteractivity, ZwlrLayerSurfaceV1},
 };
-
-/// Suggested dimensions in surface-local coordinates.
-///
-/// A zero dimension means the client must choose that dimension.
-#[derive(Debug, Clone, Copy)]
-pub struct SuggestedSurfaceSize {
-    pub width: u32,
-    pub height: u32,
-}
 
 #[derive(Debug, Clone, Copy)]
 enum OverlayStatus {
@@ -44,22 +39,8 @@ impl OverlayState {
         self.output_id
     }
 
-    fn set_destination(&self, size: SuggestedSurfaceSize) -> Result<(), Error> {
-        let unsupported = || Error::UnsupportedOverlaySize {
-            width: size.width,
-            height: size.height,
-        };
-
-        if size.width == 0 || size.height == 0 {
-            return Err(unsupported());
-        }
-
-        let width = i32::try_from(size.width).map_err(|_| unsupported())?;
-        let height = i32::try_from(size.height).map_err(|_| unsupported())?;
-
-        self.viewport.set_destination(width, height);
-
-        Ok(())
+    fn set_destination(&self, size: SurfaceSize) {
+        self.viewport.set_destination(size.width(), size.height());
     }
 }
 
@@ -204,7 +185,7 @@ impl Wayland {
             }
         };
 
-        let size = self.prepare_overlay(output_id)?;
+        let size = SurfaceSize::try_from(self.prepare_overlay(output_id)?)?;
 
         let Some(shm) = self.state.shm.as_ref() else {
             return Err(Error::MissingGlobal {
@@ -224,7 +205,7 @@ impl Wayland {
         };
 
         overlay.surface.set_buffer_transform(transform);
-        overlay.set_destination(size)?;
+        overlay.set_destination(size);
         overlay.surface.attach(Some(buffer.proxy()), 0, 0);
         overlay.surface.damage_buffer(0, 0, width, height);
         overlay.buffer = Some(buffer);
@@ -278,14 +259,18 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
 
                 let size = SuggestedSurfaceSize { width, height };
 
-                if overlay.buffer.is_some() {
-                    if overlay.set_destination(size).is_err() {
-                        overlay.status = OverlayStatus::UnsupportedSize(size);
-                        return;
-                    }
-                    overlay.surface.commit();
+                if overlay.buffer.is_none() {
+                    overlay.status = OverlayStatus::Configured(size);
+                    return;
                 }
 
+                let Ok(destination) = SurfaceSize::try_from(size) else {
+                    overlay.status = OverlayStatus::UnsupportedSize(size);
+                    return;
+                };
+
+                overlay.set_destination(destination);
+                overlay.surface.commit();
                 overlay.status = OverlayStatus::Configured(size);
             }
             Event::Closed => {
@@ -298,12 +283,6 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
 
 delegate_noop!(State: ignore WlSurface);
 delegate_noop!(State: ignore WpViewport);
-
-impl Display for SuggestedSurfaceSize {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}x{}", self.width, self.height)
-    }
-}
 
 impl Drop for OverlayState {
     fn drop(&mut self) {

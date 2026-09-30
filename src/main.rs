@@ -69,7 +69,7 @@ fn main() -> Result<ExitCode> {
             println!("Overlay configure: {configure} surface-local units");
         }
         Command::PreviewOutput { .. } => {
-            println!("Displaying frozen output. Press Ctrl+C to stop.");
+            println!("Displaying frozen output. Right-click to close, or press Ctrl+C.");
             wayland.preview_output(output_id)?;
         }
     }

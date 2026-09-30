@@ -100,6 +100,14 @@ impl State {
                 qh,
                 1..=1,
             ),
+            "wl_seat" => bind_once(
+                &mut self.seat,
+                &mut self.bound_globals,
+                registry,
+                global,
+                qh,
+                5..=5,
+            ),
             _ => {}
         }
     }
@@ -179,6 +187,11 @@ impl State {
             && manager.version() >= 3
         {
             manager.destroy();
+        }
+
+        if let Some(seat) = take_removed(&mut self.seat, &mut self.bound_globals, name) {
+            self.release_pointer();
+            seat.release();
         }
 
         // wl_compositor has no destructor at the version that gets bind

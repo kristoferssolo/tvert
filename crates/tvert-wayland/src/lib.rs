@@ -15,7 +15,10 @@ use crate::{
 use std::{collections::HashMap, fmt::Display};
 use wayland_client::protocol::{
     wl_compositor::WlCompositor,
+    wl_pointer::WlPointer,
+    wl_seat::WlSeat,
     wl_shm::{Format, WlShm},
+    wl_surface::WlSurface,
 };
 use wayland_protocols::{
     ext::{
@@ -62,6 +65,10 @@ struct State {
     overlay: Option<OverlayState>,
     viewporter: Option<WpViewporter>,
     capture_source: Option<(OutputId, ExtImageCaptureSourceV1)>,
+
+    seat: Option<WlSeat>,
+    pointer: Option<WlPointer>,
+    pointer_surface: Option<WlSurface>,
 }
 
 impl Display for Global {

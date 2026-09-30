@@ -21,6 +21,7 @@ enum OverlayStatus {
     Waiting,
     Configured(SuggestedSurfaceSize),
     UnsupportedSize(SuggestedSurfaceSize),
+    Cancelled,
     Closed,
 }
 
@@ -41,6 +42,22 @@ impl OverlayState {
 
     fn set_destination(&self, size: SurfaceSize) {
         self.viewport.set_destination(size.width(), size.height());
+    }
+
+    pub fn is_surface(&self, surface: &WlSurface) -> bool {
+        &self.surface == surface
+    }
+
+    pub const fn cancel(&mut self) {
+        if self.buffer.is_none() {
+            return;
+        }
+
+        if !matches!(self.status, OverlayStatus::Configured(_)) {
+            return;
+        }
+
+        self.status = OverlayStatus::Cancelled;
     }
 }
 
@@ -134,7 +151,7 @@ impl Wayland {
                         height: size.height,
                     });
                 }
-                OverlayStatus::Closed => {
+                OverlayStatus::Closed | OverlayStatus::Cancelled => {
                     drop(self.state.overlay.take());
                     return Err(Error::OverlayClosed);
                 }
@@ -142,8 +159,9 @@ impl Wayland {
         }
     }
 
-    /// Displays a frozen capture until the compositor closes the overlay.
+    /// Displays a frozen capture until cancelled or closed by the compositor.
     ///
+    /// Right-clicking the preview cancels it when pointer input is available.
     /// Captures before creating the overlay and leaves keyboard focus unchanged.
     /// Replaces any existing overlay.
     ///
@@ -163,11 +181,14 @@ impl Wayland {
     /// Returns [`Error::UnsupportedOutputTransform`] if the output advertises
     /// an unknown transform.
     pub fn preview_output(&mut self, output_id: OutputId) -> Result<(), Error> {
+        self.state.pointer_surface = None;
         drop(self.state.overlay.take());
 
         let result = self.run_preview(output_id);
 
+        self.state.pointer_surface = None;
         drop(self.state.overlay.take());
+
         result
     }
 
@@ -217,7 +238,7 @@ impl Wayland {
             };
 
             match overlay.status {
-                OverlayStatus::Closed => return Ok(()),
+                OverlayStatus::Closed | OverlayStatus::Cancelled => return Ok(()),
                 OverlayStatus::UnsupportedSize(size) => {
                     return Err(Error::UnsupportedOverlaySize {
                         width: size.width,

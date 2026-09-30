@@ -26,9 +26,8 @@ pub enum Command {
         #[arg(value_name = "OUTPUT")]
         output: String,
     },
-    /// Display a frozen output preview. Stop with Ctrl+C.
+    /// Display a frozen output preview. Right-click to close
     PreviewOutput {
-        /// Output name, such as DP-1
         #[arg(value_name = "OUTPUT")]
         output: String,
     },

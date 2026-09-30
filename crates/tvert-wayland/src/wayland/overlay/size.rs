@@ -1,6 +1,5 @@
-use std::{fmt::Display, num::NonZeroI32};
-
 use crate::Error;
+use std::{fmt::Display, num::NonZeroI32};
 
 /// Suggested dimensions in surface-local coordinates.
 ///

@@ -1,16 +1,13 @@
 mod args;
-mod export;
 
-use crate::{
-    args::{Args, Command},
-    export::save_png,
-};
+use crate::args::{Args, Command};
 use clap::Parser;
 use color_eyre::{Result, eyre::eyre};
 use std::process::ExitCode;
 use tracing::debug;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 use tvert_wayland::Wayland;
+use tvert_workflow::capture_output_to_png;
 
 fn main() -> Result<ExitCode> {
     color_eyre::install()?;
@@ -60,8 +57,7 @@ fn main() -> Result<ExitCode> {
 
     match args.command {
         Command::CaptureOutput { path, .. } => {
-            let image = wayland.capture_output(output_id)?;
-            save_png(&path, &image)?;
+            capture_output_to_png(&mut wayland, output_id, &path)?;
             println!("Saved {}", path.display());
         }
         Command::ProbeOverlay { .. } => {

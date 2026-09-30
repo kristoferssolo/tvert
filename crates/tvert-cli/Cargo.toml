@@ -5,13 +5,16 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "tvert"
+path = "src/main.rs"
+
 [dependencies]
 tvert-wayland.workspace = true
-tvert-image.workspace = true
+tvert-workflow.workspace = true
 
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true
-png.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing.workspace = true
 

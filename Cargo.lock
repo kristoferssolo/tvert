@@ -806,11 +806,10 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "color-eyre",
- "png",
  "tracing",
  "tracing-subscriber",
- "tvert-image",
  "tvert-wayland",
+ "tvert-workflow",
 ]
 
 [[package]]
@@ -837,6 +836,15 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",
+]
+
+[[package]]
+name = "tvert-workflow"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "tvert-image",
+ "tvert-wayland",
 ]
 
 [[package]]

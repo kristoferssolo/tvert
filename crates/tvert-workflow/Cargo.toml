@@ -1,0 +1,15 @@
+[package]
+name = "tvert-workflow"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tvert-image.workspace = true
+tvert-wayland.workspace = true
+
+thiserror.workspace = true
+
+[lints]
+workspace = true

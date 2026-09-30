@@ -28,7 +28,9 @@ fn main() -> Result<ExitCode> {
     };
 
     let output_name = match &args.command {
-        Command::CaptureOutput { output, .. } | Command::ProbeOverlay { output } => output,
+        Command::CaptureOutput { output, .. }
+        | Command::ProbeOverlay { output }
+        | Command::PreviewOutput { output } => output,
     };
 
     tracing_subscriber::fmt()
@@ -64,8 +66,11 @@ fn main() -> Result<ExitCode> {
         }
         Command::ProbeOverlay { .. } => {
             let configure = wayland.prepare_overlay(output_id)?;
-
             println!("Overlay configure: {configure} surface-local units");
+        }
+        Command::PreviewOutput { .. } => {
+            println!("Displaying frozen output. Press Ctrl+C to stop.");
+            wayland.preview_output(output_id)?;
         }
     }
 

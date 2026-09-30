@@ -58,4 +58,8 @@ pub enum Error {
     /// Initial registry discovery failed
     #[error("failed to initialize the Wayland registry")]
     RegistryInit(#[from] GlobalError),
+
+    /// The preview cannot resolve the suggested surface dimensions
+    #[error("unsupported overlay surface size: {width}x{height}")]
+    UnsupportedOverlaySize { width: u32, height: u32 },
 }

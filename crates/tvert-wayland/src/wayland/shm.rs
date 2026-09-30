@@ -3,7 +3,7 @@ use crate::{
     wayland::{pixels, screencopy::ShmRequirements},
 };
 use rustix::fs::{MemfdFlags, memfd_create};
-use std::{fs::File, os::fd::AsFd};
+use std::{fs::File, io::Write, os::fd::AsFd};
 use wayland_client::{
     QueueHandle, WEnum, delegate_noop,
     protocol::{
@@ -86,6 +86,51 @@ impl ShmBuffer {
     ) -> Result<CapturedImage, Error> {
         pixels::read_image(&self.file, requirements, y_inverted)
     }
+
+    pub fn from_image(
+        shm: &WlShm,
+        advertised_formats: &[Format],
+        image: &CapturedImage,
+        queue_handle: &QueueHandle<State>,
+    ) -> Result<Self, Error> {
+        let width = image.width.get();
+        let height = image.height.get();
+        let stride = width.checked_mul(4).ok_or(Error::InvalidShmLayout)?;
+        let byte_len = stride.checked_mul(height).ok_or(Error::InvalidShmLayout)?;
+        let byte_len = usize::try_from(byte_len).map_err(|_| Error::InvalidShmLayout)?;
+
+        if image.rgba.len() != byte_len {
+            return Err(Error::InvalidShmLayout);
+        }
+
+        let requirements = ShmRequirements {
+            format: WEnum::Value(Format::Argb8888),
+            height,
+            width,
+            stride,
+        };
+
+        let mut buffer = Self::new(shm, advertised_formats, requirements, queue_handle)?;
+
+        let mut bytes = Vec::new();
+        bytes.try_reserve_exact(byte_len)?;
+        bytes.extend_from_slice(&image.rgba);
+
+        for pixel in bytes.as_chunks_mut::<4>().0 {
+            let [red, green, blue, alpha] = *pixel;
+
+            *pixel = [
+                premultiply(blue, alpha)?,
+                premultiply(green, alpha)?,
+                premultiply(red, alpha)?,
+                alpha,
+            ];
+        }
+
+        buffer.file.write_all(&bytes)?;
+
+        Ok(buffer)
+    }
 }
 
 impl Drop for ShmBuffer {
@@ -96,6 +141,16 @@ impl Drop for ShmBuffer {
 
 fn shm_dimensions(value: u32) -> Result<i32, Error> {
     i32::try_from(value).map_err(|_| Error::InvalidShmLayout)
+}
+
+fn premultiply(channel: u8, alpha: u8) -> Result<u8, Error> {
+    let value = u32::from(channel)
+        .checked_mul(u32::from(alpha))
+        .and_then(|value| value.checked_add(127))
+        .and_then(|value| value.checked_div(255))
+        .ok_or(Error::InvalidShmLayout)?;
+
+    u8::try_from(value).map_err(|_| Error::InvalidShmLayout)
 }
 
 delegate_noop!(State: ignore WlShmPool);

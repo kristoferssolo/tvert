@@ -1,5 +1,6 @@
-use crate::{Error, PixelSize, wayland::screencopy::ShmRequirements};
+use crate::{Error, wayland::screencopy::ShmRequirements};
 use std::num::NonZeroU32;
+use tvert_image::PixelSize;
 use wayland_client::{WEnum, protocol::wl_shm::Format};
 
 /// Validated row stride for a four-byte-per-pixel SHM image

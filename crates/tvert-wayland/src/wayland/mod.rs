@@ -8,7 +8,6 @@ mod screencopy;
 mod shm;
 
 pub use overlay::OverlayState;
-pub use pixels::CapturedImage;
 pub use screencopy::ScreencopyState;
 
 use crate::{Error, Global, Output, State};

@@ -31,16 +31,16 @@ impl PixelSize {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::ImageSizeOverflow`] if the dimensions or byte
+    /// Returns [`Error::SizeOverflow`] if the dimensions or byte
     /// length cannot be represented by this process.
     pub fn rgba_len(self) -> Result<usize, Error> {
-        let width = usize::try_from(self.width.get()).map_err(|_| Error::ImageSizeOverflow)?;
-        let height = usize::try_from(self.height.get()).map_err(|_| Error::ImageSizeOverflow)?;
+        let width = usize::try_from(self.width.get()).map_err(|_| Error::SizeOverflow)?;
+        let height = usize::try_from(self.height.get()).map_err(|_| Error::SizeOverflow)?;
 
         width
             .checked_mul(height)
             .and_then(|pixels| pixels.checked_mul(4))
-            .ok_or(Error::ImageSizeOverflow)
+            .ok_or(Error::SizeOverflow)
     }
 }
 
@@ -53,6 +53,6 @@ mod tests {
     fn rejects_unrepresentable_rgba_storage() {
         let size = PixelSize::new(NonZeroU32::MAX, NonZeroU32::MAX);
 
-        assert_matches!(assert_err!(size.rgba_len()), Error::ImageSizeOverflow);
+        assert_matches!(assert_err!(size.rgba_len()), Error::SizeOverflow);
     }
 }

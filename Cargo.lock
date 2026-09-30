@@ -809,7 +809,18 @@ dependencies = [
  "png",
  "tracing",
  "tracing-subscriber",
+ "tvert-image",
  "tvert-wayland",
+]
+
+[[package]]
+name = "tvert-image"
+version = "0.1.0"
+dependencies = [
+ "claims",
+ "rstest",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -821,6 +832,7 @@ dependencies = [
  "rustix",
  "thiserror",
  "tracing",
+ "tvert-image",
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",

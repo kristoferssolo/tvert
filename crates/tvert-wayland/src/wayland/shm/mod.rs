@@ -3,11 +3,12 @@ mod layout;
 pub use layout::{ShmLayout, Stride};
 
 use crate::{
-    CapturedImage, Error, State,
+    Error, State,
     wayland::{pixels, screencopy::ShmRequirements},
 };
 use rustix::fs::{MemfdFlags, memfd_create};
 use std::{fs::File, io::Write, os::fd::AsFd};
+use tvert_image::CapturedImage;
 use wayland_client::{
     QueueHandle, WEnum, delegate_noop,
     protocol::{

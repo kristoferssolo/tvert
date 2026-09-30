@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 tvert-wayland = { path = "crates/tvert-wayland" }
+tvert-image = { path = "crates/tvert-image" }
 
 clap = { version = "4.6" }
 color-eyre = "0.6"
@@ -54,6 +55,7 @@ license.workspace = true
 
 [dependencies]
 tvert-wayland.workspace = true
+tvert-image.workspace = true
 
 clap = { workspace = true, features = ["derive"] }
 color-eyre.workspace = true

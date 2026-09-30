@@ -1,16 +1,7 @@
-use crate::{Error, PixelSize, wayland::shm::ShmLayout};
+use crate::{Error, wayland::shm::ShmLayout};
 use std::{fs::File, os::unix::fs::FileExt};
+use tvert_image::CapturedImage;
 use wayland_client::{WEnum, protocol::wl_shm::Format};
-
-/// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
-///
-/// Alpha is straight, not premultiplied.
-#[derive(Debug)]
-pub struct CapturedImage {
-    pub size: PixelSize,
-    /// Consecutive red, green, blue, and alpha bytes, without row padding
-    pub rgba: Vec<u8>,
-}
 
 pub fn read_image(
     file: &File,

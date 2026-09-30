@@ -8,7 +8,7 @@ use std::{
     io::{BufWriter, Write},
     path::Path,
 };
-use tvert_wayland::CapturedImage;
+use tvert_image::CapturedImage;
 
 /// Saves an RGBA8 image as a PNG without replacing an existing file.
 ///
@@ -24,7 +24,7 @@ pub fn save_png(path: &Path, image: &CapturedImage) -> Result<()> {
 
     if image.rgba.len() != expected_len {
         bail!(
-            "invalid RBGA image length: expected {expected_len}, got {}",
+            "invalid RGBA image length: expected {expected_len}, got {}",
             image.rgba.len()
         );
     }

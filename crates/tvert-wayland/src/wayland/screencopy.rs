@@ -1,4 +1,5 @@
-use crate::{CapturedImage, Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
+use crate::{Error, OutputId, State, Wayland, wayland::shm::ShmBuffer};
+use tvert_image::CapturedImage;
 use wayland_client::{
     Dispatch, Proxy, WEnum,
     protocol::wl_shm::{Format, WlShm},

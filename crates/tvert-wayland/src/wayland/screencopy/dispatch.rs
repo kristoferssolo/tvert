@@ -1,5 +1,5 @@
 use crate::{
-    State,
+    state::State,
     wayland::{screencopy::state::ScreencopyStatus, shm::ShmRequirements},
 };
 use wayland_client::{Dispatch, Proxy};

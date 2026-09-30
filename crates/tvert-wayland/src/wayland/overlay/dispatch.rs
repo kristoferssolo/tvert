@@ -1,5 +1,5 @@
 use crate::{
-    State,
+    state::State,
     wayland::overlay::{SuggestedSurfaceSize, size::SurfaceSize, state::OverlayStatus},
 };
 use wayland_client::{Dispatch, Proxy, delegate_noop, protocol::wl_surface::WlSurface};

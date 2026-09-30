@@ -1,4 +1,4 @@
-use crate::{Error, OutputId, State, Wayland};
+use crate::{Error, OutputId, Wayland, state::State};
 use tracing::debug;
 use wayland_client::{Proxy, delegate_noop};
 use wayland_protocols::ext::image_capture_source::v1::client::{

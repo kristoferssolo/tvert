@@ -10,7 +10,7 @@ mod shm;
 pub use overlay::OverlayState;
 pub use screencopy::ScreencopyState;
 
-use crate::{Error, Global, Output, State};
+use crate::{Error, Global, Output, state::State};
 use tracing::debug;
 use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
 

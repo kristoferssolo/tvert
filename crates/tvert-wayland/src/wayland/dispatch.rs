@@ -1,4 +1,4 @@
-use crate::{PhysicalSize, State, output::OutputData};
+use crate::{PhysicalSize, output::OutputData, state::State};
 use tracing::debug;
 use wayland_client::{
     Connection, Dispatch, Proxy, WEnum, delegate_noop,

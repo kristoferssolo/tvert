@@ -1,4 +1,4 @@
-use crate::State;
+use crate::state::State;
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum,
     protocol::{

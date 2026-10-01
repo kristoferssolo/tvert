@@ -3,6 +3,7 @@ name = "tvert-image"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+description = "Image storage, validation, and PNG encoding for Tvert"
 license.workspace = true
 
 [dependencies]

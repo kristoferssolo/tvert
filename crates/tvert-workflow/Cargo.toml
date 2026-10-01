@@ -3,6 +3,7 @@ name = "tvert-workflow"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+description = "Capture and export workflows for Tvert"
 license.workspace = true
 
 [dependencies]

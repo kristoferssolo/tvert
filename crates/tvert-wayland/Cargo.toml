@@ -3,6 +3,7 @@ name = "tvert-wayland"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+description = "Native Wayland capture and selection overlays for Tvert"
 license.workspace = true
 
 [dependencies]

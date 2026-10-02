@@ -1,8 +1,4 @@
 use std::fmt::Display;
-use wayland_client::{
-    WEnum,
-    protocol::wl_output::{Transform, WlOutput},
-};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OutputId(pub u32);
@@ -19,40 +15,6 @@ pub struct Output {
     pub name: String,
     pub size: PhysicalSize,
     pub scale: i32,
-}
-
-#[derive(Debug, Clone)]
-pub struct OutputData {
-    pub id: OutputId,
-}
-
-#[derive(Debug, Clone)]
-pub struct OutputState {
-    pub proxy: WlOutput,
-    pub name: Option<String>,
-    pub size: Option<PhysicalSize>,
-    pub scale: i32,
-    pub transform: WEnum<Transform>,
-}
-
-impl OutputState {
-    pub const fn new(proxy: WlOutput) -> Self {
-        Self {
-            proxy,
-            name: None,
-            size: None,
-            scale: 1,
-            transform: WEnum::Value(Transform::Normal),
-        }
-    }
-    pub fn snapshot(&self, id: OutputId) -> Option<Output> {
-        Some(Output {
-            id,
-            name: self.name.clone()?,
-            size: self.size?,
-            scale: self.scale,
-        })
-    }
 }
 
 impl Display for PhysicalSize {

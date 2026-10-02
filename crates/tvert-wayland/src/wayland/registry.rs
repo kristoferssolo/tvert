@@ -1,7 +1,7 @@
 use crate::{
     Global, OutputId,
-    output::{OutputData, OutputState},
     state::State,
+    wayland::{OutputState, output::OutputData},
 };
 use std::{collections::HashMap, ops::RangeInclusive};
 use tracing::{trace, warn};

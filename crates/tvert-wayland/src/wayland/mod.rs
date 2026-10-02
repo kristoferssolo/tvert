@@ -1,12 +1,14 @@
 mod capture;
 mod dispatch;
 mod input;
+mod output;
 mod overlay;
 mod pixels;
 mod registry;
 mod screencopy;
 mod shm;
 
+pub use output::OutputState;
 pub use overlay::OverlayState;
 pub use screencopy::ScreencopyState;
 

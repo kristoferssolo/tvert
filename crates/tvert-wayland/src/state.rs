@@ -1,8 +1,7 @@
 use crate::{
     Output, OutputId,
     global::Global,
-    output::OutputState,
-    wayland::{OverlayState, ScreencopyState},
+    wayland::{OutputState, OverlayState, ScreencopyState},
 };
 use std::collections::HashMap;
 use wayland_client::protocol::{

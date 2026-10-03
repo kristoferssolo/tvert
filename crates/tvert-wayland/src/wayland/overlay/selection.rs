@@ -1,3 +1,5 @@
+use crate::wayland::overlay::SurfacePosition;
+
 /// Selection progress with endpoints in surface-local coordinates.
 ///
 /// Completed endpoints have not yet been normalized or clipped.
@@ -8,16 +10,19 @@ pub enum SelectionState {
     Idle,
     /// The left button is held while the endpoint moves
     Dragging {
-        start: (f64, f64),
-        current: (f64, f64),
+        start: SurfacePosition,
+        current: SurfacePosition,
     },
     /// The left button was released
-    Complete { start: (f64, f64), end: (f64, f64) },
+    Complete {
+        start: SurfacePosition,
+        end: SurfacePosition,
+    },
 }
 
 impl SelectionState {
     /// Starts a drag, replacing the previous selection
-    pub const fn begin(&mut self, position: (f64, f64)) {
+    pub const fn begin(&mut self, position: SurfacePosition) {
         *self = Self::Dragging {
             start: position,
             current: position,
@@ -25,7 +30,7 @@ impl SelectionState {
     }
 
     /// Updates an active drag's endpoint
-    pub const fn update(&mut self, position: (f64, f64)) {
+    pub const fn update(&mut self, position: SurfacePosition) {
         let Self::Dragging { current, .. } = self else {
             return;
         };

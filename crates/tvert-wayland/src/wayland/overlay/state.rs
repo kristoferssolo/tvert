@@ -1,7 +1,7 @@
 use crate::{
     OutputId,
     wayland::{
-        overlay::{SelectionState, SuggestedSurfaceSize, size::SurfaceSize},
+        overlay::{SelectionState, SuggestedSurfaceSize, SurfacePosition, size::SurfaceSize},
         shm::ShmBuffer,
     },
 };
@@ -27,7 +27,7 @@ pub struct OverlayState {
     pub viewport: WpViewport,
     pub status: OverlayStatus,
     pub buffer: Option<ShmBuffer>,
-    pub pointer_position: Option<(f64, f64)>,
+    pub pointer_position: Option<SurfacePosition>,
     pub selection: SelectionState,
 }
 

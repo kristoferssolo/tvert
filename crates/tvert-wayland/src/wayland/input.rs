@@ -1,4 +1,7 @@
-use crate::{state::State, wayland::overlay::SelectionState};
+use crate::{
+    state::State,
+    wayland::overlay::{SelectionState, SurfacePosition},
+};
 use tracing::{debug, trace};
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum,
@@ -45,9 +48,19 @@ impl State {
             return;
         }
 
-        overlay.pointer_position = Some((x, y));
-        overlay.selection.update((x, y));
-        trace!(x, y, "overlay pointer position");
+        let Some(position) = SurfacePosition::new(x, y) else {
+            overlay.pointer_position = None;
+            overlay.selection.cacel_drag();
+            return;
+        };
+
+        overlay.pointer_position = Some(position);
+        overlay.selection.update(position);
+        trace!(
+            x = position.x(),
+            y = position.y(),
+            "overlay pointer position"
+        );
     }
 
     fn handle_overlay_button(&mut self, button: u32, button_state: ButtonState) {

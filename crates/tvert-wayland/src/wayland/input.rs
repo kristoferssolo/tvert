@@ -1,7 +1,4 @@
-use crate::{
-    state::State,
-    wayland::overlay::{SelectionState, SurfacePosition},
-};
+use crate::{state::State, wayland::overlay::SurfacePosition};
 use tracing::{debug, trace};
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum,
@@ -88,9 +85,18 @@ impl State {
             (BUTTON_LEFT, ButtonState::Released) => {
                 overlay.selection.finish();
 
-                if let SelectionState::Complete { start, end } = overlay.selection {
-                    debug!(?start, ?end, "selection drag complete");
-                }
+                let Some(rectangle) = overlay.selection_rectangle() else {
+                    debug!("selection drag has no area");
+                    return;
+                };
+
+                debug!(
+                    left = rectangle.left(),
+                    top = rectangle.top(),
+                    right = rectangle.right(),
+                    bottom = rectangle.bottom(),
+                    "selection drag complete"
+                );
             }
             (BUTTON_RIGHT, ButtonState::Pressed) => overlay.cancel(),
             _ => {}

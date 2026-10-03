@@ -1,7 +1,9 @@
 use crate::{
     OutputId,
     wayland::{
-        overlay::{SelectionState, SuggestedSurfaceSize, SurfacePosition, size::SurfaceSize},
+        overlay::{
+            SelectionState, SuggestedSurfaceSize, SurfacePosition, SurfaceRect, size::SurfaceSize,
+        },
         shm::ShmBuffer,
     },
 };
@@ -55,6 +57,22 @@ impl OverlayState {
 
     pub const fn is_interactive(&self) -> bool {
         self.buffer.is_some() && matches!(self.status, OverlayStatus::Configured(_))
+    }
+
+    /// Returns the selection rectangle within the configured surface bounds.
+    ///
+    /// Returns `None` if the overlay is not interactive or the selection is empty.
+    pub fn selection_rectangle(&self) -> Option<SurfaceRect> {
+        if !self.is_interactive() {
+            return None;
+        }
+
+        let OverlayStatus::Configured(suggested) = self.status else {
+            return None;
+        };
+
+        let bounds = SurfaceSize::try_from(suggested).ok()?;
+        self.selection.rectangle(bounds)
     }
 }
 

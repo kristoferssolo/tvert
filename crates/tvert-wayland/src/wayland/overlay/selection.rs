@@ -1,4 +1,4 @@
-use crate::wayland::overlay::SurfacePosition;
+use crate::wayland::overlay::{SurfacePosition, SurfaceRect, size::SurfaceSize};
 
 /// Selection progress with endpoints in surface-local coordinates.
 ///
@@ -57,5 +57,21 @@ impl SelectionState {
         }
 
         *self = Self::Idle;
+    }
+
+    /// Returns the current nonempty selection clipped to the supplied bounds.
+    ///
+    /// Returns `None` for an idle selection or an empty clipped rectangle.
+    pub fn rectangle(self, bounds: SurfaceSize) -> Option<SurfaceRect> {
+        let (start, end) = match self {
+            Self::Idle => return None,
+            Self::Dragging {
+                start,
+                current: end,
+            }
+            | Self::Complete { start, end } => (start, end),
+        };
+
+        SurfaceRect::from_position(start, end, bounds)
     }
 }

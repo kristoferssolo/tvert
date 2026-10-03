@@ -1,5 +1,5 @@
-use crate::state::State;
-use tracing::trace;
+use crate::{state::State, wayland::overlay::SelectionState};
+use tracing::{debug, trace};
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum,
     protocol::{
@@ -10,11 +10,13 @@ use wayland_client::{
 
 // BTN_RIGHT from Linux input-event-codes.h
 const BUTTON_RIGHT: u32 = 0x111;
+// BTN_LEFT from Linux input-event-codes.h
+const BUTTON_LEFT: u32 = 0x110;
 
 impl State {
     /// Clears pointer focus and releases the retained pointer object
     pub fn release_pointer(&mut self) {
-        self.pointer_surface = None;
+        self.clear_pointer_focus();
 
         if let Some(pointer) = self.pointer.take() {
             pointer.release();
@@ -26,6 +28,7 @@ impl State {
 
         if let Some(overlay) = self.overlay.as_mut() {
             overlay.pointer_position = None;
+            overlay.selection.cacel_drag();
         }
     }
 
@@ -43,7 +46,42 @@ impl State {
         }
 
         overlay.pointer_position = Some((x, y));
+        overlay.selection.update((x, y));
         trace!(x, y, "overlay pointer position");
+    }
+
+    fn handle_overlay_button(&mut self, button: u32, button_state: ButtonState) {
+        let Some(surface) = self.pointer_surface.as_ref() else {
+            return;
+        };
+
+        let Some(overlay) = self.overlay.as_mut() else {
+            return;
+        };
+
+        if !overlay.is_surface(surface) || !overlay.is_interactive() {
+            return;
+        }
+
+        match (button, button_state) {
+            (BUTTON_LEFT, ButtonState::Pressed) => {
+                let Some(position) = overlay.pointer_position else {
+                    return;
+                };
+
+                overlay.selection.begin(position);
+                debug!(?position, "selection drag started");
+            }
+            (BUTTON_LEFT, ButtonState::Released) => {
+                overlay.selection.finish();
+
+                if let SelectionState::Complete { start, end } = overlay.selection {
+                    debug!(?start, ?end, "selection drag complete");
+                }
+            }
+            (BUTTON_RIGHT, ButtonState::Pressed) => overlay.cancel(),
+            _ => {}
+        }
     }
 }
 
@@ -121,23 +159,11 @@ impl Dispatch<WlPointer, ()> for State {
                 state.clear_pointer_focus();
             }
             PointerEvent::Button {
-                button: BUTTON_RIGHT,
-                state: WEnum::Value(ButtonState::Pressed),
+                button,
+                state: WEnum::Value(button_state),
                 ..
             } => {
-                let Some(surface) = state.pointer_surface.as_ref() else {
-                    return;
-                };
-
-                let Some(overlay) = state.overlay.as_mut() else {
-                    return;
-                };
-
-                if !overlay.is_surface(surface) {
-                    return;
-                }
-
-                overlay.cancel();
+                state.handle_overlay_button(button, button_state);
             }
             _ => {}
         }

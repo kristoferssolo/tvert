@@ -2,7 +2,7 @@ use crate::{
     Error, OutputId, Wayland,
     wayland::{
         overlay::{
-            SuggestedSurfaceSize,
+            SelectionState, SuggestedSurfaceSize,
             size::SurfaceSize,
             state::{OverlayState, OverlayStatus},
         },
@@ -82,6 +82,7 @@ impl Wayland {
             status: OverlayStatus::Waiting,
             buffer: None,
             pointer_position: None,
+            selection: SelectionState::default(),
         });
 
         if let Some(overlay) = self.state.overlay.as_ref() {

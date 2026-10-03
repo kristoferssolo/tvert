@@ -1,7 +1,7 @@
 use crate::{
     OutputId,
     wayland::{
-        overlay::{SuggestedSurfaceSize, size::SurfaceSize},
+        overlay::{SelectionState, SuggestedSurfaceSize, size::SurfaceSize},
         shm::ShmBuffer,
     },
 };
@@ -28,6 +28,7 @@ pub struct OverlayState {
     pub status: OverlayStatus,
     pub buffer: Option<ShmBuffer>,
     pub pointer_position: Option<(f64, f64)>,
+    pub selection: SelectionState,
 }
 
 impl OverlayState {
@@ -43,16 +44,17 @@ impl OverlayState {
         &self.surface == surface
     }
 
+    /// Cancels an interactive overlay
     pub const fn cancel(&mut self) {
-        if self.buffer.is_none() {
-            return;
-        }
-
-        if !matches!(self.status, OverlayStatus::Configured(_)) {
+        if !self.is_interactive() {
             return;
         }
 
         self.status = OverlayStatus::Cancelled;
+    }
+
+    pub const fn is_interactive(&self) -> bool {
+        self.buffer.is_some() && matches!(self.status, OverlayStatus::Configured(_))
     }
 }
 

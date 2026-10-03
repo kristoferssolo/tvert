@@ -27,6 +27,7 @@ pub struct OverlayState {
     pub viewport: WpViewport,
     pub status: OverlayStatus,
     pub buffer: Option<ShmBuffer>,
+    pub pointer_position: Option<(f64, f64)>,
 }
 
 impl OverlayState {

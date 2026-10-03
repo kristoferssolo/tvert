@@ -1,4 +1,5 @@
 use crate::state::State;
+use tracing::trace;
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum,
     protocol::{
@@ -11,12 +12,38 @@ use wayland_client::{
 const BUTTON_RIGHT: u32 = 0x111;
 
 impl State {
+    /// Clears pointer focus and releases the retained pointer object
     pub fn release_pointer(&mut self) {
         self.pointer_surface = None;
 
         if let Some(pointer) = self.pointer.take() {
             pointer.release();
         }
+    }
+
+    fn clear_pointer_focus(&mut self) {
+        self.pointer_surface = None;
+
+        if let Some(overlay) = self.overlay.as_mut() {
+            overlay.pointer_position = None;
+        }
+    }
+
+    fn update_overlay_pointer_position(&mut self, x: f64, y: f64) {
+        let Some(surface) = self.pointer_surface.as_ref() else {
+            return;
+        };
+
+        let Some(overlay) = self.overlay.as_mut() else {
+            return;
+        };
+
+        if !overlay.is_surface(surface) {
+            return;
+        }
+
+        overlay.pointer_position = Some((x, y));
+        trace!(x, y, "overlay pointer position");
     }
 }
 
@@ -70,15 +97,28 @@ impl Dispatch<WlPointer, ()> for State {
 
         match event {
             PointerEvent::Enter {
-                serial, surface, ..
+                serial,
+                surface,
+                surface_x,
+                surface_y,
             } => {
+                state.clear_pointer_focus();
                 pointer.set_cursor(serial, None, 0, 0);
                 state.pointer_surface = Some(surface);
+                state.update_overlay_pointer_position(surface_x, surface_y);
+            }
+            PointerEvent::Motion {
+                surface_x,
+                surface_y,
+                ..
+            } => {
+                state.update_overlay_pointer_position(surface_x, surface_y);
             }
             PointerEvent::Leave { surface, .. } => {
-                if state.pointer_surface.as_ref() == Some(&surface) {
-                    state.pointer_surface = None;
+                if state.pointer_surface.as_ref() != Some(&surface) {
+                    return;
                 }
+                state.clear_pointer_focus();
             }
             PointerEvent::Button {
                 button: BUTTON_RIGHT,

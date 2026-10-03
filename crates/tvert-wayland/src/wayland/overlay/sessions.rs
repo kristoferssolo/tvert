@@ -81,6 +81,7 @@ impl Wayland {
             viewport,
             status: OverlayStatus::Waiting,
             buffer: None,
+            pointer_position: None,
         });
 
         if let Some(overlay) = self.state.overlay.as_ref() {

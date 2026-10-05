@@ -2,16 +2,17 @@ use crate::{
     Error, OutputId, Wayland,
     wayland::{
         overlay::{
-            OverlayBuffer, SelectionState, SuggestedSurfaceSize,
+            OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfaceRect, render,
             size::SurfaceSize,
             state::{OverlayState, OverlayStatus},
         },
         shm::ShmBuffer,
     },
 };
+use tvert_image::CapturedImage;
 use wayland_client::{
     Proxy, WEnum,
-    protocol::{wl_compositor::WlCompositor, wl_shm::WlShm},
+    protocol::{wl_compositor::WlCompositor, wl_output::Transform, wl_shm::WlShm},
 };
 use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
 use wayland_protocols_wlr::layer_shell::v1::client::{
@@ -123,6 +124,9 @@ impl Wayland {
     /// Captures before creating the overlay and leaves keyboard focus unchanged.
     /// Replaces any existing overlay.
     ///
+    /// Completing a left-button drag displays a selection outline. Starting
+    /// another drag clears the previous outline.
+    ///
     /// # Errors
     ///
     /// Returns errors from [`Self::capture_output`] or [`Self::prepare_overlay`].
@@ -138,6 +142,8 @@ impl Wayland {
     ///
     /// Returns [`Error::UnsupportedOutputTransform`] if the output advertises
     /// an unknown transform.
+    ///
+    /// Returns [`Error::Image`] if constructing an outlined image fails.
     pub fn preview_output(&mut self, output_id: OutputId) -> Result<(), Error> {
         self.state.pointer_surface = None;
         drop(self.state.overlay.take());
@@ -165,6 +171,56 @@ impl Wayland {
         };
 
         let size = SurfaceSize::try_from(self.prepare_overlay(output_id)?)?;
+        self.display_preview(&image, size, transform, None)?;
+        let mut displayed = (size, None);
+
+        loop {
+            let Some(overlay) = self.state.overlay.as_ref() else {
+                return Ok(());
+            };
+
+            let size = match overlay.status {
+                OverlayStatus::Closed | OverlayStatus::Cancelled => return Ok(()),
+                OverlayStatus::UnsupportedSize(size) => {
+                    return Err(Error::UnsupportedOverlaySize {
+                        width: size.width,
+                        height: size.height,
+                    });
+                }
+                OverlayStatus::Waiting => {
+                    self.event_queue.blocking_dispatch(&mut self.state)?;
+                    continue;
+                }
+                OverlayStatus::Configured(size) => SurfaceSize::try_from(size)?,
+            };
+
+            let rectangle = match overlay.selection {
+                SelectionState::Complete { .. } => overlay.selection_rectangle(),
+                SelectionState::Idle | SelectionState::Dragging { .. } => None,
+            };
+
+            let next = (size, rectangle);
+
+            if next != displayed {
+                self.display_preview(&image, size, transform, rectangle)?;
+                displayed = next;
+            }
+
+            self.event_queue.blocking_dispatch(&mut self.state)?;
+        }
+    }
+
+    fn display_preview(
+        &mut self,
+        image: &CapturedImage,
+        size: SurfaceSize,
+        transform: Transform,
+        rectangle: Option<SurfaceRect>,
+    ) -> Result<(), Error> {
+        let rendered = rectangle
+            .map(|rectangle| render::selection_outline(image, rectangle, size, transform))
+            .transpose()?;
+        let display_image = rendered.as_ref().unwrap_or(image);
 
         let Some(shm) = self.state.shm.as_ref() else {
             return Err(Error::MissingGlobal {
@@ -173,9 +229,10 @@ impl Wayland {
         };
 
         let queue_handle = self.event_queue.handle();
-        let buffer = ShmBuffer::from_image(shm, &self.state.shm_formats, &image, &queue_handle)?;
+        let buffer =
+            ShmBuffer::from_image(shm, &self.state.shm_formats, display_image, &queue_handle)?;
 
-        let image_size = image.size();
+        let image_size = display_image.size();
         let width = i32::try_from(image_size.width().get()).map_err(|_| Error::InvalidShmLayout)?;
         let height =
             i32::try_from(image_size.height().get()).map_err(|_| Error::InvalidShmLayout)?;
@@ -188,26 +245,11 @@ impl Wayland {
         overlay.set_destination(size);
         overlay.surface.attach(Some(buffer.proxy()), 0, 0);
         overlay.surface.damage_buffer(0, 0, width, height);
-        overlay.buffer = Some(OverlayBuffer::Submitted(buffer));
+
+        let previous = overlay.buffer.replace(OverlayBuffer::Submitted(buffer));
         overlay.surface.commit();
+        drop(previous);
 
-        loop {
-            let Some(overlay) = self.state.overlay.as_ref() else {
-                return Ok(());
-            };
-
-            match overlay.status {
-                OverlayStatus::Closed | OverlayStatus::Cancelled => return Ok(()),
-                OverlayStatus::UnsupportedSize(size) => {
-                    return Err(Error::UnsupportedOverlaySize {
-                        width: size.width,
-                        height: size.height,
-                    });
-                }
-                OverlayStatus::Waiting | OverlayStatus::Configured(_) => {
-                    self.event_queue.blocking_dispatch(&mut self.state)?;
-                }
-            }
-        }
+        Ok(())
     }
 }

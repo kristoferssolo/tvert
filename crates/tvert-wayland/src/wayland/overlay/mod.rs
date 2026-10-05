@@ -2,6 +2,7 @@ mod buffer;
 mod dispatch;
 mod position;
 mod rectangle;
+mod render;
 mod selection;
 mod sessions;
 mod size;

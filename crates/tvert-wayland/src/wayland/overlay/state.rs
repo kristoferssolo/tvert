@@ -1,10 +1,8 @@
 use crate::{
     OutputId,
-    wayland::{
-        overlay::{
-            SelectionState, SuggestedSurfaceSize, SurfacePosition, SurfaceRect, size::SurfaceSize,
-        },
-        shm::ShmBuffer,
+    wayland::overlay::{
+        OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfacePosition, SurfaceRect,
+        size::SurfaceSize,
     },
 };
 use wayland_client::protocol::wl_surface::WlSurface;
@@ -28,7 +26,7 @@ pub struct OverlayState {
     pub layer_surface: ZwlrLayerSurfaceV1,
     pub viewport: WpViewport,
     pub status: OverlayStatus,
-    pub buffer: Option<ShmBuffer>,
+    pub buffer: Option<OverlayBuffer>,
     pub pointer_position: Option<SurfacePosition>,
     pub selection: SelectionState,
 }

@@ -2,7 +2,7 @@ use crate::{
     Error, OutputId, Wayland,
     wayland::{
         overlay::{
-            SelectionState, SuggestedSurfaceSize,
+            OverlayBuffer, SelectionState, SuggestedSurfaceSize,
             size::SurfaceSize,
             state::{OverlayState, OverlayStatus},
         },
@@ -188,7 +188,7 @@ impl Wayland {
         overlay.set_destination(size);
         overlay.surface.attach(Some(buffer.proxy()), 0, 0);
         overlay.surface.damage_buffer(0, 0, width, height);
-        overlay.buffer = Some(buffer);
+        overlay.buffer = Some(OverlayBuffer::Submitted(buffer));
         overlay.surface.commit();
 
         loop {

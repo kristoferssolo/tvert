@@ -168,4 +168,3 @@ fn premultiply(channel: u8, alpha: u8) -> Result<u8, Error> {
 }
 
 delegate_noop!(State: ignore WlShmPool);
-delegate_noop!(State: ignore WlBuffer);

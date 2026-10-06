@@ -1,3 +1,5 @@
+use std::collections::TryReserveError;
+
 /// An error calculating, processing, or encoding image data
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -12,4 +14,12 @@ pub enum Error {
     /// Encoding PNG data or writing it to the destination failed
     #[error("failed to encode PNG")]
     PngEncoding(#[from] png::EncodingError),
+
+    /// The crop is empty, reversed, or extends outside the source image
+    #[error("crop bounds must describe a nonempty region inside the image")]
+    InvalidCropBounds,
+
+    /// Allocating image storage failed
+    #[error("failed to allocate image storage")]
+    Allocation(#[from] TryReserveError),
 }

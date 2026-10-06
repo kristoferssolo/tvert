@@ -81,9 +81,10 @@ fn unpremultiply(channel: u8, alpha: u8) -> Result<u8, Error> {
 mod tests {
     use super::*;
     use crate::wayland::shm::ShmRequirements;
-    use claims::{assert_err, assert_matches, assert_ok};
+    use claims::{assert_err, assert_ok};
     use rstest::rstest;
     use rustix::fs::{MemfdFlags, memfd_create};
+    use std::assert_matches;
     use std::io::{ErrorKind, Write};
 
     fn read_fixture(

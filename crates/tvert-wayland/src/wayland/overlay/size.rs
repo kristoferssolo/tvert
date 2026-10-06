@@ -57,10 +57,10 @@ impl Display for SuggestedSurfaceSize {
 
 #[cfg(test)]
 mod tests {
-    use claims::{assert_err, assert_matches, assert_ok};
-    use rstest::rstest;
-
     use super::*;
+    use claims::{assert_err, assert_ok};
+    use rstest::rstest;
+    use std::assert_matches;
 
     #[test]
     fn accepts_the_maximum_viewport_dimensions() {

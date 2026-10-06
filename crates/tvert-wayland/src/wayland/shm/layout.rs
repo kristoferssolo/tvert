@@ -197,8 +197,9 @@ impl TryFrom<ShmRequirements> for ShmLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_err, assert_matches, assert_ok};
+    use claims::{assert_err, assert_ok};
     use rstest::rstest;
+    use std::assert_matches;
 
     #[test]
     fn distinguishes_backing_storage_from_packed_pixels() {

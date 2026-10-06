@@ -47,7 +47,8 @@ impl PixelSize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_err, assert_matches};
+    use claims::assert_err;
+    use std::assert_matches;
 
     #[test]
     fn rejects_unrepresentable_rgba_storage() {

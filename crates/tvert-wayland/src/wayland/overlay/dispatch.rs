@@ -2,10 +2,17 @@ use crate::{
     state::State,
     wayland::overlay::{SuggestedSurfaceSize, size::SurfaceSize, state::OverlayStatus},
 };
-use wayland_client::{Dispatch, Proxy, delegate_noop, protocol::wl_surface::WlSurface};
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::{
     Event, ZwlrLayerSurfaceV1,
+};
+
+use wayland_client::{
+    Dispatch, Proxy, delegate_noop,
+    protocol::{
+        wl_callback::{Event as CallbackEvent, WlCallback},
+        wl_surface::WlSurface,
+    },
 };
 
 impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
@@ -54,6 +61,31 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
             }
             _ => {}
         }
+    }
+}
+
+impl Dispatch<WlCallback, ()> for State {
+    fn event(
+        state: &mut Self,
+        callback: &WlCallback,
+        event: <WlCallback as Proxy>::Event,
+        _data: &(),
+        _conn: &wayland_client::Connection,
+        _qh: &wayland_client::QueueHandle<Self>,
+    ) {
+        if !matches!(event, CallbackEvent::Done { .. }) {
+            return;
+        }
+
+        let Some(overlay) = state.overlay.as_mut() else {
+            return;
+        };
+
+        if overlay.frame_callback.as_ref() != Some(callback) {
+            return;
+        }
+
+        drop(overlay.frame_callback.take());
     }
 }
 

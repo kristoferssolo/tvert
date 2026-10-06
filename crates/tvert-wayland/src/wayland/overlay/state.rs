@@ -5,7 +5,7 @@ use crate::{
         size::SurfaceSize,
     },
 };
-use wayland_client::protocol::wl_surface::WlSurface;
+use wayland_client::protocol::{wl_callback::WlCallback, wl_surface::WlSurface};
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1;
 
@@ -29,6 +29,7 @@ pub struct OverlayState {
     pub buffer: Option<OverlayBuffer>,
     pub pointer_position: Option<SurfacePosition>,
     pub selection: SelectionState,
+    pub frame_callback: Option<WlCallback>,
 }
 
 impl OverlayState {

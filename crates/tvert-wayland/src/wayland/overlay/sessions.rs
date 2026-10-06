@@ -82,6 +82,7 @@ impl Wayland {
             viewport,
             status: OverlayStatus::Waiting,
             buffer: None,
+            frame_callback: None,
             pointer_position: None,
             selection: SelectionState::default(),
         });
@@ -120,12 +121,9 @@ impl Wayland {
 
     /// Displays a frozen capture until cancelled or closed by the compositor.
     ///
-    /// Right-clicking the preview cancels it when pointer input is available.
-    /// Captures before creating the overlay and leaves keyboard focus unchanged.
-    /// Replaces any existing overlay.
-    ///
-    /// Completing a left-button drag displays a selection outline. Starting
-    /// another drag clears the previous outline.
+    /// Dragging with the left button displays a selection outline. Releasing
+    /// keeps it visible; starting another drag replaces it.
+    /// Redraws are paced by compositor frame callbacks.
     ///
     /// # Errors
     ///
@@ -194,11 +192,7 @@ impl Wayland {
                 OverlayStatus::Configured(size) => SurfaceSize::try_from(size)?,
             };
 
-            let rectangle = match overlay.selection {
-                SelectionState::Complete { .. } => overlay.selection_rectangle(),
-                SelectionState::Idle | SelectionState::Dragging { .. } => None,
-            };
-
+            let rectangle = overlay.selection_rectangle();
             let next = (size, rectangle);
 
             if next != displayed {
@@ -245,6 +239,7 @@ impl Wayland {
         overlay.set_destination(size);
         overlay.surface.attach(Some(buffer.proxy()), 0, 0);
         overlay.surface.damage_buffer(0, 0, width, height);
+        overlay.frame_callback = Some(overlay.surface.frame(&queue_handle, ()));
 
         let previous = overlay.buffer.replace(OverlayBuffer::Submitted(buffer));
         overlay.surface.commit();

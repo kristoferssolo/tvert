@@ -195,7 +195,7 @@ impl Wayland {
             let rectangle = overlay.selection_rectangle();
             let next = (size, rectangle);
 
-            if next != displayed {
+            if next != displayed && overlay.frame_callback.is_none() {
                 self.display_preview(&image, size, transform, rectangle)?;
                 displayed = next;
             }

@@ -1,5 +1,6 @@
 mod buffer;
 mod dispatch;
+mod geometry;
 mod position;
 mod rectangle;
 mod render;

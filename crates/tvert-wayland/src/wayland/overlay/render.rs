@@ -1,6 +1,10 @@
 use crate::{
     Error,
-    wayland::overlay::{SurfaceRect, size::SurfaceSize},
+    wayland::overlay::{
+        SurfaceRect,
+        geometry::{PixelRect, buffer_edges},
+        size::SurfaceSize,
+    },
 };
 use tvert_image::{CapturedImage, PixelSize};
 use wayland_client::protocol::wl_output::Transform;
@@ -35,10 +39,27 @@ pub fn selection_outline(
     rgba.try_reserve_exact(image.rgba().len())?;
     rgba.extend_from_slice(image.rgba());
 
-    for (y, row) in rgba.chunks_exact_mut(row_bytes).enumerate() {
+    let Some(bounds) = PixelRect::from_surface(rectangle, surface_size, image.size(), transform)?
+    else {
+        return Ok(CapturedImage::new(image.size(), rgba)?);
+    };
+
+    for (y, row) in rgba
+        .chunks_exact_mut(row_bytes)
+        .enumerate()
+        .skip(bounds.y().start)
+        .take(bounds.y().len())
+    {
         let y = f64::from(u32::try_from(y).map_err(|_| Error::InvalidShmLayout)?) + 0.5;
 
-        for (x, pixel) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        for (x, pixel) in row
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .enumerate()
+            .skip(bounds.x().start)
+            .take(bounds.x().len())
+        {
             let x = f64::from(u32::try_from(x).map_err(|_| Error::InvalidShmLayout)?) + 0.5;
 
             if outline.contains(x, y) {
@@ -66,24 +87,9 @@ impl Outline {
         pixels: PixelSize,
         transform: Transform,
     ) -> Result<Self, Error> {
+        let [left, top, right, bottom] = buffer_edges(rectangle, surface, pixels, transform)?;
         let surface_width = f64::from(surface.width());
         let surface_height = f64::from(surface.height());
-        let left = rectangle.left() / surface_width;
-        let top = rectangle.top() / surface_height;
-        let right = rectangle.right() / surface_width;
-        let bottom = rectangle.bottom() / surface_height;
-
-        let [left, top, right, bottom] = match transform {
-            Transform::Normal => [left, top, right, bottom],
-            Transform::_90 => [1.0 - bottom, left, 1.0 - top, right],
-            Transform::_180 => [1.0 - right, 1.0 - bottom, 1.0 - left, 1.0 - top],
-            Transform::_270 => [top, 1.0 - right, bottom, 1.0 - left],
-            Transform::Flipped => [1.0 - right, top, 1.0 - left, bottom],
-            Transform::Flipped90 => [top, left, bottom, right],
-            Transform::Flipped180 => [left, 1.0 - bottom, right, 1.0 - top],
-            Transform::Flipped270 => [1.0 - bottom, 1.0 - right, 1.0 - top, 1.0 - left],
-            _ => return Err(Error::UnsupportedOutputTransform(u32::from(transform))),
-        };
 
         let (axis_width, axis_height) = match transform {
             Transform::_90 | Transform::_270 | Transform::Flipped90 | Transform::Flipped270 => {
@@ -92,16 +98,13 @@ impl Outline {
             _ => (surface_width, surface_height),
         };
 
-        let width = f64::from(pixels.width().get());
-        let height = f64::from(pixels.height().get());
-
         Ok(Self {
-            left: left * width,
-            top: top * height,
-            right: right * width,
-            bottom: bottom * height,
-            stroke_x: BORDER_WIDTH * width / axis_width,
-            stroke_y: BORDER_WIDTH * height / axis_height,
+            left,
+            top,
+            right,
+            bottom,
+            stroke_x: BORDER_WIDTH * f64::from(pixels.width().get()) / axis_width,
+            stroke_y: BORDER_WIDTH * f64::from(pixels.height().get()) / axis_height,
         })
     }
 
@@ -216,6 +219,32 @@ mod tests {
                 .0
                 .iter()
                 .all(|pixel| *pixel == original)
+        );
+    }
+
+    #[test]
+    fn draws_a_fractional_selection_containing_one_pixel() {
+        let image = assert_ok!(CapturedImage::new(
+            pixels(8, 8),
+            repeat_n([10, 20, 30, 255], 64).flatten().collect()
+        ));
+        let surface = surface(8, 8);
+        let rectangle = rectangle((1.1, 1.1), (2.2, 2.2), surface);
+        let rendered = assert_ok!(selection_outline(
+            &image,
+            rectangle,
+            surface,
+            Transform::Normal
+        ));
+        let pixels = rendered.rgba().as_chunks::<4>().0;
+
+        assert_eq!(assert_some!(pixels.get(9)), &BORDER_COLOR);
+        assert_eq!(
+            pixels
+                .iter()
+                .filter(|pixel| **pixel == BORDER_COLOR)
+                .count(),
+            1
         );
     }
 }

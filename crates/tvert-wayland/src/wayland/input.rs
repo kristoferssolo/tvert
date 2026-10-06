@@ -1,11 +1,15 @@
 use crate::{state::State, wayland::overlay::SurfacePosition};
 use tracing::{debug, trace};
 use wayland_client::{
-    Connection, Dispatch, Proxy, QueueHandle, WEnum,
+    Connection, Dispatch, Proxy, QueueHandle, WEnum, delegate_noop,
     protocol::{
         wl_pointer::{ButtonState, Event as PointerEvent, WlPointer},
         wl_seat::{Capability, Event as SeatEvent, WlSeat},
     },
+};
+use wayland_protocols::wp::cursor_shape::v1::client::{
+    wp_cursor_shape_device_v1::{Shape, WpCursorShapeDeviceV1},
+    wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
 };
 
 // BTN_RIGHT from Linux input-event-codes.h
@@ -102,6 +106,28 @@ impl State {
             _ => {}
         }
     }
+
+    fn set_overlay_crusor(&self, pointer: &WlPointer, serial: u32, qh: &QueueHandle<Self>) {
+        let Some(surface) = self.pointer_surface.as_ref() else {
+            return;
+        };
+
+        let Some(overlay) = self.overlay.as_ref() else {
+            return;
+        };
+
+        if !overlay.is_surface(surface) {
+            return;
+        }
+
+        let Some(manager) = self.cursor_shape_manager.as_ref() else {
+            return;
+        };
+
+        let cursor = manager.get_pointer(pointer, qh, ());
+        cursor.set_shape(serial, Shape::Crosshair);
+        cursor.destroy();
+    }
 }
 
 impl Dispatch<WlSeat, ()> for State {
@@ -146,7 +172,7 @@ impl Dispatch<WlPointer, ()> for State {
         event: <WlPointer as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
     ) {
         if state.pointer.as_ref() != Some(pointer) {
             return;
@@ -160,9 +186,9 @@ impl Dispatch<WlPointer, ()> for State {
                 surface_y,
             } => {
                 state.clear_pointer_focus();
-                pointer.set_cursor(serial, None, 0, 0);
                 state.pointer_surface = Some(surface);
                 state.update_overlay_pointer_position(surface_x, surface_y);
+                state.set_overlay_crusor(pointer, serial, qh);
             }
             PointerEvent::Motion {
                 surface_x,
@@ -188,3 +214,6 @@ impl Dispatch<WlPointer, ()> for State {
         }
     }
 }
+
+delegate_noop!(State: ignore WpCursorShapeManagerV1);
+delegate_noop!(State: ignore WpCursorShapeDeviceV1);

@@ -109,6 +109,14 @@ impl State {
                 qh,
                 5..=5,
             ),
+            "wp_cursor_shape_manager_v1" => bind_once(
+                &mut self.cursor_shape_manager,
+                &mut self.bound_globals,
+                registry,
+                global,
+                qh,
+                1..=1,
+            ),
             _ => {}
         }
     }
@@ -183,6 +191,7 @@ impl State {
         destroy_removed!(capture_manager);
         destroy_removed!(screencopy_manager);
         destroy_removed!(viewporter);
+        destroy_removed!(cursor_shape_manager);
 
         if let Some(manager) = take_removed(&mut self.layer_shell, &mut self.bound_globals, name)
             && manager.version() >= 3

@@ -19,7 +19,10 @@ use wayland_protocols::{
         },
         image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
     },
-    wp::viewporter::client::wp_viewporter::WpViewporter,
+    wp::{
+        cursor_shape::v1::client::wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
+        viewporter::client::wp_viewporter::WpViewporter,
+    },
 };
 use wayland_protocols_wlr::{
     layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1,
@@ -53,4 +56,5 @@ pub struct State {
     pub seat: Option<WlSeat>,
     pub pointer: Option<WlPointer>,
     pub pointer_surface: Option<WlSurface>,
+    pub cursor_shape_manager: Option<WpCursorShapeManagerV1>,
 }

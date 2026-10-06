@@ -53,9 +53,9 @@ pub fn buffer_edges(
 
     let [left, top, right, bottom] = match transform {
         Transform::Normal => [left, top, right, bottom],
-        Transform::_90 => [1.0 - bottom, left, 1.0 - top, right],
+        Transform::_90 => [top, 1.0 - right, bottom, 1.0 - left],
         Transform::_180 => [1.0 - right, 1.0 - bottom, 1.0 - left, 1.0 - top],
-        Transform::_270 => [top, 1.0 - right, bottom, 1.0 - left],
+        Transform::_270 => [1.0 - bottom, left, 1.0 - top, right],
         Transform::Flipped => [1.0 - right, top, 1.0 - left, bottom],
         Transform::Flipped90 => [top, left, bottom, right],
         Transform::Flipped180 => [left, 1.0 - bottom, right, 1.0 - top],
@@ -131,9 +131,9 @@ mod tests {
 
     #[rstest]
     #[case(Transform::Normal, 20..60, 10..40)]
-    #[case(Transform::_90, 80..140, 10..30)]
+    #[case(Transform::_90, 20..80, 50..70)]
     #[case(Transform::_180, 100..140, 40..70)]
-    #[case(Transform::_270, 20..80, 50..70)]
+    #[case(Transform::_270, 80..140, 10..30)]
     #[case(Transform::Flipped, 100..140, 10..40)]
     #[case(Transform::Flipped90, 20..80, 10..30)]
     #[case(Transform::Flipped180, 20..60, 40..70)]

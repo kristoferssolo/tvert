@@ -1,4 +1,5 @@
 mod buffer;
+mod crop;
 mod dispatch;
 mod geometry;
 mod position;

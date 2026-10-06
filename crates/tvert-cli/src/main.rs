@@ -27,7 +27,7 @@ fn main() -> Result<ExitCode> {
     let output_name = match &args.command {
         Command::CaptureOutput { output, .. }
         | Command::ProbeOverlay { output }
-        | Command::PreviewOutput { output } => output,
+        | Command::SelectRegion { output } => output,
     };
 
     tracing_subscriber::fmt()
@@ -64,9 +64,13 @@ fn main() -> Result<ExitCode> {
             let configure = wayland.prepare_overlay(output_id)?;
             println!("Overlay configure: {configure} surface-local units");
         }
-        Command::PreviewOutput { .. } => {
-            println!("Displaying frozen output. Right-click to close, or press Ctrl+C.");
-            wayland.preview_output(output_id)?;
+        Command::SelectRegion { .. } => {
+            println!("Drag to select a region. Release to accept; right-click to cancel.");
+
+            match wayland.select_region(output_id)? {
+                Some(image) => println!("Selected {}", image.size()),
+                None => println!("Selection cancelled"),
+            }
         }
     }
 

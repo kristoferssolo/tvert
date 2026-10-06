@@ -2,7 +2,7 @@ use crate::{
     Error, OutputId, Wayland,
     wayland::{
         overlay::{
-            OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfaceRect, render,
+            OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfaceRect, crop, render,
             size::SurfaceSize,
             state::{OverlayState, OverlayStatus},
         },
@@ -119,11 +119,14 @@ impl Wayland {
         }
     }
 
-    /// Displays a frozen capture until cancelled or closed by the compositor.
+    /// Captures an output and waits for a nonempty region selection.
     ///
     /// Dragging with the left button displays a selection outline. Releasing
-    /// keeps it visible; starting another drag replaces it.
-    /// Redraws are paced by compositor frame callbacks.
+    /// returns an owned image oriented as displayed. Empty drags keep waiting.
+    /// Right-clicking or a compositor closure after mapping returns `None`.
+    ///
+    /// The overlay is destroyed before this method returns. Obtain `output_id`
+    /// from this instance's [`Self::outputs`] method.
     ///
     /// # Errors
     ///
@@ -131,30 +134,32 @@ impl Wayland {
     ///
     /// Returns [`Error::MissingGlobal`] if SHM is unavailable,
     /// [`Error::InvalidShmLayout`] or [`Error::UnsupportedShmFormat`] if the
-    /// display buffer cannot be created, [`Error::ImageAllocation`] if image
+    /// display buffer cannot be created, [`Error::ImageAllocation`] if outline
     /// storage cannot be allocated, or [`Error::ShmIo`] if writing it fails.
     ///
-    /// Returns [`Error::UnsupportedOverlaySize`] if the suggested surface
-    /// dimensions cannot be used, [`Error::OverlayClosed`] if the overlay
-    /// disappears before mapping, or [`Error::Dispatch`] if communication fails.
-    ///
-    /// Returns [`Error::UnsupportedOutputTransform`] if the output advertises
-    /// an unknown transform.
-    ///
-    /// Returns [`Error::Image`] if constructing an outlined image fails.
-    pub fn preview_output(&mut self, output_id: OutputId) -> Result<(), Error> {
+    /// Returns [`Error::UnsupportedOverlaySize`] if configured dimensions
+    /// cannot be used, [`Error::UnsupportedOutputTransform`] for an unknown
+    /// transform, [`Error::Image`] if outlining, cropping or transforming fails,
+    /// or [`Error::Dispatch`] if communication or overlay cleanup fails.
+    pub fn select_region(&mut self, output_id: OutputId) -> Result<Option<CapturedImage>, Error> {
         self.state.pointer_surface = None;
         drop(self.state.overlay.take());
 
-        let result = self.run_preview(output_id);
-
-        self.state.pointer_surface = None;
+        let result = self.run_selection(output_id);
         drop(self.state.overlay.take());
 
-        result
+        // Send destruction requests before handing the image to another stage.
+        // Preserve the original error if both selection and cleanup fail.
+        let cleanup = self.event_queue.roundtrip(&mut self.state);
+        self.state.pointer_surface = None;
+
+        let selected = result?;
+        cleanup?;
+
+        Ok(selected)
     }
 
-    fn run_preview(&mut self, output_id: OutputId) -> Result<(), Error> {
+    fn run_selection(&mut self, output_id: OutputId) -> Result<Option<CapturedImage>, Error> {
         let image = self.capture_output(output_id)?;
 
         let Some(output) = self.state.output_states.get(&output_id) else {
@@ -174,11 +179,11 @@ impl Wayland {
 
         loop {
             let Some(overlay) = self.state.overlay.as_ref() else {
-                return Ok(());
+                return Ok(None);
             };
 
             let size = match overlay.status {
-                OverlayStatus::Closed | OverlayStatus::Cancelled => return Ok(()),
+                OverlayStatus::Closed | OverlayStatus::Cancelled => return Ok(None),
                 OverlayStatus::UnsupportedSize(size) => {
                     return Err(Error::UnsupportedOverlaySize {
                         width: size.width,
@@ -193,6 +198,14 @@ impl Wayland {
             };
 
             let rectangle = overlay.selection_rectangle();
+
+            if matches!(overlay.selection, SelectionState::Complete { .. })
+                && let Some(rectangle) = rectangle
+                && let Some(selected) = crop::selection(&image, rectangle, size, transform)?
+            {
+                return Ok(Some(selected));
+            }
+
             let next = (size, rectangle);
 
             if next != displayed && overlay.frame_callback.is_none() {

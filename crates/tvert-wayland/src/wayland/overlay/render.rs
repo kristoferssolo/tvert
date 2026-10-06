@@ -152,9 +152,9 @@ mod tests {
 
     #[rstest]
     #[case(Transform::Normal, [20.0, 10.0, 60.0, 40.0])]
-    #[case(Transform::_90, [80.0, 10.0, 140.0, 30.0])]
+    #[case(Transform::_90, [20.0, 50.0, 80.0, 70.0])]
     #[case(Transform::_180, [100.0, 40.0, 140.0, 70.0])]
-    #[case(Transform::_270, [20.0, 50.0, 80.0, 70.0])]
+    #[case(Transform::_270, [80.0, 10.0, 140.0, 30.0])]
     #[case(Transform::Flipped, [100.0, 10.0, 140.0, 40.0])]
     #[case(Transform::Flipped90, [20.0, 10.0, 80.0, 30.0])]
     #[case(Transform::Flipped180, [20.0, 40.0, 60.0, 70.0])]

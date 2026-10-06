@@ -26,8 +26,8 @@ pub enum Command {
         #[arg(value_name = "OUTPUT")]
         output: String,
     },
-    /// Display a frozen output preview. Right-click to close
-    PreviewOutput {
+    /// Capture a region of an output. Right-click to cancel.
+    SelectRegion {
         #[arg(value_name = "OUTPUT")]
         output: String,
     },

@@ -1,5 +1,5 @@
 use crate::{Error, ImageTransform};
-use std::num::NonZeroU32;
+use std::{fmt::Display, num::NonZeroU32};
 
 /// Nonzero dimensions measured in pixels.
 ///
@@ -58,6 +58,12 @@ impl PixelSize {
             | ImageTransform::Flipped
             | ImageTransform::Flipped180 => self,
         }
+    }
+}
+
+impl Display for PixelSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}x{}", self.width, self.height)
     }
 }
 

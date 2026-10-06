@@ -1,6 +1,5 @@
-use std::{num::NonZeroU32, ops::Range};
-
 use crate::{Error, PixelSize};
+use std::{num::NonZeroU32, ops::Range};
 
 /// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
 ///

@@ -102,22 +102,21 @@ impl ShmLayout {
             other => return Err(Error::UnsupportedShmFormat(other)),
         };
 
-        let width = NonZeroU32::new(width).ok_or(Error::InvalidShmLayout)?;
-        let height = NonZeroU32::new(height).ok_or(Error::InvalidShmLayout)?;
-        let stride = Stride::new(stride, width)?;
+        let size = PixelSize::try_from((width, height)).map_err(|_| Error::InvalidShmLayout)?;
+        let stride = Stride::new(stride, size.width())?;
 
-        let pool_size = stride.buffer_len(height)?;
+        let pool_size = stride.buffer_len(size.height())?;
         let file_len = u64::try_from(pool_size).map_err(|_| Error::InvalidShmLayout)?;
 
-        let packed_stride = Stride::packed(width)?;
+        let packed_stride = Stride::packed(size.width())?;
         let row_bytes =
             usize::try_from(packed_stride.bytes()).map_err(|_| Error::InvalidShmLayout)?;
-        let rgba_len = usize::try_from(packed_stride.buffer_len(height)?)
+        let rgba_len = usize::try_from(packed_stride.buffer_len(size.height())?)
             .map_err(|_| Error::InvalidShmLayout)?;
 
         Ok(Self {
             format,
-            size: PixelSize::new(width, height),
+            size,
             stride,
             pool_size,
             file_len,

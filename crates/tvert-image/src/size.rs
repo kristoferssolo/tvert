@@ -61,6 +61,22 @@ impl PixelSize {
     }
 }
 
+impl TryFrom<(u32, u32)> for PixelSize {
+    type Error = Error;
+    fn try_from((width, height): (u32, u32)) -> Result<Self, Self::Error> {
+        let width = NonZeroU32::new(width).ok_or(Error::ZeroDimensions)?;
+        let height = NonZeroU32::new(height).ok_or(Error::ZeroDimensions)?;
+
+        Ok(Self::new(width, height))
+    }
+}
+
+impl From<PixelSize> for (u32, u32) {
+    fn from(size: PixelSize) -> Self {
+        (size.width.get(), size.height.get())
+    }
+}
+
 impl Display for PixelSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}x{}", self.width, self.height)
@@ -70,8 +86,34 @@ impl Display for PixelSize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::assert_err;
+    use claims::{assert_err, assert_ok};
+    use rstest::rstest;
     use std::assert_matches;
+
+    #[rstest]
+    #[case(1, 1)]
+    #[case(3840, 2160)]
+    #[case(u32::MAX, u32::MAX)]
+    fn converts_nonzero_dimensions_without_checking_storage(
+        #[case] width: u32,
+        #[case] height: u32,
+    ) {
+        let size = assert_ok!(PixelSize::try_from((width, height)));
+        let dimensions: (u32, u32) = size.into();
+
+        assert_eq!(dimensions, (width, height));
+    }
+
+    #[rstest]
+    #[case(0, 1)]
+    #[case(1, 0)]
+    #[case(0, 0)]
+    fn rejects_zero_dimensions(#[case] width: u32, #[case] height: u32) {
+        assert_matches!(
+            assert_err!(PixelSize::try_from((width, height))),
+            Error::ZeroDimensions
+        );
+    }
 
     #[test]
     fn rejects_unrepresentable_rgba_storage() {

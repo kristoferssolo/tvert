@@ -22,4 +22,8 @@ pub enum Error {
     /// Allocating image storage failed
     #[error("failed to allocate image storage")]
     Allocation(#[from] TryReserveError),
+
+    /// At least one pixel dimension is zero
+    #[error("image dimensions must be nonzero")]
+    ZeroDimensions,
 }

@@ -29,9 +29,9 @@ pub enum Error {
 ///
 /// Returns [`Error::Runtime`] if Iced cannot start or run the window.
 pub fn run(image: CapturedImage) -> Result<(), Error> {
-    let size = image.size();
-    let image_size = Size::from((size.width().get(), size.height().get()));
-    let preview = Handle::from_rgba(size.width().get(), size.height().get(), image.into_rgba());
+    let (width, height) = image.size().into();
+    let image_size = Size::from((width, height));
+    let preview = Handle::from_rgba(width, height, image.into_rgba());
 
     iced::application(
         move || Editor::new(preview.clone(), image_size),

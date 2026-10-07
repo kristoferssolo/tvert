@@ -1,5 +1,5 @@
 use crate::{Error, PixelSize};
-use std::{num::NonZeroU32, ops::Range};
+use std::ops::Range;
 
 /// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
 ///
@@ -68,15 +68,9 @@ impl CapturedImage {
             return Err(Error::InvalidCropBounds);
         }
 
-        let width = u32::try_from(x.len())
-            .ok()
-            .and_then(NonZeroU32::new)
-            .ok_or(Error::SizeOverflow)?;
-        let height = u32::try_from(y.len())
-            .ok()
-            .and_then(NonZeroU32::new)
-            .ok_or(Error::SizeOverflow)?;
-        let size = PixelSize::new(width, height);
+        let width = u32::try_from(x.len()).map_err(|_| Error::SizeOverflow)?;
+        let height = u32::try_from(y.len()).map_err(|_| Error::SizeOverflow)?;
+        let size = PixelSize::try_from((width, height))?;
 
         let row_bytes = source_width.checked_mul(4).ok_or(Error::SizeOverflow)?;
         let start = x.start.checked_mul(4).ok_or(Error::SizeOverflow)?;
@@ -102,15 +96,12 @@ impl CapturedImage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_err, assert_ok, assert_some};
+    use claims::{assert_err, assert_ok};
     use rstest::rstest;
     use std::assert_matches;
 
     fn pixels(width: u32, height: u32) -> PixelSize {
-        PixelSize::new(
-            assert_some!(NonZeroU32::new(width)),
-            assert_some!(NonZeroU32::new(height)),
-        )
+        assert_ok!(PixelSize::try_from((width, height)))
     }
 
     fn fixture() -> CapturedImage {

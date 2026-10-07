@@ -53,13 +53,18 @@ pub fn view(selected: Tool, can_undo: bool, can_redo: bool) -> Element<'static, 
 
     container(controls)
         .padding(4)
-        .style(|_| container::Style {
-            background: Some(Color::from_rgb8(35, 35, 40).into()),
-            border: Border {
-                radius: 10.0.into(),
+        .style(|theme: &Theme| {
+            let pallete = theme.extended_palette();
+
+            container::Style {
+                background: Some(pallete.background.weak.color.into()),
+                border: Border {
+                    color: pallete.background.strong.color,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
                 ..Default::default()
-            },
-            ..Default::default()
+            }
         })
         .into()
 }
@@ -91,22 +96,24 @@ fn icon_button(
 }
 
 fn button_style(theme: &Theme, status: button::Status, selected: bool) -> button::Style {
-    let background = match (selected, status) {
-        (true, button::Status::Hovered) => Some(Color::from_rgb8(82, 76, 128).into()),
-        (true, button::Status::Pressed) => Some(Color::from_rgb8(61, 56, 100).into()),
-        (true, _) => Some(Color::from_rgb8(70, 65, 112).into()),
-        (false, button::Status::Hovered | button::Status::Pressed) => {
-            Some(Color::from_rgb8(52, 51, 60).into())
-        }
-        (false, _) => None,
+    let pallete = theme.extended_palette();
+    let background = match status {
+        button::Status::Hovered => Some(pallete.background.strong.color.into()),
+        button::Status::Pressed => Some(pallete.background.weak.color.into()),
+        button::Status::Active | button::Status::Disabled => None,
     };
 
     button::Style {
         background,
         text_color: theme.palette().text,
         border: Border {
-            radius: 6.0.into(),
-            ..Default::default()
+            color: if selected {
+                theme.palette().primary
+            } else {
+                Color::TRANSPARENT
+            },
+            width: if selected { 1.5 } else { 0.0 },
+            radius: 3.0.into(),
         },
         ..Default::default()
     }
@@ -162,7 +169,7 @@ impl Program<Message> for Icon {
         let color = if self.enabled {
             theme.palette().text
         } else {
-            Color::from_rgb8(104, 104, 116)
+            theme.palette().text.scale_alpha(0.5)
         };
 
         frame.stroke(

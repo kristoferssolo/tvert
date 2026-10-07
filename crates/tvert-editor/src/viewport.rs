@@ -59,6 +59,14 @@ impl Viewport {
         ))
     }
 
+    /// Maps an image-pixel position into canvas coordinates
+    pub fn canvas_position(self, point: Point) -> Point {
+        Point::new(
+            (point.x / self.image_size.width).mul_add(self.bounds.width, self.bounds.x),
+            (point.y / self.image_size.height).mul_add(self.bounds.height, self.bounds.y),
+        )
+    }
+
     pub fn canvas_rectangle(self, rectangle: Rectangle) -> Rectangle {
         Rectangle {
             x: (rectangle.x / self.image_size.width).mul_add(self.bounds.width, self.bounds.x),

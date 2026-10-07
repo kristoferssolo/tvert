@@ -1,5 +1,5 @@
 use crate::{annotation_canvas::AnnotationCanvas, figure::Figure, message::Message, tool::Tool};
-use iced::widget::{button, canvas, column, container, image, pick_list, row, stack, text};
+use iced::widget::{button, canvas, column, container, image, pick_list, row, space, stack, text};
 use iced::{
     ContentFit, Element, Fill, Size,
     widget::{canvas::Cache, image::Handle},
@@ -28,8 +28,11 @@ impl Editor {
 
     pub fn update(&mut self, message: Message) {
         match message {
-            Message::AddFigure { tool, bounds } => {
-                self.figures.push(tool.figure(bounds));
+            Message::AddFigure { tool, start, end } => {
+                let Some(figure) = tool.figure(start, end) else {
+                    return;
+                };
+                self.figures.push(figure);
                 self.undone_figures.clear();
             }
             Message::SelectTool(tool) => {
@@ -71,11 +74,11 @@ impl Editor {
             column![
                 row![
                 pick_list(
-                    [Tool::Rectangle, Tool::Ellipse],
+                    [Tool::Rectangle, Tool::Ellipse, Tool::Line],
                     Some(self.tool),
                     Message::SelectTool
                     ),
-                    text("Rectangle").width(Fill),
+                    space().width(Fill),
                     button("Undo")
                         .on_press_maybe((!self.figures.is_empty()).then_some(Message::Undo)),
                     button("Redo")
@@ -112,6 +115,14 @@ mod tests {
         Rectangle::new(Point::new(x, 0.0), Size::new(10.0, 10.0))
     }
 
+    fn add_figure(tool: Tool, bounds: Rectangle) -> Message {
+        Message::AddFigure {
+            tool,
+            start: bounds.position(),
+            end: Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
+        }
+    }
+
     fn assert_figures(figures: &[Box<dyn Figure>], expected: &[(Tool, Rectangle)]) {
         let viewport = assert_some!(Viewport::new(
             Size::new(100.0, 100.0),
@@ -126,11 +137,14 @@ mod tests {
         let expected = expected
             .iter()
             .map(|&(tool, bounds)| {
-                tool.figure(bounds)
-                    .path(viewport)
-                    .raw()
-                    .iter()
-                    .collect::<Vec<_>>()
+                assert_some!(tool.figure(
+                    bounds.position(),
+                    Point::new(bounds.x + bounds.width, bounds.y + bounds.height)
+                ))
+                .path(viewport)
+                .raw()
+                .iter()
+                .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
 
@@ -144,7 +158,7 @@ mod tests {
         let second = (Tool::Ellipse, bounds(20.0));
 
         for (tool, bounds) in [first, second] {
-            editor.update(Message::AddFigure { tool, bounds });
+            editor.update(add_figure(tool, bounds));
         }
 
         editor.update(Message::Undo);
@@ -169,14 +183,11 @@ mod tests {
         let replacement = (Tool::Ellipse, bounds(30.0));
 
         for (tool, bounds) in [first, second] {
-            editor.update(Message::AddFigure { tool, bounds });
+            editor.update(add_figure(tool, bounds));
         }
 
         editor.update(Message::Undo);
-        editor.update(Message::AddFigure {
-            tool: replacement.0,
-            bounds: replacement.1,
-        });
+        editor.update(add_figure(replacement.0, replacement.1));
         editor.update(Message::Redo);
 
         assert_figures(&editor.figures, &[first, replacement]);
@@ -193,10 +204,7 @@ mod tests {
         assert_figures(&editor.undone_figures, &[]);
 
         let figure = (Tool::Rectangle, bounds(10.0));
-        editor.update(Message::AddFigure {
-            tool: figure.0,
-            bounds: figure.1,
-        });
+        editor.update(add_figure(figure.0, figure.1));
 
         editor.update(Message::Undo);
         editor.update(Message::Undo);
@@ -214,10 +222,7 @@ mod tests {
         let mut editor = editor();
         let figure = (Tool::Rectangle, bounds(10.0));
 
-        editor.update(Message::AddFigure {
-            tool: figure.0,
-            bounds: figure.1,
-        });
+        editor.update(add_figure(figure.0, figure.1));
         editor.update(Message::Undo);
         editor.update(Message::SelectTool(Tool::Ellipse));
 

@@ -1,7 +1,9 @@
 mod ellipse;
+mod line;
 mod rectangle;
 
 pub use ellipse::EllipseFigure;
+pub use line::LineFigure;
 pub use rectangle::RectangleFigure;
 
 use crate::viewport::Viewport;

@@ -1,9 +1,4 @@
-use crate::{
-    figure::Figure,
-    message::Message,
-    tool::Tool,
-    viewport::{Viewport, rectangle_between},
-};
+use crate::{figure::Figure, message::Message, tool::Tool, viewport::Viewport};
 use iced::{
     Color, Event, Point, Rectangle, Renderer, Size, Theme,
     keyboard::{
@@ -100,14 +95,16 @@ impl Program<Message> for AnnotationCanvas<'_> {
             ) => {
                 *state = Drag::Idle;
                 self.cache.clear();
+
                 let end = position
                     .and_then(|point| viewport.clamped_image_position(point))
                     .unwrap_or(end);
 
-                Some(rectangle_between(start, end).map_or_else(
-                    || Action::request_redraw().and_capture(),
-                    |bounds| Action::publish(Message::AddFigure { tool, bounds }).and_capture(),
-                ))
+                Some(if start == end {
+                    Action::request_redraw().and_capture()
+                } else {
+                    Action::publish(Message::AddFigure { tool, start, end }).and_capture()
+                })
             }
             _ => None,
         }
@@ -137,9 +134,9 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 }
 
                 if let Drag::Drawing { tool, start, end } = *state
-                    && let Some(bounds) = rectangle_between(start, end)
+                    && let Some(figure) = tool.figure(start, end)
                 {
-                    frame.stroke(&tool.figure(bounds).path(viewport), stroke);
+                    frame.stroke(&figure.path(viewport), stroke);
                 }
             });
 
@@ -205,11 +202,20 @@ mod tests {
     use rstest::rstest;
 
     fn dispatch(drag: &mut Drag, event: &Event, position: Option<Point>) -> Option<Message> {
+        dispatch_with_tool(drag, event, position, Tool::Rectangle)
+    }
+
+    fn dispatch_with_tool(
+        drag: &mut Drag,
+        event: &Event,
+        position: Option<Point>,
+        tool: Tool,
+    ) -> Option<Message> {
         let cache = Cache::new();
 
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
-            tool: Tool::Rectangle,
+            tool,
             figures: &[],
             cache: &cache,
         }
@@ -244,18 +250,12 @@ mod tests {
     }
 
     #[rstest]
-    #[case(
-        Point::new(320.0, 290.0),
-        Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0))
-    )]
-    #[case(
-        Point::new(620.0, 740.0),
-        Rectangle::new(Point::new(50.0, 25.0), Size::new(150.0, 75.0))
-    )]
-    #[case(Point::ORIGIN, Rectangle::with_size(Size::new(50.0, 25.0)))]
+    #[case(Point::new(320.0, 290.0), Point::new(150.0, 75.0))]
+    #[case(Point::new(620.0, 740.0), Point::new(200.0, 100.0))]
+    #[case(Point::ORIGIN, Point::ORIGIN)]
     fn commits_the_release_position_without_a_motion_event(
         #[case] release: Point,
-        #[case] expected: Rectangle,
+        #[case] expected: Point,
     ) {
         let mut drag = Drag::Idle;
         begin(&mut drag);
@@ -270,7 +270,8 @@ mod tests {
             message,
             Message::AddFigure {
                 tool: Tool::Rectangle,
-                bounds: expected
+                start: Point::new(50.0, 25.0),
+                end: expected
             }
         );
         assert!(matches!(drag, Drag::Idle));
@@ -298,7 +299,8 @@ mod tests {
             message,
             Message::AddFigure {
                 tool: Tool::Rectangle,
-                bounds: Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0))
+                start: Point::new(50.0, 25.0),
+                end: Point::new(150.0, 75.0)
             }
         );
         assert!(matches!(drag, Drag::Idle));
@@ -464,9 +466,45 @@ mod tests {
             message,
             Some(Message::AddFigure {
                 tool: Tool::Ellipse,
-                bounds: Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0)),
+                start: Point::new(50.0, 25.0),
+                end: Point::new(150.0, 75.0)
             }),
         );
+        assert!(matches!(drag, Drag::Idle));
+    }
+
+    #[rstest]
+    #[case(Point::new(320.0, 190.0), Point::new(150.0, 25.0))]
+    #[case(Point::new(120.0, 290.0), Point::new(50.0, 75.0))]
+    #[case(Point::new(80.0, 170.0), Point::new(30.0, 15.0))]
+    fn commits_line_endpoints_without_normalizing_them(#[case] release: Point, #[case] end: Point) {
+        let mut drag = Drag::Idle;
+
+        assert_none!(dispatch_with_tool(
+            &mut drag,
+            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
+            Some(Point::new(120.0, 190.0)),
+            Tool::Line,
+        ));
+
+        let message = dispatch_with_tool(
+            &mut drag,
+            &Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
+            Some(release),
+            Tool::Line,
+        );
+
+        let (start, actual_end) = assert_some!(message.and_then(|message| match message {
+            Message::AddFigure {
+                tool: Tool::Line,
+                start,
+                end,
+            } => Some((start, end)),
+            _ => None,
+        }));
+
+        assert_eq!(start, Point::new(50.0, 25.0));
+        assert!(actual_end.distance(end) < 0.001);
         assert!(matches!(drag, Drag::Idle));
     }
 }

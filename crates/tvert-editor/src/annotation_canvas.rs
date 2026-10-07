@@ -1,11 +1,11 @@
 use crate::{
-    Message,
+    message::Message,
     viewport::{Viewport, rectangle_between},
 };
 use iced::{
     Color, Event, Point, Rectangle, Renderer, Size, Theme,
     keyboard::{
-        Event as KeyboadrdEvent,
+        Event as KeyboardEvent,
         Key::{self},
         key,
     },
@@ -43,10 +43,19 @@ impl Program<Message> for AnnotationCanvas<'_> {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> Option<iced::widget::Action<Message>> {
+        if let Some(message) = history_shortcut(event) {
+            if matches!(state, Drag::Drawing { .. }) {
+                *state = Drag::Idle;
+                self.cache.clear();
+                return Some(Action::request_redraw().and_capture());
+            }
+            return Some(Action::publish(message).and_capture());
+        }
+
         let cancel = matches!(
             event,
             Event::Mouse(MouseEvent::ButtonPressed(Button::Right))
-                | Event::Keyboard(KeyboadrdEvent::KeyPressed {
+                | Event::Keyboard(KeyboardEvent::KeyPressed {
                     key: Key::Named(key::Named::Escape),
                     ..
                 })
@@ -147,11 +156,44 @@ impl Program<Message> for AnnotationCanvas<'_> {
     }
 }
 
+fn history_shortcut(event: &Event) -> Option<Message> {
+    let Event::Keyboard(KeyboardEvent::KeyPressed {
+        key: Key::Character(character),
+        modifiers,
+        repeat: false,
+        ..
+    }) = event
+    else {
+        return None;
+    };
+
+    if !modifiers.control() || modifiers.alt() || modifiers.logo() {
+        return None;
+    }
+
+    if character.eq_ignore_ascii_case("z") {
+        return Some(if modifiers.shift() {
+            Message::Redo
+        } else {
+            Message::Undo
+        });
+    }
+
+    if !modifiers.shift() && character.eq_ignore_ascii_case("y") {
+        return Some(Message::Redo);
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use claims::{assert_none, assert_some};
-    use iced::{keyboard, widget::canvas::Program};
+    use iced::{
+        keyboard::{self, Modifiers},
+        widget::canvas::Program,
+    };
     use rstest::rstest;
 
     fn dispatch(drag: &mut Drag, event: &Event, position: Option<Point>) -> Option<Message> {
@@ -179,6 +221,18 @@ mod tests {
         assert!(matches!(drag, Drag::Drawing { .. }));
     }
 
+    fn key_press(character: &str, modifiers: Modifiers, repeat: bool) -> Event {
+        Event::Keyboard(KeyboardEvent::KeyPressed {
+            key: Key::Character(character.into()),
+            modified_key: Key::Character(character.into()),
+            physical_key: key::Physical::Code(key::Code::KeyZ),
+            location: keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat,
+        })
+    }
+
     #[rstest]
     #[case(
         Point::new(320.0, 290.0),
@@ -196,13 +250,13 @@ mod tests {
         let mut drag = Drag::Idle;
         begin(&mut drag);
 
-        let Message::AddRectangle(rectangle) = assert_some!(dispatch(
+        let message = assert_some!(dispatch(
             &mut drag,
             &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
             Some(release),
         ));
 
-        assert_eq!(rectangle, expected);
+        assert_eq!(message, Message::AddRectangle(expected));
         assert!(matches!(drag, Drag::Idle));
     }
 
@@ -218,15 +272,18 @@ mod tests {
             Some(position),
         ));
 
-        let Message::AddRectangle(rectangle) = assert_some!(dispatch(
+        let message = assert_some!(dispatch(
             &mut drag,
             &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
             None,
         ));
 
         assert_eq!(
-            rectangle,
-            Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0))
+            message,
+            Message::AddRectangle(Rectangle::new(
+                Point::new(50.0, 25.0),
+                Size::new(100.0, 50.0)
+            ))
         );
         assert!(matches!(drag, Drag::Idle));
     }
@@ -234,7 +291,7 @@ mod tests {
     #[rstest]
     #[case(&Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)))]
     #[case(&Event::Window(WindowEvent::Unfocused))]
-    #[case(&Event::Keyboard(keyboard::Event::KeyPressed {
+    #[case(&Event::Keyboard(KeyboardEvent::KeyPressed {
         key: keyboard::Key::Named(keyboard::key::Named::Escape),
         modified_key: keyboard::Key::Named(keyboard::key::Named::Escape),
         physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Escape),
@@ -278,5 +335,66 @@ mod tests {
             Some(Point::new(120.0, 190.0)),
         ));
         assert!(matches!(drag, Drag::Idle));
+    }
+
+    #[rstest]
+    #[case("z", Modifiers::CTRL, Message::Undo)]
+    #[case("Z", Modifiers::CTRL, Message::Undo)]
+    #[case("y", Modifiers::CTRL, Message::Redo)]
+    #[case("Y", Modifiers::CTRL, Message::Redo)]
+    #[case("z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
+    #[case("Z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
+    fn publishes_history_shortcuts_without_a_cursor(
+        #[case] character: &str,
+        #[case] modifiers: Modifiers,
+        #[case] expected: Message,
+    ) {
+        let mut drag = Drag::Idle;
+        let event = key_press(character, modifiers, false);
+        assert_eq!(dispatch(&mut drag, &event, None), Some(expected));
+    }
+
+    #[rstest]
+    #[case("z", Modifiers::empty(), false)]
+    #[case("z", Modifiers::CTRL | Modifiers::ALT, false)]
+    #[case("z", Modifiers::CTRL | Modifiers::LOGO, false)]
+    #[case("y", Modifiers::CTRL | Modifiers::SHIFT, false)]
+    #[case("s", Modifiers::CTRL, false)]
+    #[case("z", Modifiers::CTRL, true)]
+    fn ignores_unrelated_keys_and_repeats(
+        #[case] character: &str,
+        #[case] modifiers: Modifiers,
+        #[case] repeat: bool,
+    ) {
+        let mut drag = Drag::Idle;
+        begin(&mut drag);
+        assert_none!(dispatch(
+            &mut drag,
+            &key_press(character, modifiers, repeat),
+            None,
+        ));
+        assert!(matches!(drag, Drag::Drawing { .. }));
+    }
+
+    #[rstest]
+    #[case("z", Modifiers::CTRL, Message::Undo)]
+    #[case("y", Modifiers::CTRL, Message::Redo)]
+    #[case("z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
+    fn cancels_the_draft_before_applying_history(
+        #[case] character: &str,
+        #[case] modifiers: Modifiers,
+        #[case] expected: Message,
+    ) {
+        let mut drag = Drag::Idle;
+        begin(&mut drag);
+        let event = key_press(character, modifiers, false);
+        assert_none!(dispatch(&mut drag, &event, None));
+        assert!(matches!(drag, Drag::Idle));
+        assert_none!(dispatch(
+            &mut drag,
+            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            Some(Point::new(320.0, 290.0)),
+        ));
+        assert_eq!(dispatch(&mut drag, &event, None), Some(expected));
     }
 }

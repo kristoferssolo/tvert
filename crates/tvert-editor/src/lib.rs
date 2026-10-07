@@ -1,11 +1,10 @@
 mod annotation_canvas;
+mod editor;
+mod message;
 mod viewport;
 
-use crate::annotation_canvas::AnnotationCanvas;
-use iced::widget::canvas::Cache;
-use iced::widget::{canvas, column, container, image, stack, text};
-use iced::{ContentFit, Element, Fill, Theme, widget::image::Handle, window};
-use iced::{Rectangle, Size};
+use crate::editor::Editor;
+use iced::{Size, Theme, widget::image::Handle, window};
 use tvert_image::CapturedImage;
 
 /// An editor window failure
@@ -47,63 +46,4 @@ pub fn run(image: CapturedImage) -> Result<(), Error> {
     .resizable(true)
     .run()?;
     Ok(())
-}
-
-struct Editor {
-    preview: Handle,
-    image_size: Size,
-    rectangles: Vec<Rectangle>,
-    annotation_cache: Cache,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Message {
-    AddRectangle(Rectangle),
-}
-
-impl Editor {
-    fn new(preview: Handle, image_size: Size) -> Self {
-        Self {
-            preview,
-            image_size,
-            rectangles: Vec::new(),
-            annotation_cache: Cache::new(),
-        }
-    }
-    fn update(&mut self, message: Message) {
-        match message {
-            Message::AddRectangle(rectangle) => {
-                self.rectangles.push(rectangle);
-                self.annotation_cache.clear();
-            }
-        }
-    }
-
-    fn view(&self) -> Element<'_, Message> {
-        let picture = image(&self.preview)
-            .width(Fill)
-            .height(Fill)
-            .content_fit(ContentFit::Contain);
-
-        let annotations = canvas(AnnotationCanvas {
-            image_size: self.image_size,
-            rectangles: &self.rectangles,
-            cache: &self.annotation_cache,
-        })
-        .width(Fill)
-        .height(Fill);
-
-        container(
-            column![
-                text("Rectangle"),
-                stack![picture, annotations].width(Fill).height(Fill),
-                text("Drag to draw. Right-click or Esc to cancel the current drag.").size(14),
-            ]
-            .spacing(12),
-        )
-        .padding(16)
-        .width(Fill)
-        .height(Fill)
-        .into()
-    }
 }

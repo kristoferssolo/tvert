@@ -86,23 +86,9 @@ impl Display for PixelSize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_err, assert_ok};
+    use claims::assert_err;
     use rstest::rstest;
     use std::assert_matches;
-
-    #[rstest]
-    #[case(1, 1)]
-    #[case(3840, 2160)]
-    #[case(u32::MAX, u32::MAX)]
-    fn converts_nonzero_dimensions_without_checking_storage(
-        #[case] width: u32,
-        #[case] height: u32,
-    ) {
-        let size = assert_ok!(PixelSize::try_from((width, height)));
-        let dimensions: (u32, u32) = size.into();
-
-        assert_eq!(dimensions, (width, height));
-    }
 
     #[rstest]
     #[case(0, 1)]

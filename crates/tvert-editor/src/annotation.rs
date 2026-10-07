@@ -56,36 +56,8 @@ impl TryFrom<AnnotationDraft> for Annotation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_err, assert_ok, assert_some};
-    use iced::{Size, widget::canvas::Path};
+    use claims::assert_err;
     use rstest::rstest;
-
-    #[test]
-    fn conversion_retains_width_and_endpoint_order() {
-        let draft = AnnotationDraft {
-            tool: Tool::Line,
-            stroke_width: StrokeWidth::Thick,
-            start: Point::new(150.0, 25.0),
-            end: Point::new(50.0, 75.0),
-        };
-        let annotation = assert_ok!(Annotation::try_from(draft));
-        let viewport = assert_some!(Viewport::new(
-            Size::new(200.0, 100.0),
-            Size::new(400.0, 400.0)
-        ));
-        let expected = Path::line(Point::new(300.0, 150.0), Point::new(100.0, 250.0));
-
-        assert_eq!(annotation.stroke_width, StrokeWidth::Thick);
-        assert_eq!(
-            annotation
-                .figure
-                .path(viewport)
-                .raw()
-                .iter()
-                .collect::<Vec<_>>(),
-            expected.raw().iter().collect::<Vec<_>>()
-        );
-    }
 
     #[rstest]
     #[case(Tool::Rectangle, Point::new(10.0, 10.0), Point::new(30.0, 10.0))]

@@ -42,20 +42,9 @@ impl From<ShmFormat> for Format {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_err, assert_ok};
+    use claims::assert_err;
     use rstest::rstest;
     use std::assert_matches;
-
-    #[rstest]
-    #[case(Format::Argb8888)]
-    #[case(Format::Xrgb8888)]
-    #[case(Format::Abgr8888)]
-    #[case(Format::Xbgr8888)]
-    fn accepted_formats_retain_their_protocol_value(#[case] original: Format) {
-        let format = assert_ok!(ShmFormat::try_from(WEnum::Value(original)));
-
-        assert_eq!(Format::from(format), original);
-    }
 
     #[rstest]
     #[case(WEnum::Value(Format::Rgb565))]

@@ -3,6 +3,7 @@ mod editor;
 mod figure;
 mod message;
 mod tool;
+mod toolbar;
 mod viewport;
 
 use crate::editor::Editor;

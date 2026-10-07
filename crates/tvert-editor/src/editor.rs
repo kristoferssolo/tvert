@@ -1,10 +1,10 @@
+use crate::toolbar;
 use crate::{annotation_canvas::AnnotationCanvas, figure::Figure, message::Message, tool::Tool};
-use iced::widget::{button, canvas, column, container, image, pick_list, row, space, stack, text};
+use iced::widget::{canvas, column, container, image, stack, text};
 use iced::{
     ContentFit, Element, Fill, Size,
     widget::{canvas::Cache, image::Handle},
 };
-use strum::VariantArray;
 
 pub struct Editor {
     preview: Handle,
@@ -73,19 +73,13 @@ impl Editor {
 
         container(
             column![
-                row![
-                pick_list(
-                    Tool::VARIANTS,
-                    Some(self.tool),
-                    Message::SelectTool
-                    ),
-                    space().width(Fill),
-                    button("Undo")
-                        .on_press_maybe((!self.figures.is_empty()).then_some(Message::Undo)),
-                    button("Redo")
-                        .on_press_maybe((!self.undone_figures.is_empty()).then_some(Message::Redo)),
-                ]
-                .spacing(8),
+            container(
+                toolbar::view(
+                    self.tool,
+                    !self.figures.is_empty(),
+                    !self.undone_figures.is_empty()
+                    )
+                ).center_x(Fill),
                 stack![picture, annotations].width(Fill).height(Fill),
                 text("Drag to draw. Esc/right-click: cancel. Ctrl+Z: undo. Ctrl+Y/Ctrl+Shift+Z: redo.").size(14),
             ]

@@ -74,7 +74,7 @@ impl Editor {
             column![
                 row![
                 pick_list(
-                    [Tool::Rectangle, Tool::Ellipse, Tool::Line],
+                    [Tool::Rectangle, Tool::Ellipse, Tool::Line, Tool::Arrow],
                     Some(self.tool),
                     Message::SelectTool
                     ),
@@ -155,7 +155,7 @@ mod tests {
     fn undo_and_redo_restore_the_original_drawing_order() {
         let mut editor = editor();
         let first = (Tool::Rectangle, bounds(10.0));
-        let second = (Tool::Ellipse, bounds(20.0));
+        let second = (Tool::Arrow, bounds(20.0));
 
         for (tool, bounds) in [first, second] {
             editor.update(add_figure(tool, bounds));

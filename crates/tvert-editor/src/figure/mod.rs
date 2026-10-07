@@ -1,7 +1,9 @@
+mod arrow;
 mod ellipse;
 mod line;
 mod rectangle;
 
+pub use arrow::ArrowFigure;
 pub use ellipse::EllipseFigure;
 pub use line::LineFigure;
 pub use rectangle::RectangleFigure;

@@ -11,7 +11,18 @@ pub struct Args {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Capture a monitor and save it as a PNG. Right-click to cancel
     CaptureOutput {
+        /// Output name, such as DP-1
+        #[arg(value_name = "OUTPUT")]
+        output: String,
+
+        /// Destination PNG file. Must not already exist
+        #[arg(value_name = "FILE")]
+        path: PathBuf,
+    },
+    /// Capture a region and save it as a PNG. Right-click to cancel
+    CaptureRegion {
         /// Output name, such as DP-1
         #[arg(value_name = "OUTPUT")]
         output: String,

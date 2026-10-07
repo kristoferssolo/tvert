@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use tracing::debug;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 use tvert_wayland::Wayland;
-use tvert_workflow::capture_output_to_png;
+use tvert_workflow::{capture_output_to_png, save_png};
 
 fn main() -> Result<ExitCode> {
     color_eyre::install()?;
@@ -26,6 +26,7 @@ fn main() -> Result<ExitCode> {
 
     let output_name = match &args.command {
         Command::CaptureOutput { output, .. }
+        | Command::CaptureRegion { output, .. }
         | Command::ProbeOverlay { output }
         | Command::SelectRegion { output } => output,
     };
@@ -59,6 +60,17 @@ fn main() -> Result<ExitCode> {
         Command::CaptureOutput { path, .. } => {
             capture_output_to_png(&mut wayland, output_id, &path)?;
             println!("Saved {}", path.display());
+        }
+        Command::CaptureRegion { path, .. } => {
+            println!("Drag to select a region. Release to accept; right-click to cancel.");
+
+            let Some(image) = wayland.select_region(output_id)? else {
+                println!("Selection cancelled");
+                return Ok(ExitCode::SUCCESS);
+            };
+
+            save_png(&path, &image)?;
+            println!("Saved {} to {}", image.size(), path.display());
         }
         Command::ProbeOverlay { .. } => {
             let configure = wayland.prepare_overlay(output_id)?;

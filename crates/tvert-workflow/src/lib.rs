@@ -4,3 +4,4 @@ mod export;
 
 pub use capture::capture_output_to_png;
 pub use error::Error;
+pub use export::save_png;

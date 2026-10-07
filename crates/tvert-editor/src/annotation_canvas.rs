@@ -12,7 +12,7 @@ use iced::{
     mouse::{self, Button, Cursor, Event as MouseEvent},
     widget::{
         Action,
-        canvas::{Frame, Program, Stroke},
+        canvas::{Cache, Program, Stroke},
     },
     window::Event as WindowEvent,
 };
@@ -20,6 +20,7 @@ use iced::{
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
     pub rectangles: &'a [Rectangle],
+    pub cache: &'a Cache,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -55,6 +56,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
             && (cancel || matches!(event, Event::Window(WindowEvent::Unfocused)))
         {
             *state = Drag::Idle;
+            self.cache.clear();
             let action = Action::request_redraw();
             return Some(if cancel { action.and_capture() } else { action });
         }
@@ -66,11 +68,13 @@ impl Program<Message> for AnnotationCanvas<'_> {
             (Event::Mouse(MouseEvent::ButtonPressed(Button::Left)), _) => {
                 let start = viewport.image_position(position?)?;
                 *state = Drag::Drawing { start, end: start };
+                self.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
             (Event::Mouse(MouseEvent::CursorMoved { .. }), Drag::Drawing { start, .. }) => {
                 let end = viewport.clamped_image_position(position?)?;
                 *state = Drag::Drawing { start, end };
+                self.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
             (
@@ -78,6 +82,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 Drag::Drawing { start, end },
             ) => {
                 *state = Drag::Idle;
+                self.cache.clear();
                 let end = position
                     .and_then(|point| viewport.clamped_image_position(point))
                     .unwrap_or(end);
@@ -107,17 +112,21 @@ impl Program<Message> for AnnotationCanvas<'_> {
             Drag::Idle => None,
             Drag::Drawing { start, end } => rectangle_between(*start, *end),
         };
-        let mut frame = Frame::with_bounds(renderer, viewport.bounds);
-        let stroke = Stroke::default()
-            .with_color(Color::from_rgb8(255, 64, 64))
-            .with_width(4.0 * viewport.bounds.width / self.image_size.width);
 
-        for rectangle in self.rectangles.iter().copied().chain(draft) {
-            let displayed = viewport.canvas_rectangle(rectangle);
-            frame.stroke_rectangle(displayed.position(), displayed.size(), stroke);
-        }
+        let geometry = self
+            .cache
+            .draw_with_bounds(renderer, viewport.bounds, |frame| {
+                let stroke = Stroke::default()
+                    .with_color(Color::from_rgb8(255, 64, 64))
+                    .with_width(4.0 * viewport.bounds.width / self.image_size.width);
 
-        vec![frame.into_geometry()]
+                for rectangle in self.rectangles.iter().copied().chain(draft) {
+                    let displayed = viewport.canvas_rectangle(rectangle);
+                    frame.stroke_rectangle(displayed.position(), displayed.size(), stroke);
+                }
+            });
+
+        vec![geometry]
     }
 
     fn mouse_interaction(
@@ -146,9 +155,11 @@ mod tests {
     use rstest::rstest;
 
     fn dispatch(drag: &mut Drag, event: &Event, position: Option<Point>) -> Option<Message> {
+        let cache = Cache::new();
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
             rectangles: &[],
+            cache: &cache,
         }
         .update(
             drag,

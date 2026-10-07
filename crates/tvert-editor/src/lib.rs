@@ -2,6 +2,7 @@ mod annotation_canvas;
 mod viewport;
 
 use crate::annotation_canvas::AnnotationCanvas;
+use iced::widget::canvas::Cache;
 use iced::widget::{canvas, column, container, image, stack, text};
 use iced::{ContentFit, Element, Fill, Theme, widget::image::Handle, window};
 use iced::{Rectangle, Size};
@@ -29,11 +30,7 @@ pub fn run(image: CapturedImage) -> Result<(), Error> {
     let preview = Handle::from_rgba(size.width().get(), size.height().get(), image.into_rgba());
 
     iced::application(
-        move || Editor {
-            preview: preview.clone(),
-            image_size,
-            rectangles: Vec::new(),
-        },
+        move || Editor::new(preview.clone(), image_size),
         Editor::update,
         Editor::view,
     )
@@ -56,6 +53,7 @@ struct Editor {
     preview: Handle,
     image_size: Size,
     rectangles: Vec<Rectangle>,
+    annotation_cache: Cache,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -64,9 +62,20 @@ enum Message {
 }
 
 impl Editor {
+    fn new(preview: Handle, image_size: Size) -> Self {
+        Self {
+            preview,
+            image_size,
+            rectangles: Vec::new(),
+            annotation_cache: Cache::new(),
+        }
+    }
     fn update(&mut self, message: Message) {
         match message {
-            Message::AddRectangle(rectangle) => self.rectangles.push(rectangle),
+            Message::AddRectangle(rectangle) => {
+                self.rectangles.push(rectangle);
+                self.annotation_cache.clear();
+            }
         }
     }
 
@@ -79,6 +88,7 @@ impl Editor {
         let annotations = canvas(AnnotationCanvas {
             image_size: self.image_size,
             rectangles: &self.rectangles,
+            cache: &self.annotation_cache,
         })
         .width(Fill)
         .height(Fill);

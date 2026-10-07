@@ -36,10 +36,16 @@ impl CapturedImage {
         self.size
     }
 
-    /// Returns tightly packed RGBA8 pixels in row order.
+    /// Returns tightly packed RGBA8 pixels in row order
     #[must_use]
     pub const fn rgba(&self) -> &[u8] {
         self.rgba.as_slice()
+    }
+
+    /// Returns the owned RGBA8 pixels without copying them
+    #[must_use]
+    pub fn into_rgba(self) -> Vec<u8> {
+        self.rgba
     }
 
     /// Copies a nonempty region into a new tightly packed RGBA8 image.

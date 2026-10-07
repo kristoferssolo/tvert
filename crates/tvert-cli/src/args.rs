@@ -42,4 +42,10 @@ pub enum Command {
         #[arg(value_name = "OUTPUT")]
         output: String,
     },
+    /// Select a region and open it in the editor. Right-click to cancel
+    EditRegion {
+        /// Output name, such as DP-1
+        #[arg(value_name = "OUTPUT")]
+        output: String,
+    },
 }

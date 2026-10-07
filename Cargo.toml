@@ -12,12 +12,19 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 tvert-cli = { path = "crates/tvert-cli" }
+tvert-editor = { path = "crates/tvert-editor" }
 tvert-image = { path = "crates/tvert-image" }
 tvert-wayland = { path = "crates/tvert-wayland" }
 tvert-workflow = { path = "crates/tvert-workflow" }
 
 clap = { version = "4.6" }
 color-eyre = "0.6"
+iced = { version = "0.14", default-features = false, features = [
+  "image-without-codecs",
+  "thread-pool",
+  "tiny-skia",
+  "wayland",
+] }
 png = "0.18"
 rustix = { version = "1", features = ["fs"] }
 thiserror = "2"

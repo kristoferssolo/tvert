@@ -1,5 +1,10 @@
-use iced::widget::{container, image};
-use iced::{ContentFit, Element, Fill, Never, Theme, widget::image::Handle, window};
+mod annotation_canvas;
+mod viewport;
+
+use crate::annotation_canvas::AnnotationCanvas;
+use iced::widget::{canvas, column, container, image, stack, text};
+use iced::{ContentFit, Element, Fill, Theme, widget::image::Handle, window};
+use iced::{Rectangle, Size};
 use tvert_image::CapturedImage;
 
 /// An editor window failure
@@ -20,33 +25,75 @@ pub enum Error {
 /// Returns [`Error::Runtime`] if Iced cannot start or run the window.
 pub fn run(image: CapturedImage) -> Result<(), Error> {
     let size = image.size();
+    let image_size = Size::from((size.width().get(), size.height().get()));
     let preview = Handle::from_rgba(size.width().get(), size.height().get(), image.into_rgba());
 
-    iced::application(move || preview.clone(), (), view)
-        .title("Tvert")
-        .theme(Theme::Dark)
-        .window(window::Settings {
-            platform_specific: window::settings::PlatformSpecific {
-                application_id: "tvert".into(),
-                ..Default::default()
-            },
+    iced::application(
+        move || Editor {
+            preview: preview.clone(),
+            image_size,
+            rectangles: Vec::new(),
+        },
+        Editor::update,
+        Editor::view,
+    )
+    .title("Tvert")
+    .theme(Theme::Dark)
+    .window(window::Settings {
+        platform_specific: window::settings::PlatformSpecific {
+            application_id: "tvert".into(),
             ..Default::default()
-        })
-        .window_size((1000.0, 700.0))
-        .resizable(true)
-        .run()?;
+        },
+        ..Default::default()
+    })
+    .window_size((1000.0, 700.0))
+    .resizable(true)
+    .run()?;
     Ok(())
 }
 
-fn view(preview: &Handle) -> Element<'_, Never> {
-    container(
-        image(preview)
+struct Editor {
+    preview: Handle,
+    image_size: Size,
+    rectangles: Vec<Rectangle>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Message {
+    AddRectangle(Rectangle),
+}
+
+impl Editor {
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::AddRectangle(rectangle) => self.rectangles.push(rectangle),
+        }
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        let picture = image(&self.preview)
             .width(Fill)
             .height(Fill)
-            .content_fit(ContentFit::Contain),
-    )
-    .padding(16)
-    .width(Fill)
-    .height(Fill)
-    .into()
+            .content_fit(ContentFit::Contain);
+
+        let annotations = canvas(AnnotationCanvas {
+            image_size: self.image_size,
+            rectangles: &self.rectangles,
+        })
+        .width(Fill)
+        .height(Fill);
+
+        container(
+            column![
+                text("Rectangle"),
+                stack![picture, annotations].width(Fill).height(Fill),
+                text("Drag to draw. Right-click or Esc to cancel the current drag.").size(14),
+            ]
+            .spacing(12),
+        )
+        .padding(16)
+        .width(Fill)
+        .height(Fill)
+        .into()
+    }
 }

@@ -1,8 +1,10 @@
+use crate::tool::Tool;
 use iced::Rectangle;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Message {
-    AddRectangle(Rectangle),
+    AddFigure { tool: Tool, bounds: Rectangle },
+    SelectTool(Tool),
     Undo,
     Redo,
 }

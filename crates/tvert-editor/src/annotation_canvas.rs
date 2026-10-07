@@ -1,5 +1,7 @@
 use crate::{
+    figure::Figure,
     message::Message,
+    tool::Tool,
     viewport::{Viewport, rectangle_between},
 };
 use iced::{
@@ -19,7 +21,8 @@ use iced::{
 
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
-    pub rectangles: &'a [Rectangle],
+    pub tool: Tool,
+    pub figures: &'a [Box<dyn Figure>],
     pub cache: &'a Cache,
 }
 
@@ -28,6 +31,7 @@ pub enum Drag {
     #[default]
     Idle,
     Drawing {
+        tool: Tool,
         start: Point,
         end: Point,
     },
@@ -76,19 +80,23 @@ impl Program<Message> for AnnotationCanvas<'_> {
         match (event, *state) {
             (Event::Mouse(MouseEvent::ButtonPressed(Button::Left)), _) => {
                 let start = viewport.image_position(position?)?;
-                *state = Drag::Drawing { start, end: start };
+                *state = Drag::Drawing {
+                    tool: self.tool,
+                    start,
+                    end: start,
+                };
                 self.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
-            (Event::Mouse(MouseEvent::CursorMoved { .. }), Drag::Drawing { start, .. }) => {
+            (Event::Mouse(MouseEvent::CursorMoved { .. }), Drag::Drawing { tool, start, .. }) => {
                 let end = viewport.clamped_image_position(position?)?;
-                *state = Drag::Drawing { start, end };
+                *state = Drag::Drawing { tool, start, end };
                 self.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
             (
                 Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
-                Drag::Drawing { start, end },
+                Drag::Drawing { tool, start, end },
             ) => {
                 *state = Drag::Idle;
                 self.cache.clear();
@@ -98,7 +106,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
 
                 Some(rectangle_between(start, end).map_or_else(
                     || Action::request_redraw().and_capture(),
-                    |rectangle| Action::publish(Message::AddRectangle(rectangle)).and_capture(),
+                    |bounds| Action::publish(Message::AddFigure { tool, bounds }).and_capture(),
                 ))
             }
             _ => None,
@@ -117,11 +125,6 @@ impl Program<Message> for AnnotationCanvas<'_> {
             return Vec::new();
         };
 
-        let draft = match state {
-            Drag::Idle => None,
-            Drag::Drawing { start, end } => rectangle_between(*start, *end),
-        };
-
         let geometry = self
             .cache
             .draw_with_bounds(renderer, viewport.bounds, |frame| {
@@ -129,9 +132,14 @@ impl Program<Message> for AnnotationCanvas<'_> {
                     .with_color(Color::from_rgb8(255, 64, 64))
                     .with_width(4.0 * viewport.bounds.width / self.image_size.width);
 
-                for rectangle in self.rectangles.iter().copied().chain(draft) {
-                    let displayed = viewport.canvas_rectangle(rectangle);
-                    frame.stroke_rectangle(displayed.position(), displayed.size(), stroke);
+                for figure in self.figures {
+                    frame.stroke(&figure.path(viewport), stroke);
+                }
+
+                if let Drag::Drawing { tool, start, end } = *state
+                    && let Some(bounds) = rectangle_between(start, end)
+                {
+                    frame.stroke(&tool.figure(bounds).path(viewport), stroke);
                 }
             });
 
@@ -198,9 +206,11 @@ mod tests {
 
     fn dispatch(drag: &mut Drag, event: &Event, position: Option<Point>) -> Option<Message> {
         let cache = Cache::new();
+
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
-            rectangles: &[],
+            tool: Tool::Rectangle,
+            figures: &[],
             cache: &cache,
         }
         .update(
@@ -256,7 +266,13 @@ mod tests {
             Some(release),
         ));
 
-        assert_eq!(message, Message::AddRectangle(expected));
+        assert_eq!(
+            message,
+            Message::AddFigure {
+                tool: Tool::Rectangle,
+                bounds: expected
+            }
+        );
         assert!(matches!(drag, Drag::Idle));
     }
 
@@ -280,10 +296,10 @@ mod tests {
 
         assert_eq!(
             message,
-            Message::AddRectangle(Rectangle::new(
-                Point::new(50.0, 25.0),
-                Size::new(100.0, 50.0)
-            ))
+            Message::AddFigure {
+                tool: Tool::Rectangle,
+                bounds: Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0))
+            }
         );
         assert!(matches!(drag, Drag::Idle));
     }
@@ -396,5 +412,61 @@ mod tests {
             Some(Point::new(320.0, 290.0)),
         ));
         assert_eq!(dispatch(&mut drag, &event, None), Some(expected));
+    }
+
+    #[test]
+    fn finishes_with_the_tool_selected_when_the_drag_started() {
+        let cache = Cache::new();
+        let mut canvas = AnnotationCanvas {
+            image_size: Size::new(200.0, 100.0),
+            tool: Tool::Ellipse,
+            figures: &[],
+            cache: &cache,
+        };
+        let bounds = Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0));
+        let mut drag = Drag::Idle;
+
+        let _ = canvas.update(
+            &mut drag,
+            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
+            bounds,
+            Cursor::Available(Point::new(120.0, 190.0)),
+        );
+
+        assert!(matches!(
+            drag,
+            Drag::Drawing {
+                tool: Tool::Ellipse,
+                ..
+            }
+        ));
+
+        canvas.tool = Tool::Rectangle;
+        let position = Point::new(320.0, 290.0);
+
+        let _ = canvas.update(
+            &mut drag,
+            &Event::Mouse(MouseEvent::CursorMoved { position }),
+            bounds,
+            Cursor::Available(position),
+        );
+
+        let message = canvas
+            .update(
+                &mut drag,
+                &Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
+                bounds,
+                Cursor::Available(position),
+            )
+            .and_then(|action| action.into_inner().0);
+
+        assert_eq!(
+            message,
+            Some(Message::AddFigure {
+                tool: Tool::Ellipse,
+                bounds: Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0)),
+            }),
+        );
+        assert!(matches!(drag, Drag::Idle));
     }
 }

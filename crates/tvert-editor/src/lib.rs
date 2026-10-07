@@ -1,6 +1,8 @@
 mod annotation_canvas;
 mod editor;
+mod figure;
 mod message;
+mod tool;
 mod viewport;
 
 use crate::editor::Editor;

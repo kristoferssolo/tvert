@@ -1,15 +1,16 @@
-use crate::{annotation_canvas::AnnotationCanvas, message::Message};
-use iced::widget::{button, canvas, column, container, image, row, stack, text};
+use crate::{annotation_canvas::AnnotationCanvas, figure::Figure, message::Message, tool::Tool};
+use iced::widget::{button, canvas, column, container, image, pick_list, row, stack, text};
 use iced::{
-    ContentFit, Element, Fill, Rectangle, Size,
+    ContentFit, Element, Fill, Size,
     widget::{canvas::Cache, image::Handle},
 };
 
 pub struct Editor {
     preview: Handle,
     image_size: Size,
-    rectangles: Vec<Rectangle>,
-    undone_rectangles: Vec<Rectangle>,
+    tool: Tool,
+    figures: Vec<Box<dyn Figure>>,
+    undone_figures: Vec<Box<dyn Figure>>,
     annotation_cache: Cache,
 }
 
@@ -18,29 +19,34 @@ impl Editor {
         Self {
             preview,
             image_size,
-            rectangles: Vec::new(),
-            undone_rectangles: Vec::new(),
+            tool: Tool::default(),
+            figures: Vec::new(),
+            undone_figures: Vec::new(),
             annotation_cache: Cache::new(),
         }
     }
 
     pub fn update(&mut self, message: Message) {
         match message {
-            Message::AddRectangle(rectangle) => {
-                self.rectangles.push(rectangle);
-                self.undone_rectangles.clear();
+            Message::AddFigure { tool, bounds } => {
+                self.figures.push(tool.figure(bounds));
+                self.undone_figures.clear();
+            }
+            Message::SelectTool(tool) => {
+                self.tool = tool;
+                return;
             }
             Message::Undo => {
-                let Some(rectangle) = self.rectangles.pop() else {
+                let Some(figure) = self.figures.pop() else {
                     return;
                 };
-                self.undone_rectangles.push(rectangle);
+                self.undone_figures.push(figure);
             }
             Message::Redo => {
-                let Some(rectangle) = self.undone_rectangles.pop() else {
+                let Some(figure) = self.undone_figures.pop() else {
                     return;
                 };
-                self.rectangles.push(rectangle);
+                self.figures.push(figure);
             }
         }
         self.annotation_cache.clear();
@@ -54,7 +60,8 @@ impl Editor {
 
         let annotations = canvas(AnnotationCanvas {
             image_size: self.image_size,
-            rectangles: &self.rectangles,
+            tool: self.tool,
+            figures: &self.figures,
             cache: &self.annotation_cache,
         })
         .width(Fill)
@@ -63,11 +70,16 @@ impl Editor {
         container(
             column![
                 row![
+                pick_list(
+                    [Tool::Rectangle, Tool::Ellipse],
+                    Some(self.tool),
+                    Message::SelectTool
+                    ),
                     text("Rectangle").width(Fill),
                     button("Undo")
-                        .on_press_maybe((!self.rectangles.is_empty()).then_some(Message::Undo)),
+                        .on_press_maybe((!self.figures.is_empty()).then_some(Message::Undo)),
                     button("Redo")
-                        .on_press_maybe((!self.undone_rectangles.is_empty()).then_some(Message::Redo)),
+                        .on_press_maybe((!self.undone_figures.is_empty()).then_some(Message::Redo)),
                 ]
                 .spacing(8),
                 stack![picture, annotations].width(Fill).height(Fill),
@@ -85,7 +97,9 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iced::Point;
+    use crate::viewport::Viewport;
+    use claims::assert_some;
+    use iced::{Point, Rectangle};
 
     fn editor() -> Editor {
         Editor::new(
@@ -94,64 +108,125 @@ mod tests {
         )
     }
 
-    fn rectangle(x: f32) -> Rectangle {
+    fn bounds(x: f32) -> Rectangle {
         Rectangle::new(Point::new(x, 0.0), Size::new(10.0, 10.0))
+    }
+
+    fn assert_figures(figures: &[Box<dyn Figure>], expected: &[(Tool, Rectangle)]) {
+        let viewport = assert_some!(Viewport::new(
+            Size::new(100.0, 100.0),
+            Size::new(100.0, 100.0),
+        ));
+
+        let actual = figures
+            .iter()
+            .map(|figure| figure.path(viewport).raw().iter().collect::<Vec<_>>())
+            .collect::<Vec<_>>();
+
+        let expected = expected
+            .iter()
+            .map(|&(tool, bounds)| {
+                tool.figure(bounds)
+                    .path(viewport)
+                    .raw()
+                    .iter()
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
     fn undo_and_redo_restore_the_original_drawing_order() {
         let mut editor = editor();
-        let first = rectangle(10.0);
-        let second = rectangle(20.0);
-        editor.update(Message::AddRectangle(first));
-        editor.update(Message::AddRectangle(second));
+        let first = (Tool::Rectangle, bounds(10.0));
+        let second = (Tool::Ellipse, bounds(20.0));
+
+        for (tool, bounds) in [first, second] {
+            editor.update(Message::AddFigure { tool, bounds });
+        }
 
         editor.update(Message::Undo);
-        assert_eq!(editor.rectangles, [first]);
+        assert_figures(&editor.figures, &[first]);
+
         editor.update(Message::Undo);
-        assert_eq!(editor.rectangles, Vec::<Rectangle>::new());
+        assert_figures(&editor.figures, &[]);
 
         editor.update(Message::Redo);
-        assert_eq!(editor.rectangles, [first]);
+        assert_figures(&editor.figures, &[first]);
+
         editor.update(Message::Redo);
-        assert_eq!(editor.rectangles, [first, second]);
-        assert_eq!(editor.undone_rectangles, Vec::<Rectangle>::new());
+        assert_figures(&editor.figures, &[first, second]);
+        assert_figures(&editor.undone_figures, &[]);
     }
 
     #[test]
-    fn a_new_rectangle_after_undo_discards_the_redo_branch() {
+    fn a_new_figure_after_undo_discards_the_redo_branch() {
         let mut editor = editor();
-        let first = rectangle(10.0);
-        let second = rectangle(20.0);
-        let replacement = rectangle(30.0);
-        editor.update(Message::AddRectangle(first));
-        editor.update(Message::AddRectangle(second));
+        let first = (Tool::Rectangle, bounds(10.0));
+        let second = (Tool::Ellipse, bounds(20.0));
+        let replacement = (Tool::Ellipse, bounds(30.0));
+
+        for (tool, bounds) in [first, second] {
+            editor.update(Message::AddFigure { tool, bounds });
+        }
+
         editor.update(Message::Undo);
-        editor.update(Message::AddRectangle(replacement));
+        editor.update(Message::AddFigure {
+            tool: replacement.0,
+            bounds: replacement.1,
+        });
         editor.update(Message::Redo);
 
-        assert_eq!(editor.rectangles, [first, replacement]);
-        assert_eq!(editor.undone_rectangles, Vec::<Rectangle>::new());
+        assert_figures(&editor.figures, &[first, replacement]);
+        assert_figures(&editor.undone_figures, &[]);
     }
 
     #[test]
     fn exhausted_history_is_a_noop() {
         let mut editor = editor();
-        editor.update(Message::Undo);
-        editor.update(Message::Redo);
-        assert_eq!(editor.rectangles, Vec::<Rectangle>::new());
-        assert_eq!(editor.undone_rectangles, Vec::<Rectangle>::new());
 
-        let rectangle = rectangle(10.0);
-        editor.update(Message::AddRectangle(rectangle));
+        editor.update(Message::Undo);
+        editor.update(Message::Redo);
+        assert_figures(&editor.figures, &[]);
+        assert_figures(&editor.undone_figures, &[]);
+
+        let figure = (Tool::Rectangle, bounds(10.0));
+        editor.update(Message::AddFigure {
+            tool: figure.0,
+            bounds: figure.1,
+        });
+
         editor.update(Message::Undo);
         editor.update(Message::Undo);
-        assert_eq!(editor.rectangles, Vec::<Rectangle>::new());
-        assert_eq!(editor.undone_rectangles, [rectangle]);
+        assert_figures(&editor.figures, &[]);
+        assert_figures(&editor.undone_figures, &[figure]);
 
         editor.update(Message::Redo);
         editor.update(Message::Redo);
-        assert_eq!(editor.rectangles, [rectangle]);
-        assert_eq!(editor.undone_rectangles, Vec::<Rectangle>::new());
+        assert_figures(&editor.figures, &[figure]);
+        assert_figures(&editor.undone_figures, &[]);
+    }
+
+    #[test]
+    fn selecting_a_tool_preserves_the_redo_history() {
+        let mut editor = editor();
+        let figure = (Tool::Rectangle, bounds(10.0));
+
+        editor.update(Message::AddFigure {
+            tool: figure.0,
+            bounds: figure.1,
+        });
+        editor.update(Message::Undo);
+        editor.update(Message::SelectTool(Tool::Ellipse));
+
+        assert_eq!(editor.tool, Tool::Ellipse);
+        assert_figures(&editor.figures, &[]);
+        assert_figures(&editor.undone_figures, &[figure]);
+
+        editor.update(Message::Redo);
+        assert_figures(&editor.figures, &[figure]);
+        assert_figures(&editor.undone_figures, &[]);
     }
 }

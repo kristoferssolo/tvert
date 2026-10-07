@@ -1,3 +1,4 @@
+use crate::stroke_width::StrokeWidth;
 use crate::{message::Message, tool::Tool, viewport::Viewport};
 use iced::widget::{button, canvas, container, space, text, tooltip};
 use iced::{
@@ -29,8 +30,8 @@ pub fn view(selected: Tool, can_undo: bool, can_redo: bool) -> Element<'static, 
     let separator = container(space())
         .width(1)
         .height(24)
-        .style(|_| container::Style {
-            background: Some(Color::from_rgb8(58, 57, 66).into()),
+        .style(|theme: &Theme| container::Style {
+            background: Some(theme.extended_palette().background.strong.color.into()),
             ..Default::default()
         });
 
@@ -67,6 +68,30 @@ pub fn view(selected: Tool, can_undo: bool, can_redo: bool) -> Element<'static, 
             }
         })
         .into()
+}
+
+/// Builds controls for the width of new annotation strokes
+pub fn stroke_width_constrols(selected: StrokeWidth) -> Element<'static, Message> {
+    let buttons = StrokeWidth::VARIANTS.iter().map(|&width| {
+        button(text(width.to_string()).size(14))
+            .padding([4, 8])
+            .on_press(Message::SelectStrokeWidth(width))
+            .style(move |theme, status| button_style(theme, status, width == selected))
+            .into()
+    });
+
+    tooltip(
+        Row::new()
+            .push(text("Stroke").size(14))
+            .push(Row::with_children(buttons).spacing(4))
+            .spacing(8)
+            .align_y(Vertical::Center),
+        text("Width in image pixels").size(12),
+        tooltip::Position::Bottom,
+    )
+    .gap(8)
+    .style(container::rounded_box)
+    .into()
 }
 
 fn icon_button(

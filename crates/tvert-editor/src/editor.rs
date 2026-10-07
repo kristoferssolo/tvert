@@ -1,6 +1,8 @@
-use crate::toolbar;
-use crate::{annotation_canvas::AnnotationCanvas, figure::Figure, message::Message, tool::Tool};
-use iced::widget::{canvas, column, container, image, stack, text};
+use crate::{
+    annotation_canvas::AnnotationCanvas, figure::Annotation, message::Message,
+    stroke_width::StrokeWidth, tool::Tool, toolbar,
+};
+use iced::widget::{canvas, column, container, image, stack};
 use iced::{
     ContentFit, Element, Fill, Size,
     widget::{canvas::Cache, image::Handle},
@@ -10,8 +12,9 @@ pub struct Editor {
     preview: Handle,
     image_size: Size,
     tool: Tool,
-    figures: Vec<Box<dyn Figure>>,
-    undone_figures: Vec<Box<dyn Figure>>,
+    stroke_width: StrokeWidth,
+    figures: Vec<Annotation>,
+    undone_figures: Vec<Annotation>,
     annotation_cache: Cache,
 }
 
@@ -21,6 +24,7 @@ impl Editor {
             preview,
             image_size,
             tool: Tool::default(),
+            stroke_width: StrokeWidth::default(),
             figures: Vec::new(),
             undone_figures: Vec::new(),
             annotation_cache: Cache::new(),
@@ -29,28 +33,40 @@ impl Editor {
 
     pub fn update(&mut self, message: Message) {
         match message {
-            Message::AddFigure { tool, start, end } => {
+            Message::AddFigure {
+                tool,
+                stroke_width,
+                start,
+                end,
+            } => {
                 let Some(figure) = tool.figure(start, end) else {
                     return;
                 };
-                self.figures.push(figure);
+                self.figures.push(Annotation {
+                    figure,
+                    stroke_width,
+                });
                 self.undone_figures.clear();
             }
             Message::SelectTool(tool) => {
                 self.tool = tool;
                 return;
             }
+            Message::SelectStrokeWidth(stroke_width) => {
+                self.stroke_width = stroke_width;
+                return;
+            }
             Message::Undo => {
-                let Some(figure) = self.figures.pop() else {
+                let Some(annotation) = self.figures.pop() else {
                     return;
                 };
-                self.undone_figures.push(figure);
+                self.undone_figures.push(annotation);
             }
             Message::Redo => {
-                let Some(figure) = self.undone_figures.pop() else {
+                let Some(anootation) = self.undone_figures.pop() else {
                     return;
                 };
-                self.figures.push(figure);
+                self.figures.push(anootation);
             }
         }
         self.annotation_cache.clear();
@@ -65,6 +81,7 @@ impl Editor {
         let annotations = canvas(AnnotationCanvas {
             image_size: self.image_size,
             tool: self.tool,
+            stroke_width: self.stroke_width,
             figures: &self.figures,
             cache: &self.annotation_cache,
         })
@@ -73,15 +90,14 @@ impl Editor {
 
         container(
             column![
-            container(
-                toolbar::view(
+                container(toolbar::view(
                     self.tool,
                     !self.figures.is_empty(),
                     !self.undone_figures.is_empty()
-                    )
-                ).center_x(Fill),
+                ))
+                .center_x(Fill),
+                container(toolbar::stroke_width_constrols(self.stroke_width)).center_x(Fill),
                 stack![picture, annotations].width(Fill).height(Fill),
-                text("Drag to draw. Esc/right-click: cancel. Ctrl+Z: undo. Ctrl+Y/Ctrl+Shift+Z: redo.").size(14),
             ]
             .spacing(12),
         )
@@ -113,12 +129,13 @@ mod tests {
     fn add_figure(tool: Tool, bounds: Rectangle) -> Message {
         Message::AddFigure {
             tool,
+            stroke_width: StrokeWidth::default(),
             start: bounds.position(),
             end: Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
         }
     }
 
-    fn assert_figures(figures: &[Box<dyn Figure>], expected: &[(Tool, Rectangle)]) {
+    fn assert_figures(figures: &[Annotation], expected: &[(Tool, Rectangle)]) {
         let viewport = assert_some!(Viewport::new(
             Size::new(100.0, 100.0),
             Size::new(100.0, 100.0),
@@ -126,7 +143,14 @@ mod tests {
 
         let actual = figures
             .iter()
-            .map(|figure| figure.path(viewport).raw().iter().collect::<Vec<_>>())
+            .map(|annotation| {
+                annotation
+                    .figure
+                    .path(viewport)
+                    .raw()
+                    .iter()
+                    .collect::<Vec<_>>()
+            })
             .collect::<Vec<_>>();
 
         let expected = expected
@@ -228,5 +252,39 @@ mod tests {
         editor.update(Message::Redo);
         assert_figures(&editor.figures, &[figure]);
         assert_figures(&editor.undone_figures, &[]);
+    }
+
+    #[test]
+    fn stroke_width_changes_preserve_existing_figures_and_history() {
+        let mut editor = editor();
+        let thin = Message::AddFigure {
+            tool: Tool::Line,
+            stroke_width: StrokeWidth::Thin,
+            start: Point::new(10.0, 10.0),
+            end: Point::new(30.0, 10.0),
+        };
+        let thick = Message::AddFigure {
+            tool: Tool::Line,
+            stroke_width: StrokeWidth::Thick,
+            start: Point::new(10.0, 10.0),
+            end: Point::new(30.0, 10.0),
+        };
+
+        editor.update(thin);
+        editor.update(Message::SelectStrokeWidth(StrokeWidth::Thick));
+        editor.update(thick);
+        editor.update(Message::Undo);
+        editor.update(Message::SelectStrokeWidth(StrokeWidth::Medium));
+        editor.update(Message::Redo);
+
+        let widths = editor
+            .figures
+            .iter()
+            .map(|annotation| annotation.stroke_width)
+            .collect::<Vec<_>>();
+
+        assert_eq!(widths, [StrokeWidth::Thin, StrokeWidth::Thick]);
+        assert_eq!(editor.stroke_width, StrokeWidth::Medium);
+        assert!(editor.undone_figures.is_empty());
     }
 }

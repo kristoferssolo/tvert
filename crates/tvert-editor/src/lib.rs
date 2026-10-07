@@ -2,6 +2,7 @@ mod annotation_canvas;
 mod editor;
 mod figure;
 mod message;
+mod stroke_width;
 mod tool;
 mod toolbar;
 mod viewport;

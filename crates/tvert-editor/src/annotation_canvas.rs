@@ -1,4 +1,6 @@
-use crate::{figure::Figure, message::Message, tool::Tool, viewport::Viewport};
+use crate::{
+    figure::Annotation, message::Message, stroke_width::StrokeWidth, tool::Tool, viewport::Viewport,
+};
 use iced::{
     Color, Event, Point, Rectangle, Renderer, Size, Theme,
     keyboard::{
@@ -17,7 +19,8 @@ use iced::{
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
     pub tool: Tool,
-    pub figures: &'a [Box<dyn Figure>],
+    pub stroke_width: StrokeWidth,
+    pub figures: &'a [Annotation],
     pub cache: &'a Cache,
 }
 
@@ -27,6 +30,7 @@ pub enum Drag {
     Idle,
     Drawing {
         tool: Tool,
+        stroke_width: StrokeWidth,
         start: Point,
         end: Point,
     },
@@ -77,21 +81,40 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 let start = viewport.image_position(position?)?;
                 *state = Drag::Drawing {
                     tool: self.tool,
+                    stroke_width: self.stroke_width,
                     start,
                     end: start,
                 };
                 self.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
-            (Event::Mouse(MouseEvent::CursorMoved { .. }), Drag::Drawing { tool, start, .. }) => {
+            (
+                Event::Mouse(MouseEvent::CursorMoved { .. }),
+                Drag::Drawing {
+                    tool,
+                    stroke_width,
+                    start,
+                    ..
+                },
+            ) => {
                 let end = viewport.clamped_image_position(position?)?;
-                *state = Drag::Drawing { tool, start, end };
+                *state = Drag::Drawing {
+                    tool,
+                    stroke_width,
+                    start,
+                    end,
+                };
                 self.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
             (
                 Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
-                Drag::Drawing { tool, start, end },
+                Drag::Drawing {
+                    tool,
+                    stroke_width,
+                    start,
+                    end,
+                },
             ) => {
                 *state = Drag::Idle;
                 self.cache.clear();
@@ -103,7 +126,13 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 Some(if start == end {
                     Action::request_redraw().and_capture()
                 } else {
-                    Action::publish(Message::AddFigure { tool, start, end }).and_capture()
+                    Action::publish(Message::AddFigure {
+                        tool,
+                        stroke_width,
+                        start,
+                        end,
+                    })
+                    .and_capture()
                 })
             }
             _ => None,
@@ -125,18 +154,28 @@ impl Program<Message> for AnnotationCanvas<'_> {
         let geometry = self
             .cache
             .draw_with_bounds(renderer, viewport.bounds, |frame| {
-                let stroke = Stroke::default()
-                    .with_color(Color::from_rgb8(255, 64, 64))
-                    .with_width(4.0 * viewport.bounds.width / self.image_size.width);
+                let stroke = |width: StrokeWidth| {
+                    Stroke::default()
+                        .with_color(Color::from_rgb8(255, 64, 64))
+                        .with_width(width.pixels() * viewport.bounds.width / self.image_size.width)
+                };
 
-                for figure in self.figures {
-                    frame.stroke(&figure.path(viewport), stroke);
+                for annotation in self.figures {
+                    frame.stroke(
+                        &annotation.figure.path(viewport),
+                        stroke(annotation.stroke_width),
+                    );
                 }
 
-                if let Drag::Drawing { tool, start, end } = *state
+                if let Drag::Drawing {
+                    tool,
+                    stroke_width,
+                    start,
+                    end,
+                } = *state
                     && let Some(figure) = tool.figure(start, end)
                 {
-                    frame.stroke(&figure.path(viewport), stroke);
+                    frame.stroke(&figure.path(viewport), stroke(stroke_width));
                 }
             });
 
@@ -216,6 +255,7 @@ mod tests {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
             tool,
+            stroke_width: StrokeWidth::default(),
             figures: &[],
             cache: &cache,
         }
@@ -270,8 +310,9 @@ mod tests {
             message,
             Message::AddFigure {
                 tool: Tool::Rectangle,
+                stroke_width: StrokeWidth::default(),
                 start: Point::new(50.0, 25.0),
-                end: expected
+                end: expected,
             }
         );
         assert!(matches!(drag, Drag::Idle));
@@ -299,6 +340,7 @@ mod tests {
             message,
             Message::AddFigure {
                 tool: Tool::Rectangle,
+                stroke_width: StrokeWidth::default(),
                 start: Point::new(50.0, 25.0),
                 end: Point::new(150.0, 75.0)
             }
@@ -422,6 +464,7 @@ mod tests {
         let mut canvas = AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
             tool: Tool::Ellipse,
+            stroke_width: StrokeWidth::default(),
             figures: &[],
             cache: &cache,
         };
@@ -466,8 +509,9 @@ mod tests {
             message,
             Some(Message::AddFigure {
                 tool: Tool::Ellipse,
+                stroke_width: StrokeWidth::default(),
                 start: Point::new(50.0, 25.0),
-                end: Point::new(150.0, 75.0)
+                end: Point::new(150.0, 75.0),
             }),
         );
         assert!(matches!(drag, Drag::Idle));
@@ -499,6 +543,7 @@ mod tests {
                 tool: Tool::Line,
                 start,
                 end,
+                ..
             } => Some((start, end)),
             _ => None,
         }));

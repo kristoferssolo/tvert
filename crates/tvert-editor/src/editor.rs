@@ -4,6 +4,7 @@ use iced::{
     ContentFit, Element, Fill, Size,
     widget::{canvas::Cache, image::Handle},
 };
+use strum::VariantArray;
 
 pub struct Editor {
     preview: Handle,
@@ -74,7 +75,7 @@ impl Editor {
             column![
                 row![
                 pick_list(
-                    [Tool::Rectangle, Tool::Ellipse, Tool::Line, Tool::Arrow],
+                    Tool::VARIANTS,
                     Some(self.tool),
                     Message::SelectTool
                     ),

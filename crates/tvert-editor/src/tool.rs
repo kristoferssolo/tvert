@@ -3,10 +3,10 @@ use crate::{
     viewport::rectangle_between,
 };
 use iced::Point;
-use std::fmt::Display;
+use strum::{Display, VariantArray};
 
 /// The figure created by the next drag
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Display, VariantArray)]
 pub enum Tool {
     Rectangle,
     Ellipse,
@@ -30,21 +30,6 @@ impl Tool {
             Self::Line => Box::new(LineFigure::new(start, end)),
             Self::Arrow => Box::new(ArrowFigure::new(start, end)),
         })
-    }
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Rectangle => "rectangle",
-            Self::Ellipse => "ellipse",
-            Self::Line => "line",
-            Self::Arrow => "arrow",
-        }
-    }
-}
-
-impl Display for Tool {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
     }
 }
 
@@ -71,7 +56,7 @@ mod tests {
     #[case(Point::new(f32::NAN, 10.0), Point::new(20.0, 20.0))]
     #[case(Point::new(10.0, 10.0), Point::new(f32::INFINITY, 20.0))]
     fn rejects_unusable_endpoints(#[case] start: Point, #[case] end: Point) {
-        for tool in [Tool::Rectangle, Tool::Ellipse, Tool::Line, Tool::Arrow] {
+        for &tool in Tool::VARIANTS {
             assert_none!(tool.figure(start, end));
         }
     }

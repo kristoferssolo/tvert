@@ -71,7 +71,7 @@ pub fn view(selected: Tool, can_undo: bool, can_redo: bool) -> Element<'static, 
 }
 
 /// Builds controls for the width of new annotation strokes
-pub fn stroke_width_constrols(selected: StrokeWidth) -> Element<'static, Message> {
+pub fn stroke_width_controls(selected: StrokeWidth) -> Element<'static, Message> {
     let buttons = StrokeWidth::VARIANTS.iter().map(|&width| {
         button(text(width.to_string()).size(14))
             .padding([4, 8])

@@ -1,3 +1,4 @@
+mod annotation;
 mod annotation_canvas;
 mod editor;
 mod figure;

@@ -14,6 +14,12 @@ impl RectangleFigure {
     }
 }
 
+impl From<Rectangle> for RectangleFigure {
+    fn from(bounds: Rectangle) -> Self {
+        Self::new(bounds)
+    }
+}
+
 impl Figure for RectangleFigure {
     fn path(&self, viewport: Viewport) -> Path {
         let bounds = viewport.canvas_rectangle(self.bounds);

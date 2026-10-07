@@ -1,8 +1,12 @@
 use crate::{
-    figure::Annotation, message::Message, stroke_width::StrokeWidth, tool::Tool, viewport::Viewport,
+    annotation::{Annotation, AnnotationDraft},
+    message::Message,
+    stroke_width::StrokeWidth,
+    tool::Tool,
+    viewport::Viewport,
 };
 use iced::{
-    Color, Event, Point, Rectangle, Renderer, Size, Theme,
+    Event, Rectangle, Renderer, Size, Theme,
     keyboard::{
         Event as KeyboardEvent,
         Key::{self},
@@ -11,7 +15,7 @@ use iced::{
     mouse::{self, Button, Cursor, Event as MouseEvent},
     widget::{
         Action,
-        canvas::{Cache, Program, Stroke},
+        canvas::{Cache, Program},
     },
     window::Event as WindowEvent,
 };
@@ -20,24 +24,12 @@ pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
     pub tool: Tool,
     pub stroke_width: StrokeWidth,
-    pub figures: &'a [Annotation],
+    pub annotations: &'a [Annotation],
     pub cache: &'a Cache,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub enum Drag {
-    #[default]
-    Idle,
-    Drawing {
-        tool: Tool,
-        stroke_width: StrokeWidth,
-        start: Point,
-        end: Point,
-    },
-}
-
 impl Program<Message> for AnnotationCanvas<'_> {
-    type State = Drag;
+    type State = Option<AnnotationDraft>;
 
     fn update(
         &self,
@@ -47,8 +39,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         cursor: Cursor,
     ) -> Option<iced::widget::Action<Message>> {
         if let Some(message) = history_shortcut(event) {
-            if matches!(state, Drag::Drawing { .. }) {
-                *state = Drag::Idle;
+            if state.take().is_some() {
                 self.cache.clear();
                 return Some(Action::request_redraw().and_capture());
             }
@@ -64,11 +55,10 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 })
         );
 
-        if matches!(state, Drag::Drawing { .. })
-            && (cancel || matches!(event, Event::Window(WindowEvent::Unfocused)))
-        {
-            *state = Drag::Idle;
+        if state.is_some() && (cancel || matches!(event, Event::Window(WindowEvent::Unfocused))) {
+            *state = None;
             self.cache.clear();
+
             let action = Action::request_redraw();
             return Some(if cancel { action.and_capture() } else { action });
         }
@@ -76,63 +66,38 @@ impl Program<Message> for AnnotationCanvas<'_> {
         let viewport = Viewport::new(self.image_size, bounds.size())?;
         let position = cursor.position_from(bounds.position());
 
-        match (event, *state) {
-            (Event::Mouse(MouseEvent::ButtonPressed(Button::Left)), _) => {
+        match event {
+            Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => {
                 let start = viewport.image_position(position?)?;
-                *state = Drag::Drawing {
+
+                *state = Some(AnnotationDraft {
                     tool: self.tool,
                     stroke_width: self.stroke_width,
                     start,
                     end: start,
-                };
+                });
                 self.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
-            (
-                Event::Mouse(MouseEvent::CursorMoved { .. }),
-                Drag::Drawing {
-                    tool,
-                    stroke_width,
-                    start,
-                    ..
-                },
-            ) => {
-                let end = viewport.clamped_image_position(position?)?;
-                *state = Drag::Drawing {
-                    tool,
-                    stroke_width,
-                    start,
-                    end,
-                };
+            Event::Mouse(MouseEvent::CursorMoved { .. }) => {
+                let draft = state.as_mut()?;
+                draft.end = viewport.clamped_image_position(position?)?;
+
                 self.cache.clear();
                 Some(Action::request_redraw().and_capture())
             }
-            (
-                Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
-                Drag::Drawing {
-                    tool,
-                    stroke_width,
-                    start,
-                    end,
-                },
-            ) => {
-                *state = Drag::Idle;
+            Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
+                let mut draft = state.take()?;
                 self.cache.clear();
 
-                let end = position
+                draft.end = position
                     .and_then(|point| viewport.clamped_image_position(point))
-                    .unwrap_or(end);
+                    .unwrap_or(draft.end);
 
-                Some(if start == end {
+                Some(if draft.start == draft.end {
                     Action::request_redraw().and_capture()
                 } else {
-                    Action::publish(Message::AddFigure {
-                        tool,
-                        stroke_width,
-                        start,
-                        end,
-                    })
-                    .and_capture()
+                    Action::publish(Message::AddAnnotation(draft)).and_capture()
                 })
             }
             _ => None,
@@ -154,28 +119,14 @@ impl Program<Message> for AnnotationCanvas<'_> {
         let geometry = self
             .cache
             .draw_with_bounds(renderer, viewport.bounds, |frame| {
-                let stroke = |width: StrokeWidth| {
-                    Stroke::default()
-                        .with_color(Color::from_rgb8(255, 64, 64))
-                        .with_width(width.pixels() * viewport.bounds.width / self.image_size.width)
-                };
-
-                for annotation in self.figures {
-                    frame.stroke(
-                        &annotation.figure.path(viewport),
-                        stroke(annotation.stroke_width),
-                    );
+                for annotation in self.annotations {
+                    annotation.draw(frame, viewport);
                 }
 
-                if let Drag::Drawing {
-                    tool,
-                    stroke_width,
-                    start,
-                    end,
-                } = *state
-                    && let Some(figure) = tool.figure(start, end)
+                if let Some(draft) = *state
+                    && let Ok(annotation) = Annotation::try_from(draft)
                 {
-                    frame.stroke(&figure.path(viewport), stroke(stroke_width));
+                    annotation.draw(frame, viewport);
                 }
             });
 
@@ -184,7 +135,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
 
     fn mouse_interaction(
         &self,
-        state: &Drag,
+        state: &Self::State,
         bounds: Rectangle,
         cursor: Cursor,
     ) -> mouse::Interaction {
@@ -192,7 +143,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
             .and_then(|viewport| viewport.image_position(cursor.position_from(bounds.position())?))
             .is_some();
 
-        if over_image || matches!(state, Drag::Drawing { .. }) {
+        if over_image || state.is_some() {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::None
@@ -232,20 +183,27 @@ fn history_shortcut(event: &Event) -> Option<Message> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use claims::{assert_none, assert_some};
     use iced::{
+        Point,
         keyboard::{self, Modifiers},
         widget::canvas::Program,
     };
     use rstest::rstest;
 
-    fn dispatch(drag: &mut Drag, event: &Event, position: Option<Point>) -> Option<Message> {
+    fn dispatch(
+        drag: &mut Option<AnnotationDraft>,
+        event: &Event,
+        position: Option<Point>,
+    ) -> Option<Message> {
         dispatch_with_tool(drag, event, position, Tool::Rectangle)
     }
 
     fn dispatch_with_tool(
-        drag: &mut Drag,
+        drag: &mut Option<AnnotationDraft>,
         event: &Event,
         position: Option<Point>,
         tool: Tool,
@@ -256,7 +214,7 @@ mod tests {
             image_size: Size::new(200.0, 100.0),
             tool,
             stroke_width: StrokeWidth::default(),
-            figures: &[],
+            annotations: &[],
             cache: &cache,
         }
         .update(
@@ -268,13 +226,13 @@ mod tests {
         .and_then(|action| action.into_inner().0)
     }
 
-    fn begin(drag: &mut Drag) {
+    fn begin(drag: &mut Option<AnnotationDraft>) {
         assert_none!(dispatch(
             drag,
             &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
             Some(Point::new(120.0, 190.0)),
         ));
-        assert!(matches!(drag, Drag::Drawing { .. }));
+        assert_some!(drag);
     }
 
     fn key_press(character: &str, modifiers: Modifiers, repeat: bool) -> Event {
@@ -297,7 +255,7 @@ mod tests {
         #[case] release: Point,
         #[case] expected: Point,
     ) {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
         begin(&mut drag);
 
         let message = assert_some!(dispatch(
@@ -308,19 +266,19 @@ mod tests {
 
         assert_eq!(
             message,
-            Message::AddFigure {
+            Message::AddAnnotation(AnnotationDraft {
                 tool: Tool::Rectangle,
                 stroke_width: StrokeWidth::default(),
                 start: Point::new(50.0, 25.0),
                 end: expected,
-            }
+            })
         );
-        assert!(matches!(drag, Drag::Idle));
+        assert_none!(drag);
     }
 
     #[test]
     fn uses_the_last_endpoint_when_the_cursor_is_unavailable() {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
         begin(&mut drag);
         let position = Point::new(320.0, 290.0);
 
@@ -338,14 +296,14 @@ mod tests {
 
         assert_eq!(
             message,
-            Message::AddFigure {
+            Message::AddAnnotation(AnnotationDraft {
                 tool: Tool::Rectangle,
                 stroke_width: StrokeWidth::default(),
                 start: Point::new(50.0, 25.0),
                 end: Point::new(150.0, 75.0)
-            }
+            })
         );
-        assert!(matches!(drag, Drag::Idle));
+        assert_none!(drag);
     }
 
     #[rstest]
@@ -361,10 +319,11 @@ mod tests {
         repeat: false,
     }))]
     fn cancels_without_committing_on_a_later_release(#[case] cancel: &Event) {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
         begin(&mut drag);
+
         assert_none!(dispatch(&mut drag, cancel, None));
-        assert!(matches!(drag, Drag::Idle));
+        assert_none!(drag);
         assert_none!(dispatch(
             &mut drag,
             &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
@@ -374,19 +333,19 @@ mod tests {
 
     #[test]
     fn ignores_presses_in_the_letterbox() {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
 
         assert_none!(dispatch(
             &mut drag,
             &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
             Some(Point::new(120.0, 90.0)),
         ));
-        assert!(matches!(drag, Drag::Idle));
+        assert_none!(drag);
     }
 
     #[test]
     fn ignores_a_click_without_dragging() {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
         begin(&mut drag);
 
         assert_none!(dispatch(
@@ -394,7 +353,7 @@ mod tests {
             &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
             Some(Point::new(120.0, 190.0)),
         ));
-        assert!(matches!(drag, Drag::Idle));
+        assert_none!(drag);
     }
 
     #[rstest]
@@ -409,7 +368,7 @@ mod tests {
         #[case] modifiers: Modifiers,
         #[case] expected: Message,
     ) {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
         let event = key_press(character, modifiers, false);
         assert_eq!(dispatch(&mut drag, &event, None), Some(expected));
     }
@@ -426,14 +385,14 @@ mod tests {
         #[case] modifiers: Modifiers,
         #[case] repeat: bool,
     ) {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
         begin(&mut drag);
         assert_none!(dispatch(
             &mut drag,
             &key_press(character, modifiers, repeat),
             None,
         ));
-        assert!(matches!(drag, Drag::Drawing { .. }));
+        assert_some!(drag);
     }
 
     #[rstest]
@@ -445,11 +404,11 @@ mod tests {
         #[case] modifiers: Modifiers,
         #[case] expected: Message,
     ) {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
         begin(&mut drag);
         let event = key_press(character, modifiers, false);
         assert_none!(dispatch(&mut drag, &event, None));
-        assert!(matches!(drag, Drag::Idle));
+        assert_none!(drag);
         assert_none!(dispatch(
             &mut drag,
             &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
@@ -465,11 +424,11 @@ mod tests {
             image_size: Size::new(200.0, 100.0),
             tool: Tool::Ellipse,
             stroke_width: StrokeWidth::default(),
-            figures: &[],
+            annotations: &[],
             cache: &cache,
         };
         let bounds = Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0));
-        let mut drag = Drag::Idle;
+        let mut drag = None;
 
         let _ = canvas.update(
             &mut drag,
@@ -478,13 +437,13 @@ mod tests {
             Cursor::Available(Point::new(120.0, 190.0)),
         );
 
-        assert!(matches!(
+        assert_matches!(
             drag,
-            Drag::Drawing {
+            Some(AnnotationDraft {
                 tool: Tool::Ellipse,
                 ..
-            }
-        ));
+            })
+        );
 
         canvas.tool = Tool::Rectangle;
         let position = Point::new(320.0, 290.0);
@@ -507,14 +466,14 @@ mod tests {
 
         assert_eq!(
             message,
-            Some(Message::AddFigure {
+            Some(Message::AddAnnotation(AnnotationDraft {
                 tool: Tool::Ellipse,
                 stroke_width: StrokeWidth::default(),
                 start: Point::new(50.0, 25.0),
                 end: Point::new(150.0, 75.0),
-            }),
+            })),
         );
-        assert!(matches!(drag, Drag::Idle));
+        assert_none!(drag);
     }
 
     #[rstest]
@@ -522,7 +481,7 @@ mod tests {
     #[case(Point::new(120.0, 290.0), Point::new(50.0, 75.0))]
     #[case(Point::new(80.0, 170.0), Point::new(30.0, 15.0))]
     fn commits_line_endpoints_without_normalizing_them(#[case] release: Point, #[case] end: Point) {
-        let mut drag = Drag::Idle;
+        let mut drag = None;
 
         assert_none!(dispatch_with_tool(
             &mut drag,
@@ -539,17 +498,58 @@ mod tests {
         );
 
         let (start, actual_end) = assert_some!(message.and_then(|message| match message {
-            Message::AddFigure {
+            Message::AddAnnotation(AnnotationDraft {
                 tool: Tool::Line,
                 start,
                 end,
                 ..
-            } => Some((start, end)),
+            }) => Some((start, end)),
             _ => None,
         }));
 
         assert_eq!(start, Point::new(50.0, 25.0));
         assert!(actual_end.distance(end) < 0.001);
-        assert!(matches!(drag, Drag::Idle));
+        assert_none!(drag);
+    }
+
+    #[test]
+    fn finishes_with_the_width_selected_when_the_drag_started() {
+        let cache = Cache::new();
+        let mut canvas = AnnotationCanvas {
+            image_size: Size::new(200.0, 100.0),
+            tool: Tool::Line,
+            stroke_width: StrokeWidth::Thin,
+            annotations: &[],
+            cache: &cache,
+        };
+        let bounds = Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0));
+        let mut draft = None;
+
+        let _ = canvas.update(
+            &mut draft,
+            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
+            bounds,
+            Cursor::Available(Point::new(120.0, 190.0)),
+        );
+
+        canvas.stroke_width = StrokeWidth::Thick;
+
+        let message = canvas
+            .update(
+                &mut draft,
+                &Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
+                bounds,
+                Cursor::Available(Point::new(320.0, 290.0)),
+            )
+            .and_then(|action| action.into_inner().0);
+
+        assert_matches!(
+            message,
+            Some(Message::AddAnnotation(AnnotationDraft {
+                stroke_width: StrokeWidth::Thin,
+                ..
+            }))
+        );
+        assert_none!(draft);
     }
 }

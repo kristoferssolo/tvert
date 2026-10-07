@@ -67,13 +67,20 @@ impl Viewport {
         )
     }
 
+    /// Maps an image-pixel rectangle into canvas coordinates
     pub fn canvas_rectangle(self, rectangle: Rectangle) -> Rectangle {
-        Rectangle {
-            x: (rectangle.x / self.image_size.width).mul_add(self.bounds.width, self.bounds.x),
-            y: (rectangle.y / self.image_size.height).mul_add(self.bounds.height, self.bounds.y),
-            width: rectangle.width / self.image_size.width * self.bounds.width,
-            height: rectangle.height / self.image_size.height * self.bounds.height,
-        }
+        Rectangle::new(
+            self.canvas_position(rectangle.position()),
+            Size::new(
+                rectangle.width / self.image_size.width * self.bounds.width,
+                rectangle.height / self.image_size.height * self.bounds.height,
+            ),
+        )
+    }
+
+    /// Maps an image-pixel length into canvas units
+    pub fn canvas_length(&self, pixels: f32) -> f32 {
+        pixels * self.bounds.width / self.image_size.width
     }
 }
 

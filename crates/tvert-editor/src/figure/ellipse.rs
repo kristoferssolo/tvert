@@ -17,6 +17,12 @@ impl EllipseFigure {
     }
 }
 
+impl From<Rectangle> for EllipseFigure {
+    fn from(bounds: Rectangle) -> Self {
+        Self::new(bounds)
+    }
+}
+
 impl Figure for EllipseFigure {
     fn path(&self, viewport: Viewport) -> Path {
         let bounds = viewport.canvas_rectangle(self.bounds);

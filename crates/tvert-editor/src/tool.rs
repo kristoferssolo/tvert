@@ -25,8 +25,8 @@ impl Tool {
             return None;
         }
         Some(match self {
-            Self::Rectangle => Box::new(RectangleFigure::new(rectangle_between(start, end)?)),
-            Self::Ellipse => Box::new(EllipseFigure::new(rectangle_between(start, end)?)),
+            Self::Rectangle => Box::new(RectangleFigure::from(rectangle_between(start, end)?)),
+            Self::Ellipse => Box::new(EllipseFigure::from(rectangle_between(start, end)?)),
             Self::Line => Box::new(LineFigure::new(start, end)),
             Self::Arrow => Box::new(ArrowFigure::new(start, end)),
         })

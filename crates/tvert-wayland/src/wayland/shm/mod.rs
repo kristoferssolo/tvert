@@ -1,6 +1,8 @@
+mod format;
 mod layout;
 mod requirements;
 
+pub use format::ShmFormat;
 pub use layout::{ShmLayout, Stride};
 pub use requirements::ShmRequirements;
 
@@ -120,8 +122,10 @@ impl ShmBuffer {
         layout: ShmLayout,
         queue_handle: &QueueHandle<State>,
     ) -> Result<Self, Error> {
-        if !advertised_formats.contains(&layout.format()) {
-            return Err(Error::UnsupportedShmFormat(WEnum::Value(layout.format())));
+        let format = layout.format().into();
+
+        if !advertised_formats.contains(&format) {
+            return Err(Error::UnsupportedShmFormat(WEnum::Value(format)));
         }
 
         let width = shm_dimensions(layout.width().get())?;
@@ -134,8 +138,7 @@ impl ShmBuffer {
         file.set_len(layout.file_len())?;
 
         let pool = shm.create_pool(file.as_fd(), layout.pool_size(), queue_handle, ());
-        let buffer =
-            pool.create_buffer(0, width, height, stride, layout.format(), queue_handle, ());
+        let buffer = pool.create_buffer(0, width, height, stride, format, queue_handle, ());
 
         pool.destroy();
 

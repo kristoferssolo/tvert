@@ -1,4 +1,7 @@
-use crate::{Error, wayland::shm::ShmRequirements};
+use crate::{
+    Error,
+    wayland::shm::{ShmFormat, ShmRequirements},
+};
 use std::num::NonZeroU32;
 use tvert_image::PixelSize;
 use wayland_client::{WEnum, protocol::wl_shm::Format};
@@ -74,7 +77,7 @@ impl Stride {
 /// independently after validation.
 #[derive(Debug, Clone, Copy)]
 pub struct ShmLayout {
-    format: Format,
+    format: ShmFormat,
     size: PixelSize,
     stride: Stride,
     pool_size: i32,
@@ -94,13 +97,7 @@ impl ShmLayout {
     /// stride, arithmetic overflow, or sizes that cannot be represented
     /// by Wayland or this process.
     pub fn new(format: WEnum<Format>, width: u32, height: u32, stride: u32) -> Result<Self, Error> {
-        let format = match format {
-            WEnum::Value(
-                format
-                @ (Format::Argb8888 | Format::Xrgb8888 | Format::Abgr8888 | Format::Xbgr8888),
-            ) => format,
-            other => return Err(Error::UnsupportedShmFormat(other)),
-        };
+        let format = ShmFormat::try_from(format)?;
 
         let size = PixelSize::try_from((width, height)).map_err(|_| Error::InvalidShmLayout)?;
         let stride = Stride::new(stride, size.width())?;
@@ -125,7 +122,7 @@ impl ShmLayout {
         })
     }
 
-    pub const fn format(self) -> Format {
+    pub const fn format(self) -> ShmFormat {
         self.format
     }
 

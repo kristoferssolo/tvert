@@ -1,7 +1,9 @@
-use crate::{Error, wayland::shm::ShmLayout};
+use crate::{
+    Error,
+    wayland::shm::{ShmFormat, ShmLayout},
+};
 use std::{fs::File, os::unix::fs::FileExt};
 use tvert_image::CapturedImage;
-use wayland_client::{WEnum, protocol::wl_shm::Format};
 
 pub fn read_image(
     file: &File,
@@ -27,25 +29,19 @@ pub fn read_image(
         file.read_exact_at(row, layout.row_offset(source_row)?)?;
 
         for pixel in row.as_chunks_mut::<4>().0 {
-            let converted = rgba_pixel(pixel, layout.format())?;
-            pixel.copy_from_slice(&converted);
+            *pixel = rgba_pixel(*pixel, layout.format())?;
         }
     }
 
     CapturedImage::new(layout.size(), rgba).map_err(Error::from)
 }
 
-fn rgba_pixel(pixel: &[u8], format: Format) -> Result<[u8; 4], Error> {
-    let &[first, green, last, alpha] = pixel else {
-        return Err(Error::InvalidShmLayout);
-    };
-
+fn rgba_pixel([first, green, last, alpha]: [u8; 4], format: ShmFormat) -> Result<[u8; 4], Error> {
     let (red, blue, alpha) = match format {
-        Format::Argb8888 => (last, first, alpha),
-        Format::Xrgb8888 => (last, first, 255),
-        Format::Abgr8888 => (first, last, alpha),
-        Format::Xbgr8888 => (first, last, 255),
-        other => return Err(Error::UnsupportedShmFormat(WEnum::Value(other))),
+        ShmFormat::Argb8888 => (last, first, alpha),
+        ShmFormat::Xrgb8888 => (last, first, 255),
+        ShmFormat::Abgr8888 => (first, last, alpha),
+        ShmFormat::Xbgr8888 => (first, last, 255),
     };
 
     if alpha == 255 {
@@ -84,8 +80,11 @@ mod tests {
     use claims::{assert_err, assert_ok};
     use rstest::rstest;
     use rustix::fs::{MemfdFlags, memfd_create};
-    use std::assert_matches;
-    use std::io::{ErrorKind, Write};
+    use std::{
+        assert_matches,
+        io::{ErrorKind, Write},
+    };
+    use wayland_client::{WEnum, protocol::wl_shm::Format};
 
     fn read_fixture(
         bytes: &[u8],

@@ -140,11 +140,7 @@ impl Editor {
             content = content.push(text(error_message(error)).style(text::danger));
         }
 
-        container(content)
-            .padding(16)
-            .width(Fill)
-            .height(Fill)
-            .into()
+        container(content).width(Fill).height(Fill).into()
     }
 
     /// Renders committed annotations over the original capture at full resolution.

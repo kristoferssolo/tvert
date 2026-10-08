@@ -1,6 +1,7 @@
 use crate::{
     annotation::{Annotation, AnnotationDraft},
     message::Message,
+    shortcuts,
     stroke_width::StrokeWidth,
     tool::Tool,
     viewport::Viewport,
@@ -41,7 +42,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> Option<iced::widget::Action<Message>> {
-        if let Some(message) = history_shortcut(event) {
+        if let Some(message) = shortcuts::history(event) {
             if state.take().is_some() {
                 self.cache.clear();
                 return Some(Action::request_redraw().and_capture());
@@ -181,48 +182,45 @@ impl AnnotationCanvas<'_> {
     }
 }
 
-fn history_shortcut(event: &Event) -> Option<Message> {
-    let Event::Keyboard(KeyboardEvent::KeyPressed {
-        key: Key::Character(character),
-        modifiers,
-        repeat: false,
-        ..
-    }) = event
-    else {
-        return None;
-    };
-
-    if !modifiers.control() || modifiers.alt() || modifiers.logo() {
-        return None;
-    }
-
-    if character.eq_ignore_ascii_case("z") {
-        return Some(if modifiers.shift() {
-            Message::Redo
-        } else {
-            Message::Undo
-        });
-    }
-
-    if !modifiers.shift() && character.eq_ignore_ascii_case("y") {
-        return Some(Message::Redo);
-    }
-
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::annotation::DEFAULT_STROKE_COLOR;
     use claims::{assert_none, assert_some, assert_some_eq};
-    use iced::{
-        Point,
-        keyboard::{self, Modifiers},
-        widget::canvas::Program,
-    };
+    use iced::keyboard::{self, Modifiers};
     use rstest::rstest;
-    use std::assert_matches;
+
+    const PRESS: Event = Event::Mouse(MouseEvent::ButtonPressed(Button::Left));
+    const RELEASE: Event = Event::Mouse(MouseEvent::ButtonReleased(Button::Left));
+    const START: Point = Point::new(120.0, 190.0);
+    const END: Point = Point::new(320.0, 290.0);
+
+    fn canvas(cache: &Cache, tool: Tool) -> AnnotationCanvas<'_> {
+        AnnotationCanvas {
+            image_size: Size::new(200.0, 100.0),
+            tool,
+            stroke_width: StrokeWidth::default(),
+            stroke_color: DEFAULT_STROKE_COLOR,
+            annotations: &[],
+            cache,
+        }
+    }
+
+    fn dispatch_canvas(
+        canvas: &AnnotationCanvas<'_>,
+        draft: &mut DraftState,
+        event: &Event,
+        position: Option<Point>,
+    ) -> Option<Message> {
+        canvas
+            .update(
+                draft,
+                event,
+                Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0)),
+                position.map_or(Cursor::Unavailable, Cursor::Available),
+            )
+            .and_then(|action| action.into_inner().0)
+    }
 
     fn dispatch(draft: &mut DraftState, event: &Event, position: Option<Point>) -> Option<Message> {
         dispatch_with_tool(draft, event, position, Tool::Rectangle)
@@ -234,31 +232,11 @@ mod tests {
         position: Option<Point>,
         tool: Tool,
     ) -> Option<Message> {
-        let cache = Cache::new();
-
-        AnnotationCanvas {
-            image_size: Size::new(200.0, 100.0),
-            tool,
-            stroke_width: StrokeWidth::default(),
-            stroke_color: DEFAULT_STROKE_COLOR,
-            annotations: &[],
-            cache: &cache,
-        }
-        .update(
-            draft,
-            event,
-            Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0)),
-            position.map_or(mouse::Cursor::Unavailable, mouse::Cursor::Available),
-        )
-        .and_then(|action| action.into_inner().0)
+        dispatch_canvas(&canvas(&Cache::new(), tool), draft, event, position)
     }
 
     fn begin(draft: &mut DraftState) {
-        assert_none!(dispatch(
-            draft,
-            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-            Some(Point::new(120.0, 190.0)),
-        ));
+        assert_none!(dispatch(draft, &PRESS, Some(START)));
         assert_some!(draft);
     }
 
@@ -274,8 +252,17 @@ mod tests {
         })
     }
 
+    fn expected_annotation(tool: Tool, points: Vec<Point>) -> Message {
+        Message::AddAnnotation(AnnotationDraft {
+            tool,
+            stroke_width: StrokeWidth::default(),
+            stroke_color: DEFAULT_STROKE_COLOR,
+            points,
+        })
+    }
+
     #[rstest]
-    #[case(Point::new(320.0, 290.0), Point::new(150.0, 75.0))]
+    #[case(END, Point::new(150.0, 75.0))]
     #[case(Point::new(620.0, 740.0), Point::new(200.0, 100.0))]
     #[case(Point::ORIGIN, Point::ORIGIN)]
     fn commits_the_release_position_without_a_motion_event(
@@ -284,21 +271,10 @@ mod tests {
     ) {
         let mut draft = None;
         begin(&mut draft);
-
-        let message = assert_some!(dispatch(
-            &mut draft,
-            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-            Some(release),
-        ));
-
-        assert_eq!(
+        let message = dispatch(&mut draft, &RELEASE, Some(release));
+        assert_some_eq!(
             message,
-            Message::AddAnnotation(AnnotationDraft {
-                tool: Tool::Rectangle,
-                stroke_width: StrokeWidth::default(),
-                stroke_color: DEFAULT_STROKE_COLOR,
-                points: vec![Point::new(50.0, 25.0), expected]
-            })
+            expected_annotation(Tool::Rectangle, vec![Point::new(50.0, 25.0), expected])
         );
         assert_none!(draft);
     }
@@ -307,66 +283,46 @@ mod tests {
     fn uses_the_last_endpoint_when_the_cursor_is_unavailable() {
         let mut draft = None;
         begin(&mut draft);
-        let position = Point::new(320.0, 290.0);
-
         assert_none!(dispatch(
             &mut draft,
-            &Event::Mouse(mouse::Event::CursorMoved { position }),
-            Some(position),
+            &Event::Mouse(MouseEvent::CursorMoved { position: END }),
+            Some(END)
         ));
-
-        let message = assert_some!(dispatch(
-            &mut draft,
-            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-            None,
-        ));
-
-        assert_eq!(
+        let message = dispatch(&mut draft, &RELEASE, None);
+        assert_some_eq!(
             message,
-            Message::AddAnnotation(AnnotationDraft {
-                tool: Tool::Rectangle,
-                stroke_width: StrokeWidth::default(),
-                stroke_color: DEFAULT_STROKE_COLOR,
-                points: vec![Point::new(50.0, 25.0), Point::new(150.0, 75.0)]
-            })
+            expected_annotation(
+                Tool::Rectangle,
+                vec![Point::new(50.0, 25.0), Point::new(150.0, 75.0)]
+            )
         );
         assert_none!(draft);
     }
 
     #[rstest]
-    #[case(&Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)))]
-    #[case(&Event::Window(WindowEvent::Unfocused))]
-    #[case(&Event::Keyboard(KeyboardEvent::KeyPressed {
-        key: keyboard::Key::Named(keyboard::key::Named::Escape),
-        modified_key: keyboard::Key::Named(keyboard::key::Named::Escape),
-        physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Escape),
+    #[case(Event::Mouse(MouseEvent::ButtonPressed(Button::Right)))]
+    #[case(Event::Window(WindowEvent::Unfocused))]
+    #[case(Event::Keyboard(KeyboardEvent::KeyPressed {
+        key: Key::Named(key::Named::Escape),
+        modified_key: Key::Named(key::Named::Escape),
+        physical_key: key::Physical::Code(key::Code::Escape),
         location: keyboard::Location::Standard,
-        modifiers: keyboard::Modifiers::empty(),
+        modifiers: Modifiers::empty(),
         text: None,
         repeat: false,
     }))]
-    fn cancels_without_committing_on_a_later_release(#[case] cancel: &Event) {
+    fn cancels_without_committing_on_a_later_release(#[case] cancel: Event) {
         let mut draft = None;
         begin(&mut draft);
-
-        assert_none!(dispatch(&mut draft, cancel, None));
+        assert_none!(dispatch(&mut draft, &cancel, None));
         assert_none!(&draft);
-        assert_none!(dispatch(
-            &mut draft,
-            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-            Some(Point::new(320.0, 290.0)),
-        ));
+        assert_none!(dispatch(&mut draft, &RELEASE, Some(END)));
     }
 
     #[test]
     fn ignores_presses_in_the_letterbox() {
         let mut draft = None;
-
-        assert_none!(dispatch(
-            &mut draft,
-            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-            Some(Point::new(120.0, 90.0)),
-        ));
+        assert_none!(dispatch(&mut draft, &PRESS, Some(Point::new(120.0, 90.0))));
         assert_none!(draft);
     }
 
@@ -374,50 +330,27 @@ mod tests {
     fn ignores_a_click_without_dragging() {
         let mut draft = None;
         begin(&mut draft);
-
-        assert_none!(dispatch(
-            &mut draft,
-            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-            Some(Point::new(120.0, 190.0)),
-        ));
+        assert_none!(dispatch(&mut draft, &RELEASE, Some(START)));
         assert_none!(draft);
     }
 
-    #[rstest]
-    #[case("z", Modifiers::CTRL, Message::Undo)]
-    #[case("Z", Modifiers::CTRL, Message::Undo)]
-    #[case("y", Modifiers::CTRL, Message::Redo)]
-    #[case("Y", Modifiers::CTRL, Message::Redo)]
-    #[case("z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
-    #[case("Z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
-    fn publishes_history_shortcuts_without_a_cursor(
-        #[case] character: &str,
-        #[case] modifiers: Modifiers,
-        #[case] expected: Message,
-    ) {
+    #[test]
+    fn publishes_history_shortcuts_without_a_cursor() {
         let mut draft = None;
-        let event = key_press(character, modifiers, false);
-        assert_eq!(dispatch(&mut draft, &event, None), Some(expected));
+        assert_some_eq!(
+            dispatch(&mut draft, &key_press("z", Modifiers::CTRL, false), None),
+            Message::Undo
+        );
     }
 
-    #[rstest]
-    #[case("z", Modifiers::empty(), false)]
-    #[case("z", Modifiers::CTRL | Modifiers::ALT, false)]
-    #[case("z", Modifiers::CTRL | Modifiers::LOGO, false)]
-    #[case("y", Modifiers::CTRL | Modifiers::SHIFT, false)]
-    #[case("s", Modifiers::CTRL, false)]
-    #[case("z", Modifiers::CTRL, true)]
-    fn ignores_unrelated_keys_and_repeats(
-        #[case] character: &str,
-        #[case] modifiers: Modifiers,
-        #[case] repeat: bool,
-    ) {
+    #[test]
+    fn leaves_export_shortcuts_for_the_subscription() {
         let mut draft = None;
         begin(&mut draft);
         assert_none!(dispatch(
             &mut draft,
-            &key_press(character, modifiers, repeat),
-            None,
+            &key_press("s", Modifiers::CTRL, false),
+            None
         ));
         assert_some!(draft);
     }
@@ -436,70 +369,45 @@ mod tests {
         let event = key_press(character, modifiers, false);
         assert_none!(dispatch(&mut draft, &event, None));
         assert_none!(&draft);
-        assert_none!(dispatch(
-            &mut draft,
-            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-            Some(Point::new(320.0, 290.0)),
-        ));
-        assert_eq!(dispatch(&mut draft, &event, None), Some(expected));
+        assert_none!(dispatch(&mut draft, &RELEASE, Some(END)));
+        assert_some_eq!(dispatch(&mut draft, &event, None), expected);
     }
 
-    #[test]
-    fn finishes_with_the_tool_selected_when_the_drag_started() {
+    #[rstest]
+    #[case(Tool::Ellipse, StrokeWidth::Medium, DEFAULT_STROKE_COLOR)]
+    #[case(Tool::Rectangle, StrokeWidth::Thin, DEFAULT_STROKE_COLOR)]
+    #[case(Tool::Rectangle, StrokeWidth::Medium, Color::BLACK)]
+    fn retains_the_appearance_selected_when_the_drag_started(
+        #[case] tool: Tool,
+        #[case] width: StrokeWidth,
+        #[case] color: Color,
+    ) {
         let cache = Cache::new();
-        let mut canvas = AnnotationCanvas {
-            image_size: Size::new(200.0, 100.0),
-            tool: Tool::Ellipse,
-            stroke_width: StrokeWidth::default(),
-            stroke_color: DEFAULT_STROKE_COLOR,
-            annotations: &[],
-            cache: &cache,
-        };
-        let bounds = Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0));
+        let mut canvas = canvas(&cache, tool);
+        canvas.stroke_width = width;
+        canvas.stroke_color = color;
         let mut draft = None;
+        assert_none!(dispatch_canvas(&canvas, &mut draft, &PRESS, Some(START)));
 
-        let _ = canvas.update(
+        canvas.tool = Tool::Arrow;
+        canvas.stroke_width = StrokeWidth::Thick;
+        canvas.stroke_color = Color::WHITE;
+
+        assert_none!(dispatch_canvas(
+            &canvas,
             &mut draft,
-            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
-            bounds,
-            Cursor::Available(Point::new(120.0, 190.0)),
-        );
-
-        assert_matches!(
-            draft,
-            Some(AnnotationDraft {
-                tool: Tool::Ellipse,
-                ..
-            })
-        );
-
-        canvas.tool = Tool::Rectangle;
-        let position = Point::new(320.0, 290.0);
-
-        let _ = canvas.update(
-            &mut draft,
-            &Event::Mouse(MouseEvent::CursorMoved { position }),
-            bounds,
-            Cursor::Available(position),
-        );
-
-        let message = canvas
-            .update(
-                &mut draft,
-                &Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
-                bounds,
-                Cursor::Available(position),
-            )
-            .and_then(|action| action.into_inner().0);
-
-        assert_eq!(
+            &Event::Mouse(MouseEvent::CursorMoved { position: END }),
+            Some(END)
+        ));
+        let message = dispatch_canvas(&canvas, &mut draft, &RELEASE, Some(END));
+        assert_some_eq!(
             message,
-            Some(Message::AddAnnotation(AnnotationDraft {
-                tool: Tool::Ellipse,
-                stroke_width: StrokeWidth::default(),
-                stroke_color: DEFAULT_STROKE_COLOR,
-                points: vec![Point::new(50.0, 25.0), Point::new(150.0, 75.0),]
-            })),
+            Message::AddAnnotation(AnnotationDraft {
+                tool,
+                stroke_width: width,
+                stroke_color: color,
+                points: vec![Point::new(50.0, 25.0), Point::new(150.0, 75.0)],
+            })
         );
         assert_none!(draft);
     }
@@ -510,21 +418,13 @@ mod tests {
     #[case(Point::new(80.0, 170.0), Point::new(30.0, 15.0))]
     fn commits_line_endpoints_without_normalizing_them(#[case] release: Point, #[case] end: Point) {
         let mut draft = None;
-
         assert_none!(dispatch_with_tool(
             &mut draft,
-            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
-            Some(Point::new(120.0, 190.0)),
-            Tool::Line,
+            &PRESS,
+            Some(START),
+            Tool::Line
         ));
-
-        let message = dispatch_with_tool(
-            &mut draft,
-            &Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
-            Some(release),
-            Tool::Line,
-        );
-
+        let message = dispatch_with_tool(&mut draft, &RELEASE, Some(release), Tool::Line);
         let points = assert_some!(message.and_then(|message| match message {
             Message::AddAnnotation(AnnotationDraft {
                 tool: Tool::Line,
@@ -533,97 +433,42 @@ mod tests {
             }) => Some(points),
             _ => None,
         }));
-
         assert_some_eq!(points.first(), &Point::new(50.0, 25.0));
         assert!(assert_some!(points.last()).distance(end) < 0.001);
         assert_none!(draft);
     }
 
     #[test]
-    fn finishes_with_the_width_selected_when_the_drag_started() {
-        let cache = Cache::new();
-        let mut canvas = AnnotationCanvas {
-            image_size: Size::new(200.0, 100.0),
-            tool: Tool::Line,
-            stroke_width: StrokeWidth::Thin,
-            stroke_color: DEFAULT_STROKE_COLOR,
-            annotations: &[],
-            cache: &cache,
-        };
-        let bounds = Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0));
-        let mut draft = None;
-
-        let _ = canvas.update(
-            &mut draft,
-            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
-            bounds,
-            Cursor::Available(Point::new(120.0, 190.0)),
-        );
-
-        canvas.stroke_width = StrokeWidth::Thick;
-
-        let message = canvas
-            .update(
-                &mut draft,
-                &Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
-                bounds,
-                Cursor::Available(Point::new(320.0, 290.0)),
-            )
-            .and_then(|action| action.into_inner().0);
-
-        assert_matches!(
-            message,
-            Some(Message::AddAnnotation(AnnotationDraft {
-                stroke_width: StrokeWidth::Thin,
-                ..
-            }))
-        );
-        assert_none!(draft);
-    }
-
-    #[test]
     fn pencil_retains_motion_samples_and_a_return_to_its_start() {
-        let mut drag = None;
-        let press = Point::new(120.0, 190.0);
+        let mut draft = None;
         let middle = Point::new(320.0, 190.0);
-
         assert_none!(dispatch_with_tool(
-            &mut drag,
-            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
-            Some(press),
-            Tool::Pencil,
+            &mut draft,
+            &PRESS,
+            Some(START),
+            Tool::Pencil
         ));
-
         for position in [middle, middle] {
             assert_none!(dispatch_with_tool(
-                &mut drag,
+                &mut draft,
                 &Event::Mouse(MouseEvent::CursorMoved { position }),
                 Some(position),
-                Tool::Pencil,
+                Tool::Pencil
             ));
         }
-
-        let message = dispatch_with_tool(
-            &mut drag,
-            &Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
-            Some(press),
-            Tool::Pencil,
-        );
-
+        let message = dispatch_with_tool(&mut draft, &RELEASE, Some(START), Tool::Pencil);
         assert_some_eq!(
             message,
-            Message::AddAnnotation(AnnotationDraft {
-                tool: Tool::Pencil,
-                stroke_width: StrokeWidth::default(),
-                stroke_color: DEFAULT_STROKE_COLOR,
-                points: vec![
+            expected_annotation(
+                Tool::Pencil,
+                vec![
                     Point::new(50.0, 25.0),
                     Point::new(150.0, 25.0),
-                    Point::new(50.0, 25.0),
-                ],
-            })
+                    Point::new(50.0, 25.0)
+                ]
+            )
         );
-        assert_none!(drag.as_ref());
+        assert_none!(draft);
     }
 
     #[test]
@@ -631,28 +476,24 @@ mod tests {
         let mut draft = None;
         assert_none!(dispatch_with_tool(
             &mut draft,
-            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
-            Some(Point::new(120.0, 190.0)),
-            Tool::Pencil,
+            &PRESS,
+            Some(START),
+            Tool::Pencil
         ));
-
-        let snapshot = Point::new(320.0, 290.0);
-        for position in [Point::new(220.0, 190.0), snapshot] {
+        for position in [Point::new(220.0, 190.0), END] {
             assert_none!(dispatch_with_tool(
                 &mut draft,
                 &Event::Mouse(MouseEvent::CursorMoved { position }),
-                Some(snapshot),
-                Tool::Pencil,
+                Some(END),
+                Tool::Pencil
             ));
         }
-
-        let draft = assert_some!(draft);
         assert_eq!(
-            draft.points,
+            assert_some!(draft).points,
             vec![
                 Point::new(50.0, 25.0),
                 Point::new(100.0, 25.0),
-                Point::new(150.0, 75.0),
+                Point::new(150.0, 75.0)
             ]
         );
     }

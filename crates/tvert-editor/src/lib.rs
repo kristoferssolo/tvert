@@ -6,6 +6,7 @@ mod export;
 mod figure;
 mod message;
 mod render;
+mod shortcuts;
 mod stroke_width;
 mod tool;
 mod toolbar;
@@ -14,16 +15,8 @@ mod viewport;
 pub use error::Error;
 pub use export::ExportAction;
 
-use crate::{
-    editor::{Editor, ExportHandler},
-    message::Message,
-};
-use iced::{
-    Event, Size, Theme, event,
-    keyboard::{Event as KeyboardEvent, Key},
-    widget::image::Handle,
-    window,
-};
+use crate::editor::{Editor, ExportHandler};
+use iced::{Size, Theme, event, widget::image::Handle, window};
 use std::{error::Error as StdError, rc::Rc};
 use tvert_image::CapturedImage;
 
@@ -61,47 +54,16 @@ where
     .title("Tvert")
     .theme(Theme::Dark)
     .font(lucide_icons::LUCIDE_FONT_BYTES)
-    .subscription(|_| event::listen_with(export_shortcut))
+    .subscription(|_| event::listen_with(|event, status, _| shortcuts::export(&event, status)))
     .window(window::Settings {
         platform_specific: window::settings::PlatformSpecific {
             application_id: "tvert".into(),
             ..Default::default()
         },
-        min_size: Some(Size::new(640.0, 320.0)),
         ..Default::default()
     })
-    .window_size((1000.0, 700.0))
+    .window_size((1080.0, 720.0))
     .resizable(true)
     .run()?;
     Ok(())
-}
-
-fn export_shortcut(event: Event, status: event::Status, _window: window::Id) -> Option<Message> {
-    if status != event::Status::Ignored {
-        return None;
-    }
-
-    let Event::Keyboard(KeyboardEvent::KeyPressed {
-        key: Key::Character(character),
-        modifiers,
-        repeat: false,
-        ..
-    }) = event
-    else {
-        return None;
-    };
-
-    // Ctrl must be held; Alt/Logo must not. Shift is decided per shortcut
-    if !modifiers.control() || modifiers.alt() || modifiers.logo() {
-        return None;
-    }
-
-    let action = match (character.to_ascii_lowercase().as_str(), modifiers.shift()) {
-        ("c", false) => ExportAction::Copy,
-        ("c", true) => ExportAction::CopyAndSave,
-        ("s", false) => ExportAction::Save,
-        _ => return None,
-    };
-
-    Some(Message::Export(action))
 }

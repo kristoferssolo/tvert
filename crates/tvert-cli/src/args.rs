@@ -47,5 +47,9 @@ pub enum Command {
         /// Output name, such as DP-1
         #[arg(value_name = "OUTPUT")]
         output: String,
+
+        /// Destination PNG file. Must not already exist
+        #[arg(value_name = "FILE")]
+        path: PathBuf,
     },
 }

@@ -9,4 +9,5 @@ pub enum Message {
     SelectStrokeColor(Color),
     Undo,
     Redo,
+    Save,
 }

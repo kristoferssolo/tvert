@@ -27,7 +27,7 @@ fn main() -> Result<ExitCode> {
     let output_name = match &args.command {
         Command::CaptureOutput { output, .. }
         | Command::CaptureRegion { output, .. }
-        | Command::EditRegion { output }
+        | Command::EditRegion { output, .. }
         | Command::ProbeOverlay { output }
         | Command::SelectRegion { output } => output,
     };
@@ -73,7 +73,7 @@ fn main() -> Result<ExitCode> {
             save_png(&path, &image)?;
             println!("Saved {} to {}", image.size(), path.display());
         }
-        Command::EditRegion { .. } => {
+        Command::EditRegion { path, .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
 
             let Some(image) = wayland.select_region(output_id)? else {
@@ -82,7 +82,11 @@ fn main() -> Result<ExitCode> {
             };
 
             drop(wayland);
-            tvert_editor::run(image)?;
+            tvert_editor::run(image, move |image| -> Result<(), tvert_workflow::Error> {
+                save_png(&path, image)?;
+                println!("Saved {} to {}", image.size(), path.display());
+                Ok(())
+            })?;
         }
         Command::ProbeOverlay { .. } => {
             let configure = wayland.prepare_overlay(output_id)?;

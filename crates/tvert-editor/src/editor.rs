@@ -1,17 +1,23 @@
-use crate::Error;
-use crate::annotation::DEFAULT_STROKE_COLOR;
-use crate::render::render_image;
 use crate::{
-    annotation::Annotation, annotation_canvas::AnnotationCanvas, message::Message,
-    stroke_width::StrokeWidth, tool::Tool, toolbar,
+    Error,
+    annotation::{Annotation, DEFAULT_STROKE_COLOR},
+    annotation_canvas::AnnotationCanvas,
+    message::Message,
+    render::render_image,
+    stroke_width::StrokeWidth,
+    tool::Tool,
+    toolbar,
 };
-use iced::Color;
-use iced::widget::{canvas, column, container, image, stack};
+use iced::widget::{button, canvas, column, container, image, stack, text};
 use iced::{
-    ContentFit, Element, Fill, Size,
+    Color, ContentFit, Element, Fill, Size, Task,
     widget::{canvas::Cache, image::Handle},
 };
+use std::{error::Error as StdError, rc::Rc};
 use tvert_image::CapturedImage;
+
+/// Saves an edited image using the caller's export policy
+pub type SaveHandler = Rc<dyn Fn(&CapturedImage) -> Result<(), Error>>;
 
 pub struct Editor {
     preview: Handle,
@@ -19,60 +25,66 @@ pub struct Editor {
     tool: Tool,
     stroke_width: StrokeWidth,
     stroke_color: Color,
+    save: SaveHandler,
+    save_error: Option<Error>,
     annotations: Vec<Annotation>,
     undone_annotations: Vec<Annotation>,
     annotation_cache: Cache,
 }
 
 impl Editor {
-    pub fn new(preview: Handle, image_size: Size) -> Self {
+    pub fn new(preview: Handle, image_size: Size, save: SaveHandler) -> Self {
         Self {
             preview,
             image_size,
             tool: Tool::default(),
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
+            save,
+            save_error: None,
             annotations: Vec::new(),
             undone_annotations: Vec::new(),
             annotation_cache: Cache::new(),
         }
     }
 
-    pub fn update(&mut self, message: Message) {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::AddAnnotation(draft) => {
                 let Ok(annotation) = Annotation::try_from(draft) else {
-                    return;
+                    return Task::none();
                 };
                 self.annotations.push(annotation);
                 self.undone_annotations.clear();
             }
             Message::SelectTool(tool) => {
                 self.tool = tool;
-                return;
+                return Task::none();
             }
             Message::SelectStrokeWidth(stroke_width) => {
                 self.stroke_width = stroke_width;
-                return;
+                return Task::none();
             }
             Message::SelectStrokeColor(stroke_color) => {
                 self.stroke_color = stroke_color;
-                return;
+                return Task::none();
             }
             Message::Undo => {
                 let Some(annotation) = self.annotations.pop() else {
-                    return;
+                    return Task::none();
                 };
                 self.undone_annotations.push(annotation);
             }
             Message::Redo => {
                 let Some(anootation) = self.undone_annotations.pop() else {
-                    return;
+                    return Task::none();
                 };
                 self.annotations.push(anootation);
             }
+            Message::Save => return self.save(),
         }
         self.annotation_cache.clear();
+        Task::none()
     }
 
     pub fn view(&self) -> Element<'_, Message> {
@@ -92,24 +104,34 @@ impl Editor {
         .width(Fill)
         .height(Fill);
 
-        container(
-            column![
-                container(toolbar::view(
-                    self.tool,
-                    !self.annotations.is_empty(),
-                    !self.undone_annotations.is_empty()
-                ))
-                .center_x(Fill),
-                container(toolbar::stroke_width_controls(self.stroke_width)).center_x(Fill),
-                container(toolbar::stroke_color_controls(self.stroke_color)).center_x(Fill),
-                stack![picture, annotations].width(Fill).height(Fill),
-            ]
-            .spacing(12),
-        )
-        .padding(16)
-        .width(Fill)
-        .height(Fill)
-        .into()
+        let mut content = column![
+            container(toolbar::view(
+                self.tool,
+                !self.annotations.is_empty(),
+                !self.undone_annotations.is_empty()
+            ))
+            .center_x(Fill),
+            container(toolbar::stroke_width_controls(self.stroke_width)).center_x(Fill),
+            container(toolbar::stroke_color_controls(self.stroke_color)).center_x(Fill),
+            stack![picture, annotations].width(Fill).height(Fill),
+            container(
+                button("Save (Ctrl+S)")
+                    .padding([8, 16])
+                    .on_press(Message::Save)
+            )
+            .center_x(Fill)
+        ]
+        .spacing(12);
+
+        if let Some(error) = &self.save_error {
+            content = content.push(text(error_message(error)).style(text::danger));
+        }
+
+        container(content)
+            .padding(16)
+            .width(Fill)
+            .height(Fill)
+            .into()
     }
 
     /// Renders committed annotations over the original capture at full resolution.
@@ -117,10 +139,35 @@ impl Editor {
     /// # Errors
     ///
     /// Returns an error if preparing the pixels or export viewport fails.
-    #[expect(dead_code)]
     pub fn render_image(&self) -> Result<CapturedImage, Error> {
         render_image(&self.preview, &self.annotations)
     }
+
+    pub fn save(&mut self) -> Task<Message> {
+        match self.render_image().and_then(|image| (self.save)(&image)) {
+            Ok(()) => {
+                self.save_error = None;
+                iced::exit()
+            }
+            Err(error) => {
+                self.save_error = Some(error);
+                Task::none()
+            }
+        }
+    }
+}
+
+fn error_message(error: &dyn StdError) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+
+    while let Some(error) = source {
+        message.push_str(": ");
+        message.push_str(&error.to_string());
+        source = error.source();
+    }
+
+    message
 }
 
 #[cfg(test)]
@@ -134,6 +181,7 @@ mod tests {
         Editor::new(
             Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
             Size::new(1.0, 1.0),
+            Rc::new(|_| Ok(())),
         )
     }
 
@@ -193,19 +241,19 @@ mod tests {
         let second = (Tool::Arrow, bounds(20.0));
 
         for (tool, bounds) in [first, second] {
-            editor.update(add_figure(tool, bounds));
+            let _ = editor.update(add_figure(tool, bounds));
         }
 
-        editor.update(Message::Undo);
+        let _ = editor.update(Message::Undo);
         assert_figures(&editor.annotations, &[first]);
 
-        editor.update(Message::Undo);
+        let _ = editor.update(Message::Undo);
         assert_figures(&editor.annotations, &[]);
 
-        editor.update(Message::Redo);
+        let _ = editor.update(Message::Redo);
         assert_figures(&editor.annotations, &[first]);
 
-        editor.update(Message::Redo);
+        let _ = editor.update(Message::Redo);
         assert_figures(&editor.annotations, &[first, second]);
         assert_figures(&editor.undone_annotations, &[]);
     }
@@ -218,12 +266,12 @@ mod tests {
         let replacement = (Tool::Ellipse, bounds(30.0));
 
         for (tool, bounds) in [first, second] {
-            editor.update(add_figure(tool, bounds));
+            let _ = editor.update(add_figure(tool, bounds));
         }
 
-        editor.update(Message::Undo);
-        editor.update(add_figure(replacement.0, replacement.1));
-        editor.update(Message::Redo);
+        let _ = editor.update(Message::Undo);
+        let _ = editor.update(add_figure(replacement.0, replacement.1));
+        let _ = editor.update(Message::Redo);
 
         assert_figures(&editor.annotations, &[first, replacement]);
         assert_figures(&editor.undone_annotations, &[]);
@@ -233,21 +281,21 @@ mod tests {
     fn exhausted_history_is_a_noop() {
         let mut editor = editor();
 
-        editor.update(Message::Undo);
-        editor.update(Message::Redo);
+        let _ = editor.update(Message::Undo);
+        let _ = editor.update(Message::Redo);
         assert_figures(&editor.annotations, &[]);
         assert_figures(&editor.undone_annotations, &[]);
 
         let figure = (Tool::Rectangle, bounds(10.0));
-        editor.update(add_figure(figure.0, figure.1));
+        let _ = editor.update(add_figure(figure.0, figure.1));
 
-        editor.update(Message::Undo);
-        editor.update(Message::Undo);
+        let _ = editor.update(Message::Undo);
+        let _ = editor.update(Message::Undo);
         assert_figures(&editor.annotations, &[]);
         assert_figures(&editor.undone_annotations, &[figure]);
 
-        editor.update(Message::Redo);
-        editor.update(Message::Redo);
+        let _ = editor.update(Message::Redo);
+        let _ = editor.update(Message::Redo);
         assert_figures(&editor.annotations, &[figure]);
         assert_figures(&editor.undone_annotations, &[]);
     }
@@ -257,15 +305,15 @@ mod tests {
         let mut editor = editor();
         let figure = (Tool::Rectangle, bounds(10.0));
 
-        editor.update(add_figure(figure.0, figure.1));
-        editor.update(Message::Undo);
-        editor.update(Message::SelectTool(Tool::Ellipse));
+        let _ = editor.update(add_figure(figure.0, figure.1));
+        let _ = editor.update(Message::Undo);
+        let _ = editor.update(Message::SelectTool(Tool::Ellipse));
 
         assert_eq!(editor.tool, Tool::Ellipse);
         assert_figures(&editor.annotations, &[]);
         assert_figures(&editor.undone_annotations, &[figure]);
 
-        editor.update(Message::Redo);
+        let _ = editor.update(Message::Redo);
         assert_figures(&editor.annotations, &[figure]);
         assert_figures(&editor.undone_annotations, &[]);
     }
@@ -291,14 +339,14 @@ mod tests {
             end: Point::new(30.0, 10.0),
         });
 
-        editor.update(thin);
-        editor.update(Message::SelectStrokeWidth(StrokeWidth::Thick));
-        editor.update(Message::SelectStrokeColor(blue));
-        editor.update(thick);
-        editor.update(Message::Undo);
-        editor.update(Message::SelectStrokeWidth(StrokeWidth::Medium));
-        editor.update(Message::SelectStrokeColor(green));
-        editor.update(Message::Redo);
+        let _ = editor.update(thin);
+        let _ = editor.update(Message::SelectStrokeWidth(StrokeWidth::Thick));
+        let _ = editor.update(Message::SelectStrokeColor(blue));
+        let _ = editor.update(thick);
+        let _ = editor.update(Message::Undo);
+        let _ = editor.update(Message::SelectStrokeWidth(StrokeWidth::Medium));
+        let _ = editor.update(Message::SelectStrokeColor(green));
+        let _ = editor.update(Message::Redo);
 
         let appearances = editor
             .annotations

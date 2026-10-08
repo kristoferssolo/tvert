@@ -2,6 +2,7 @@ mod annotation;
 mod annotation_canvas;
 mod editor;
 mod error;
+mod export;
 mod figure;
 mod message;
 mod render;
@@ -11,9 +12,10 @@ mod toolbar;
 mod viewport;
 
 pub use error::Error;
+pub use export::ExportAction;
 
 use crate::{
-    editor::{Editor, SaveHandler},
+    editor::{Editor, ExportHandler},
     message::Message,
 };
 use iced::{
@@ -30,15 +32,16 @@ use tvert_image::CapturedImage;
 /// Takes ownership of the pixels and runs until the window closes.
 /// Call this on the main thread after closing the selection overlay.
 ///
-/// Save invokes the caller's callback and closes the window only on success.
-/// Save errors appear in the editor so the user can retry.
+/// Copy and Save invoke the caller's callback with the requested action.
+/// The window closes only on success; export errors appear in the editor.
+/// The caller must retain and serve clipboard ownership after this returns.
 ///
 /// # Errors
 ///
 /// Returns [`Error::Runtime`] if Iced cannot start or run the window.
 pub fn run<E>(
     image: CapturedImage,
-    save: impl Fn(&CapturedImage) -> Result<(), E> + 'static,
+    export: impl Fn(ExportAction, &CapturedImage) -> Result<(), E> + 'static,
 ) -> Result<(), Error>
 where
     E: StdError + Send + Sync + 'static,
@@ -46,17 +49,18 @@ where
     let (width, height) = image.size().into();
     let image_size = Size::from((width, height));
     let preview = Handle::from_rgba(width, height, image.into_rgba());
-    let save: SaveHandler =
-        Rc::new(move |image| save(image).map_err(|source| Error::Save(Box::new(source))));
+    let export: ExportHandler = Rc::new(move |action, image| {
+        export(action, image).map_err(|source| Error::Export(Box::new(source)))
+    });
 
     iced::application(
-        move || Editor::new(preview.clone(), image_size, save.clone()),
+        move || Editor::new(preview.clone(), image_size, export.clone()),
         Editor::update,
         Editor::view,
     )
     .title("Tvert")
     .theme(Theme::Dark)
-    .subscription(|_| event::listen_with(save_shortcut))
+    .subscription(|_| event::listen_with(export_shortcut))
     .window(window::Settings {
         platform_specific: window::settings::PlatformSpecific {
             application_id: "tvert".into(),
@@ -70,7 +74,7 @@ where
     Ok(())
 }
 
-fn save_shortcut(event: Event, status: event::Status, _window: window::Id) -> Option<Message> {
+fn export_shortcut(event: Event, status: event::Status, _window: window::Id) -> Option<Message> {
     if status != event::Status::Ignored {
         return None;
     }
@@ -85,10 +89,17 @@ fn save_shortcut(event: Event, status: event::Status, _window: window::Id) -> Op
         return None;
     };
 
-    (modifiers.control()
-        && !modifiers.shift()
-        && !modifiers.alt()
-        && !modifiers.logo()
-        && character.eq_ignore_ascii_case("s"))
-    .then_some(Message::Save)
+    if !modifiers.control() || modifiers.shift() || modifiers.alt() || modifiers.logo() {
+        return None;
+    }
+
+    let action = if character.eq_ignore_ascii_case("c") {
+        ExportAction::Copy
+    } else if character.eq_ignore_ascii_case("s") {
+        ExportAction::Save
+    } else {
+        return None;
+    };
+
+    Some(Message::Export(action))
 }

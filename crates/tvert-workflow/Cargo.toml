@@ -11,6 +11,7 @@ tvert-image.workspace = true
 tvert-wayland.workspace = true
 
 thiserror.workspace = true
+wl-clipboard-rs.workspace = true
 
 [lints]
 workspace = true

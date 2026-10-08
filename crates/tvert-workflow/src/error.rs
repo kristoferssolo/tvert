@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-/// An error while capturing or saving an image.
+/// An error while capturing or exporting an image
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// Capturing the selected output failed
@@ -30,4 +30,12 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+
+    /// Encoding the clipboard image failed
+    #[error("failed to encode clipboard PNG")]
+    EncodeClipboardPng(#[source] tvert_image::Error),
+
+    /// Clipboard setup or a paste transfer failed
+    #[error("failed to access the Wayland clipboard")]
+    Clipboard(#[from] wl_clipboard_rs::copy::Error),
 }

@@ -3,11 +3,12 @@ mod args;
 use crate::args::{Args, Command};
 use clap::Parser;
 use color_eyre::{Result, eyre::eyre};
-use std::process::ExitCode;
+use std::{cell::RefCell, process::ExitCode, rc::Rc};
 use tracing::debug;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
+use tvert_editor::ExportAction;
 use tvert_wayland::Wayland;
-use tvert_workflow::{capture_output_to_png, save_png};
+use tvert_workflow::{capture_output_to_png, prepare_png_copy, save_png};
 
 fn main() -> Result<ExitCode> {
     color_eyre::install()?;
@@ -82,11 +83,31 @@ fn main() -> Result<ExitCode> {
             };
 
             drop(wayland);
-            tvert_editor::run(image, move |image| -> Result<(), tvert_workflow::Error> {
-                save_png(&path, image)?;
-                println!("Saved {} to {}", image.size(), path.display());
-                Ok(())
-            })?;
+
+            let clipboard = Rc::new(RefCell::new(None));
+            let editor_clipboard = clipboard.clone();
+
+            tvert_editor::run(
+                image,
+                move |action, image| -> Result<(), tvert_workflow::Error> {
+                    match action {
+                        ExportAction::Copy => {
+                            let offer = prepare_png_copy(image)?;
+                            editor_clipboard.replace(Some(offer));
+                        }
+                        ExportAction::Save => {
+                            save_png(&path, image)?;
+                            println!("Saved {} to {}", image.size(), path.display());
+                        }
+                    }
+                    Ok(())
+                },
+            )?;
+
+            if let Some(offer) = clipboard.take() {
+                println!("Serving the copied image until the clipboard is replaced.");
+                offer.serve()?;
+            }
         }
         Command::ProbeOverlay { .. } => {
             let configure = wayland.prepare_overlay(output_id)?;

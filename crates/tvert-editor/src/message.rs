@@ -1,4 +1,6 @@
-use crate::{annotation::AnnotationDraft, stroke_width::StrokeWidth, tool::Tool};
+use crate::{
+    annotation::AnnotationDraft, export::ExportAction, stroke_width::StrokeWidth, tool::Tool,
+};
 use iced::Color;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -9,5 +11,5 @@ pub enum Message {
     SelectStrokeColor(Color),
     Undo,
     Redo,
-    Save,
+    Export(ExportAction),
 }

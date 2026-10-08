@@ -2,13 +2,14 @@ use crate::{
     Error,
     annotation::{Annotation, DEFAULT_STROKE_COLOR},
     annotation_canvas::AnnotationCanvas,
+    export::ExportAction,
     message::Message,
     render::render_image,
     stroke_width::StrokeWidth,
     tool::Tool,
     toolbar,
 };
-use iced::widget::{button, canvas, column, container, image, stack, text};
+use iced::widget::{button, canvas, column, container, image, row, stack, text};
 use iced::{
     Color, ContentFit, Element, Fill, Size, Task,
     widget::{canvas::Cache, image::Handle},
@@ -16,8 +17,8 @@ use iced::{
 use std::{error::Error as StdError, rc::Rc};
 use tvert_image::CapturedImage;
 
-/// Saves an edited image using the caller's export policy
-pub type SaveHandler = Rc<dyn Fn(&CapturedImage) -> Result<(), Error>>;
+/// Exports an edited image using the caller's clipboard or save policy
+pub type ExportHandler = Rc<dyn Fn(ExportAction, &CapturedImage) -> Result<(), Error>>;
 
 pub struct Editor {
     preview: Handle,
@@ -25,23 +26,23 @@ pub struct Editor {
     tool: Tool,
     stroke_width: StrokeWidth,
     stroke_color: Color,
-    save: SaveHandler,
-    save_error: Option<Error>,
+    export: ExportHandler,
+    export_error: Option<Error>,
     annotations: Vec<Annotation>,
     undone_annotations: Vec<Annotation>,
     annotation_cache: Cache,
 }
 
 impl Editor {
-    pub fn new(preview: Handle, image_size: Size, save: SaveHandler) -> Self {
+    pub fn new(preview: Handle, image_size: Size, export: ExportHandler) -> Self {
         Self {
             preview,
             image_size,
             tool: Tool::default(),
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
-            save,
-            save_error: None,
+            export,
+            export_error: None,
             annotations: Vec::new(),
             undone_annotations: Vec::new(),
             annotation_cache: Cache::new(),
@@ -81,7 +82,7 @@ impl Editor {
                 };
                 self.annotations.push(anootation);
             }
-            Message::Save => return self.save(),
+            Message::Export(action) => return self.export(action),
         }
         self.annotation_cache.clear();
         Task::none()
@@ -115,15 +116,21 @@ impl Editor {
             container(toolbar::stroke_color_controls(self.stroke_color)).center_x(Fill),
             stack![picture, annotations].width(Fill).height(Fill),
             container(
-                button("Save (Ctrl+S)")
-                    .padding([8, 16])
-                    .on_press(Message::Save)
+                row![
+                    button("Copy (Ctrl+C)")
+                        .padding([8, 16])
+                        .on_press(Message::Export(ExportAction::Copy)),
+                    button("Save (Ctrl+S)")
+                        .padding([8, 16])
+                        .on_press(Message::Export(ExportAction::Save)),
+                ]
+                .spacing(8)
             )
             .center_x(Fill)
         ]
         .spacing(12);
 
-        if let Some(error) = &self.save_error {
+        if let Some(error) = &self.export_error {
             content = content.push(text(error_message(error)).style(text::danger));
         }
 
@@ -143,14 +150,17 @@ impl Editor {
         render_image(&self.preview, &self.annotations)
     }
 
-    pub fn save(&mut self) -> Task<Message> {
-        match self.render_image().and_then(|image| (self.save)(&image)) {
+    pub fn export(&mut self, action: ExportAction) -> Task<Message> {
+        match self
+            .render_image()
+            .and_then(|image| (self.export)(action, &image))
+        {
             Ok(()) => {
-                self.save_error = None;
+                self.export_error = None;
                 iced::exit()
             }
             Err(error) => {
-                self.save_error = Some(error);
+                self.export_error = Some(error);
                 Task::none()
             }
         }
@@ -181,7 +191,7 @@ mod tests {
         Editor::new(
             Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
             Size::new(1.0, 1.0),
-            Rc::new(|_| Ok(())),
+            Rc::new(|_, _| Ok(())),
         )
     }
 

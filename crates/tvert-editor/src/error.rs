@@ -17,7 +17,7 @@ pub enum Error {
     #[error("failed to prepare the edited image")]
     Image(#[from] tvert_image::Error),
 
-    /// The caller's save operation failed
-    #[error("failed to save screenshot")]
-    Save(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// The caller's export operation failed.
+    #[error("failed to export screenshot")]
+    Export(#[source] Box<dyn std::error::Error + Send + Sync>),
 }

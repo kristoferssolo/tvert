@@ -2,16 +2,24 @@ use crate::{
     ExportAction, annotation::DEFAULT_STROKE_COLOR, message::Message, stroke_width::StrokeWidth,
     tool::Tool,
 };
-use iced::Font;
-use iced::widget::{button, container, pick_list, rule, text, tooltip};
+use iced::widget::{Column, button, container, pick_list, row, rule, space, text, tooltip};
 use iced::{
-    Color, Element, Fill, Theme,
+    Border, Color, Element, Fill, Font, Theme,
     alignment::{Horizontal, Vertical},
     widget::Row,
 };
+use iced_aw::{DropDown, drop_down};
 use lucide_icons::Icon;
-use std::fmt::Display;
 use strum::VariantArray;
+
+const COLORS: &[Color] = &[
+    DEFAULT_STROKE_COLOR,
+    Color::from_rgb8(64, 128, 255),
+    Color::from_rgb8(64, 200, 96),
+    Color::from_rgb8(255, 208, 64),
+    Color::WHITE,
+    Color::BLACK,
+];
 
 const ICON_FONT: Font = Font::with_name("lucide");
 
@@ -20,6 +28,7 @@ pub fn view(
     selected: Tool,
     stroke_width: StrokeWidth,
     stroke_color: Color,
+    color_pallete_open: bool,
     can_undo: bool,
     can_redo: bool,
 ) -> Element<'static, Message> {
@@ -49,7 +58,7 @@ pub fn view(
             false,
         ))
         .push(separator())
-        .push(stroke_color_controls(stroke_color))
+        .push(stroke_color_controls(stroke_color, color_pallete_open))
         .push(stroke_width_controls(stroke_width))
         .push(icon_button(
             Icon::Copy,
@@ -83,29 +92,52 @@ fn stroke_width_controls(selected: StrokeWidth) -> Element<'static, Message> {
     .into()
 }
 
-fn stroke_color_controls(selected: Color) -> Element<'static, Message> {
-    let colors = [
-        ColorPreset::new("Red", DEFAULT_STROKE_COLOR),
-        ColorPreset::new("Blue", Color::from_rgb8(64, 128, 255)),
-        ColorPreset::new("Green", Color::from_rgb8(64, 200, 96)),
-        ColorPreset::new("Yellow", Color::from_rgb8(255, 208, 64)),
-        ColorPreset::new("White", Color::WHITE),
-        ColorPreset::new("Black", Color::BLACK),
-    ];
+fn stroke_color_controls(selected: Color, open: bool) -> Element<'static, Message> {
+    let trigger = button(
+        row![
+            color_swatch(selected),
+            text(char::from(Icon::ChevronDown).to_string())
+                .font(ICON_FONT)
+                .size(14)
+        ]
+        .spacing(6)
+        .align_y(Vertical::Center),
+    )
+    .width(60)
+    .height(36)
+    .padding(8)
+    .on_press(Message::ToggleColorPallete)
+    .style(button::secondary);
 
-    let selected = colors
-        .iter()
-        .copied()
-        .find(|preset| preset.color == selected);
+    let rows = COLORS.chunks(3).map(|colors| {
+        Row::with_children(colors.iter().copied().map(|color| {
+            button(color_swatch(color))
+                .width(36)
+                .height(36)
+                .padding(8)
+                .on_press(Message::SelectStrokeColor(color))
+                .style(move |theme, status| {
+                    if color == selected {
+                        button::primary(theme, status)
+                    } else {
+                        button::background(theme, status)
+                    }
+                })
+                .into()
+        }))
+        .spacing(4)
+        .into()
+    });
 
-    pick_list(colors, selected, |preset| {
-        Message::SelectStrokeColor(preset.color)
-    })
-    .placeholder("Color")
-    .width(104)
-    .text_size(14)
-    .padding([9, 10])
-    .into()
+    let palette = container(Column::with_children(rows).spacing(4))
+        .padding(8)
+        .style(container::rounded_box);
+
+    DropDown::new(trigger, palette, open)
+        .width(132)
+        .alignment(drop_down::Alignment::Bottom)
+        .on_dismiss(Message::CloseColorPallete)
+        .into()
 }
 
 fn icon_button(
@@ -150,20 +182,18 @@ fn separator() -> Element<'static, Message> {
         .into()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct ColorPreset {
-    label: &'static str,
-    color: Color,
-}
-
-impl ColorPreset {
-    const fn new(label: &'static str, color: Color) -> Self {
-        Self { label, color }
-    }
-}
-
-impl Display for ColorPreset {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label)
-    }
+fn color_swatch(color: Color) -> Element<'static, Message> {
+    container(space())
+        .width(20)
+        .height(20)
+        .style(move |theme: &Theme| container::Style {
+            background: Some(color.into()),
+            border: Border {
+                color: theme.palette().text.scale_alpha(0.5),
+                width: 1.0,
+                radius: 3.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
 }

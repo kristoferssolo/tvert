@@ -9,6 +9,8 @@ pub enum Message {
     SelectTool(Tool),
     SelectStrokeWidth(StrokeWidth),
     SelectStrokeColor(Color),
+    ToggleColorPallete,
+    CloseColorPallete,
     Undo,
     Redo,
     Export(ExportAction),

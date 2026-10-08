@@ -9,7 +9,7 @@ use crate::{
     tool::Tool,
     toolbar,
 };
-use iced::widget::{canvas, column, container, image, stack, text};
+use iced::widget::{canvas, column, container, image, opaque, space, stack, text};
 use iced::{
     Color, ContentFit, Element, Fill, Size, Task,
     widget::{canvas::Cache, image::Handle},
@@ -31,6 +31,7 @@ pub struct Editor {
     annotations: Vec<Annotation>,
     undone_annotations: Vec<Annotation>,
     annotation_cache: Cache,
+    color_pallete_open: bool,
 }
 
 impl Editor {
@@ -46,6 +47,7 @@ impl Editor {
             annotations: Vec::new(),
             undone_annotations: Vec::new(),
             annotation_cache: Cache::new(),
+            color_pallete_open: false,
         }
     }
 
@@ -68,6 +70,15 @@ impl Editor {
             }
             Message::SelectStrokeColor(stroke_color) => {
                 self.stroke_color = stroke_color;
+                self.color_pallete_open = false;
+                return Task::none();
+            }
+            Message::ToggleColorPallete => {
+                self.color_pallete_open = !self.color_pallete_open;
+                return Task::none();
+            }
+            Message::CloseColorPallete => {
+                self.color_pallete_open = false;
                 return Task::none();
             }
             Message::Undo => {
@@ -105,15 +116,23 @@ impl Editor {
         .width(Fill)
         .height(Fill);
 
+        let mut preview = stack![picture, annotations].width(Fill).height(Fill);
+
+        // Dismissing the palette must not start a drag on the image
+        if self.color_pallete_open {
+            preview = preview.push(opaque(space().width(Fill).height(Fill)));
+        }
+
         let mut content = column![
             toolbar::view(
                 self.tool,
                 self.stroke_width,
                 self.stroke_color,
+                self.color_pallete_open,
                 !self.annotations.is_empty(),
                 !self.undone_annotations.is_empty()
             ),
-            stack![picture, annotations].width(Fill).height(Fill),
+            preview
         ]
         .spacing(12);
 

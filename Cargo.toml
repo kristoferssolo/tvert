@@ -27,6 +27,9 @@ iced = { version = "0.14", default-features = false, features = [
   "tiny-skia",
   "wayland",
 ] }
+iced_aw = { version = "0.14", default-features = false, features = [
+  "drop_down",
+] }
 lucide-icons = "1.53"
 png = "0.18"
 rustix = { version = "1", features = ["fs"] }

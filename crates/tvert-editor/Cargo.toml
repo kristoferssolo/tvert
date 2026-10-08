@@ -10,6 +10,7 @@ license.workspace = true
 tvert-image.workspace = true
 
 iced.workspace = true
+iced_aw.workspace = true
 lucide-icons.workspace = true
 strum.workspace = true
 thiserror.workspace = true

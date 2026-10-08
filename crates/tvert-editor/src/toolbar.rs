@@ -1,256 +1,169 @@
-use crate::annotation::DEFAULT_STROKE_COLOR;
-use crate::stroke_width::StrokeWidth;
-use crate::{message::Message, tool::Tool, viewport::Viewport};
-use iced::widget::{button, canvas, container, space, text, tooltip};
-use iced::{
-    Border, Color, Element, Point, Renderer, Size, Theme,
-    alignment::Vertical,
-    mouse,
-    widget::{
-        Row,
-        canvas::{
-            Frame, LineCap, LineJoin, Path, Program, Stroke, path::lyon_path::math::Transform,
-        },
-    },
+use crate::{
+    ExportAction, annotation::DEFAULT_STROKE_COLOR, message::Message, stroke_width::StrokeWidth,
+    tool::Tool,
 };
+use iced::Font;
+use iced::widget::{button, container, pick_list, rule, text, tooltip};
+use iced::{
+    Color, Element, Fill, Theme,
+    alignment::{Horizontal, Vertical},
+    widget::Row,
+};
+use lucide_icons::Icon;
+use std::fmt::Display;
 use strum::VariantArray;
 
-const ICON_SIZE: f32 = 24.0;
+const ICON_FONT: Font = Font::with_name("lucide");
 
-/// Builds the tool selector and history controls
-pub fn view(selected: Tool, can_undo: bool, can_redo: bool) -> Element<'static, Message> {
+/// Builds the editor's drawing, history, appearance, and export controls
+pub fn view(
+    selected: Tool,
+    stroke_width: StrokeWidth,
+    stroke_color: Color,
+    can_undo: bool,
+    can_redo: bool,
+) -> Element<'static, Message> {
     let tools = Tool::VARIANTS.iter().map(|&tool| {
         icon_button(
-            tool_path(tool),
+            tool.icon(),
             tool.to_string(),
             Some(Message::SelectTool(tool)),
             tool == selected,
         )
     });
 
-    let separator = container(space())
-        .width(1)
-        .height(24)
-        .style(|theme: &Theme| container::Style {
-            background: Some(theme.extended_palette().background.strong.color.into()),
-            ..Default::default()
-        });
-
     let controls = Row::with_children(tools)
         .spacing(4)
         .align_y(Vertical::Center)
-        .push(container(separator).padding([0, 6]))
+        .push(separator())
         .push(icon_button(
-            undo_path(),
+            Icon::Undo2,
             "Undo (Ctrl+Z)".into(),
             can_undo.then_some(Message::Undo),
             false,
         ))
         .push(icon_button(
-            undo_path().transform(&Transform::new(-1.0, 0.0, 0.0, 1.0, ICON_SIZE, 0.0)),
+            Icon::Redo2,
             "Redo (Ctrl+Y / Ctrl+Shift+Z)".into(),
             can_redo.then_some(Message::Redo),
+            false,
+        ))
+        .push(separator())
+        .push(stroke_color_controls(stroke_color))
+        .push(stroke_width_controls(stroke_width))
+        .push(icon_button(
+            Icon::Copy,
+            "Copy (Ctrl+C)".into(),
+            Some(Message::Export(ExportAction::Copy)),
+            false,
+        ))
+        .push(icon_button(
+            Icon::Save,
+            "Save (Ctrl+S)".into(),
+            Some(Message::Export(ExportAction::Save)),
             false,
         ));
 
     container(controls)
         .padding(4)
-        .style(|theme: &Theme| {
-            let pallete = theme.extended_palette();
-
-            container::Style {
-                background: Some(pallete.background.weak.color.into()),
-                border: Border {
-                    color: pallete.background.strong.color,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
-                ..Default::default()
-            }
-        })
+        .width(Fill)
+        .style(container::rounded_box)
         .into()
 }
 
-/// Builds controls for the width of new annotation strokes
-pub fn stroke_width_controls(selected: StrokeWidth) -> Element<'static, Message> {
-    let buttons = StrokeWidth::VARIANTS.iter().map(|&width| {
-        button(text(width.to_string()).size(14))
-            .padding([4, 8])
-            .on_press(Message::SelectStrokeWidth(width))
-            .style(move |theme, status| button_style(theme, status, width == selected))
-            .into()
-    });
-
-    tooltip(
-        Row::new()
-            .push(text("Stroke").size(14))
-            .push(Row::with_children(buttons).spacing(4))
-            .spacing(8)
-            .align_y(Vertical::Center),
-        text("Width in image pixels").size(12),
-        tooltip::Position::Bottom,
+fn stroke_width_controls(selected: StrokeWidth) -> Element<'static, Message> {
+    pick_list(
+        StrokeWidth::VARIANTS,
+        Some(selected),
+        Message::SelectStrokeWidth,
     )
-    .gap(8)
-    .style(container::rounded_box)
+    .width(76)
+    .text_size(14)
+    .padding([9, 10])
     .into()
 }
 
-/// Builds controls for the color of new annotation strokes
-pub fn stroke_color_controls(selected: Color) -> Element<'static, Message> {
+fn stroke_color_controls(selected: Color) -> Element<'static, Message> {
     let colors = [
-        ("Red", DEFAULT_STROKE_COLOR),
-        ("Blue", Color::from_rgb8(64, 128, 255)),
-        ("Green", Color::from_rgb8(64, 200, 96)),
-        ("Yellow", Color::from_rgb8(255, 208, 64)),
-        ("White", Color::WHITE),
-        ("Black", Color::BLACK),
+        ColorPreset::new("Red", DEFAULT_STROKE_COLOR),
+        ColorPreset::new("Blue", Color::from_rgb8(64, 128, 255)),
+        ColorPreset::new("Green", Color::from_rgb8(64, 200, 96)),
+        ColorPreset::new("Yellow", Color::from_rgb8(255, 208, 64)),
+        ColorPreset::new("White", Color::WHITE),
+        ColorPreset::new("Black", Color::BLACK),
     ];
 
-    let buttons = colors.into_iter().map(|(label, color)| {
-        let swatch = container(space())
-            .width(16)
-            .height(16)
-            .style(move |theme: &Theme| container::Style {
-                background: Some(color.into()),
-                border: Border {
-                    color: theme.extended_palette().background.strong.color,
-                    width: 1.0,
-                    radius: 8.0.into(),
-                },
-                ..Default::default()
-            });
+    let selected = colors
+        .iter()
+        .copied()
+        .find(|preset| preset.color == selected);
 
-        let control = button(swatch)
-            .padding(6)
-            .on_press(Message::SelectStrokeColor(color))
-            .style(move |theme, status| button_style(theme, status, color == selected));
-
-        tooltip(control, text(label).size(12), tooltip::Position::Bottom)
-            .gap(8)
-            .style(container::rounded_box)
-            .into()
-    });
-
-    Row::new()
-        .push(text("Color").size(14))
-        .push(Row::with_children(buttons).spacing(4))
-        .spacing(8)
-        .align_y(Vertical::Center)
-        .into()
+    pick_list(colors, selected, |preset| {
+        Message::SelectStrokeColor(preset.color)
+    })
+    .placeholder("Color")
+    .width(104)
+    .text_size(14)
+    .padding([9, 10])
+    .into()
 }
 
 fn icon_button(
-    path: Path,
+    icon: Icon,
     label: String,
     action: Option<Message>,
     selected: bool,
 ) -> Element<'static, Message> {
-    let icon = canvas(Icon {
-        path,
-        enabled: action.is_some(),
-    })
-    .width(ICON_SIZE)
-    .height(ICON_SIZE);
+    let icon = text(char::from(icon).to_string())
+        .font(ICON_FONT)
+        .size(20)
+        .line_height(1.0)
+        .width(Fill)
+        .height(Fill)
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center);
 
     let control = button(icon)
-        .width(40)
-        .height(40)
+        .width(36)
+        .height(36)
         .padding(8)
         .on_press_maybe(action)
         .style(move |theme, status| button_style(theme, status, selected));
 
     tooltip(control, text(label).size(12), tooltip::Position::Bottom)
-        .gap(8)
+        .gap(6)
         .style(container::rounded_box)
         .into()
 }
 
 fn button_style(theme: &Theme, status: button::Status, selected: bool) -> button::Style {
-    let pallete = theme.extended_palette();
-    let background = match status {
-        button::Status::Hovered => Some(pallete.background.strong.color.into()),
-        button::Status::Pressed => Some(pallete.background.weak.color.into()),
-        button::Status::Active | button::Status::Disabled => None,
-    };
+    if selected {
+        return button::primary(theme, status);
+    }
+    button::text(theme, status)
+}
 
-    button::Style {
-        background,
-        text_color: theme.palette().text,
-        border: Border {
-            color: if selected {
-                theme.palette().primary
-            } else {
-                Color::TRANSPARENT
-            },
-            width: if selected { 1.5 } else { 0.0 },
-            radius: 3.0.into(),
-        },
-        ..Default::default()
+fn separator() -> Element<'static, Message> {
+    container(rule::vertical(1))
+        .height(24)
+        .padding([0, 6])
+        .into()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ColorPreset {
+    label: &'static str,
+    color: Color,
+}
+
+impl ColorPreset {
+    const fn new(label: &'static str, color: Color) -> Self {
+        Self { label, color }
     }
 }
 
-fn tool_path(tool: Tool) -> Path {
-    let size = Size::new(ICON_SIZE, ICON_SIZE);
-    let Some(viewport) = Viewport::new(size, size) else {
-        return Path::new(|_| {});
-    };
-
-    let (start, end) = match tool {
-        Tool::Rectangle | Tool::Ellipse => (Point::new(5.0, 5.0), Point::new(19.0, 19.0)),
-        Tool::Line | Tool::Arrow => (Point::new(4.0, 12.0), Point::new(20.0, 12.0)),
-    };
-
-    tool.figure(start, end)
-        .map_or_else(|| Path::new(|_| {}), |figure| figure.path(viewport))
-}
-
-fn undo_path() -> Path {
-    Path::new(|builder| {
-        builder.move_to(Point::new(5.0, 9.0));
-        builder.line_to(Point::new(14.0, 9.0));
-        builder.bezier_curve_to(
-            Point::new(21.0, 9.0),
-            Point::new(21.0, 19.0),
-            Point::new(14.0, 19.0),
-        );
-        builder.move_to(Point::new(9.0, 5.0));
-        builder.line_to(Point::new(5.0, 9.0));
-        builder.line_to(Point::new(9.0, 13.0));
-    })
-}
-
-struct Icon {
-    path: Path,
-    enabled: bool,
-}
-
-impl Program<Message> for Icon {
-    type State = ();
-
-    fn draw(
-        &self,
-        _state: &Self::State,
-        renderer: &Renderer,
-        theme: &Theme,
-        bounds: iced::Rectangle,
-        _cursor: mouse::Cursor,
-    ) -> Vec<iced::widget::canvas::Geometry<Renderer>> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        let color = if self.enabled {
-            theme.palette().text
-        } else {
-            theme.palette().text.scale_alpha(0.5)
-        };
-
-        frame.stroke(
-            &self.path,
-            Stroke::default()
-                .with_color(color)
-                .with_width(1.5)
-                .with_line_cap(LineCap::Round)
-                .with_line_join(LineJoin::Round),
-        );
-
-        vec![frame.into_geometry()]
+impl Display for ColorPreset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.label)
     }
 }

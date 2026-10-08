@@ -9,7 +9,7 @@ use crate::{
     tool::Tool,
     toolbar,
 };
-use iced::widget::{button, canvas, column, container, image, row, stack, text};
+use iced::widget::{canvas, column, container, image, stack, text};
 use iced::{
     Color, ContentFit, Element, Fill, Size, Task,
     widget::{canvas::Cache, image::Handle},
@@ -106,27 +106,14 @@ impl Editor {
         .height(Fill);
 
         let mut content = column![
-            container(toolbar::view(
+            toolbar::view(
                 self.tool,
+                self.stroke_width,
+                self.stroke_color,
                 !self.annotations.is_empty(),
                 !self.undone_annotations.is_empty()
-            ))
-            .center_x(Fill),
-            container(toolbar::stroke_width_controls(self.stroke_width)).center_x(Fill),
-            container(toolbar::stroke_color_controls(self.stroke_color)).center_x(Fill),
+            ),
             stack![picture, annotations].width(Fill).height(Fill),
-            container(
-                row![
-                    button("Copy (Ctrl+C)")
-                        .padding([8, 16])
-                        .on_press(Message::Export(ExportAction::Copy)),
-                    button("Save (Ctrl+S)")
-                        .padding([8, 16])
-                        .on_press(Message::Export(ExportAction::Save)),
-                ]
-                .spacing(8)
-            )
-            .center_x(Fill)
         ]
         .spacing(12);
 

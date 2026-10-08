@@ -60,12 +60,14 @@ where
     )
     .title("Tvert")
     .theme(Theme::Dark)
+    .font(lucide_icons::LUCIDE_FONT_BYTES)
     .subscription(|_| event::listen_with(export_shortcut))
     .window(window::Settings {
         platform_specific: window::settings::PlatformSpecific {
             application_id: "tvert".into(),
             ..Default::default()
         },
+        min_size: Some(Size::new(640.0, 320.0)),
         ..Default::default()
     })
     .window_size((1000.0, 700.0))

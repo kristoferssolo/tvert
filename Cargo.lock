@@ -1415,6 +1415,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
 
 [[package]]
+name = "lucide-icons"
+version = "1.53.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "720db98d498e108e7ec3dd7a7f679b49d5c001b5d406236640eaf212b5bf75c8"
+
+[[package]]
 name = "lyon"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2903,6 +2909,7 @@ version = "0.1.0"
 dependencies = [
  "claims",
  "iced",
+ "lucide-icons",
  "rstest",
  "strum",
  "thiserror 2.0.21",

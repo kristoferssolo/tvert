@@ -3,6 +3,7 @@ use crate::{
     viewport::rectangle_between,
 };
 use iced::Point;
+use lucide_icons::Icon;
 use strum::{Display, VariantArray};
 
 /// The figure created by the next drag
@@ -30,6 +31,15 @@ impl Tool {
             Self::Line => Box::new(LineFigure::new(start, end)),
             Self::Arrow => Box::new(ArrowFigure::new(start, end)),
         })
+    }
+
+    pub const fn icon(self) -> Icon {
+        match self {
+            Self::Rectangle => Icon::Square,
+            Self::Ellipse => Icon::Circle,
+            Self::Line => Icon::Minus,
+            Self::Arrow => Icon::ArrowRight,
+        }
     }
 }
 

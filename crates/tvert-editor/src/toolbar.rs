@@ -2,6 +2,8 @@ use crate::{
     ExportAction, annotation::DEFAULT_STROKE_COLOR, message::Message, stroke_width::StrokeWidth,
     tool::Tool,
 };
+use iced::Pixels;
+use iced::widget::text::{LineHeight, Shaping};
 use iced::widget::{Column, button, container, pick_list, row, rule, space, text, tooltip};
 use iced::{
     Border, Color, Element, Fill, Font, Theme,
@@ -88,6 +90,14 @@ fn stroke_width_controls(selected: StrokeWidth) -> Element<'static, Message> {
     )
     .width(76)
     .text_size(14)
+    .text_line_height(Pixels(18.0))
+    .handle(pick_list::Handle::Static(pick_list::Icon {
+        font: ICON_FONT,
+        code_point: char::from(Icon::ChevronDown),
+        size: Some(Pixels(14.0)),
+        line_height: LineHeight::default(),
+        shaping: Shaping::default(),
+    }))
     .padding([9, 10])
     .into()
 }
@@ -107,7 +117,7 @@ fn stroke_color_controls(selected: Color, open: bool) -> Element<'static, Messag
     .height(36)
     .padding(8)
     .on_press(Message::ToggleColorPallete)
-    .style(button::secondary);
+    .style(move |theme, status| color_trigger_style(theme, status, open));
 
     let rows = COLORS.chunks(3).map(|colors| {
         Row::with_children(colors.iter().copied().map(|color| {
@@ -196,4 +206,24 @@ fn color_swatch(color: Color) -> Element<'static, Message> {
             ..Default::default()
         })
         .into()
+}
+
+fn color_trigger_style(theme: &Theme, status: button::Status, open: bool) -> button::Style {
+    let is_hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+
+    let status = if open {
+        pick_list::Status::Opened { is_hovered }
+    } else if is_hovered {
+        pick_list::Status::Hovered
+    } else {
+        pick_list::Status::Active
+    };
+    let style = pick_list::default(theme, status);
+
+    button::Style {
+        background: Some(style.background),
+        text_color: style.handle_color,
+        border: style.border,
+        ..Default::default()
+    }
 }

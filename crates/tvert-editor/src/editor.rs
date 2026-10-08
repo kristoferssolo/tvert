@@ -1,7 +1,9 @@
+use crate::annotation::DEFAULT_STROKE_COLOR;
 use crate::{
     annotation::Annotation, annotation_canvas::AnnotationCanvas, message::Message,
     stroke_width::StrokeWidth, tool::Tool, toolbar,
 };
+use iced::Color;
 use iced::widget::{canvas, column, container, image, stack};
 use iced::{
     ContentFit, Element, Fill, Size,
@@ -13,6 +15,7 @@ pub struct Editor {
     image_size: Size,
     tool: Tool,
     stroke_width: StrokeWidth,
+    stroke_color: Color,
     annotations: Vec<Annotation>,
     undone_annotations: Vec<Annotation>,
     annotation_cache: Cache,
@@ -25,6 +28,7 @@ impl Editor {
             image_size,
             tool: Tool::default(),
             stroke_width: StrokeWidth::default(),
+            stroke_color: DEFAULT_STROKE_COLOR,
             annotations: Vec::new(),
             undone_annotations: Vec::new(),
             annotation_cache: Cache::new(),
@@ -46,6 +50,10 @@ impl Editor {
             }
             Message::SelectStrokeWidth(stroke_width) => {
                 self.stroke_width = stroke_width;
+                return;
+            }
+            Message::SelectStrokeColor(stroke_color) => {
+                self.stroke_color = stroke_color;
                 return;
             }
             Message::Undo => {
@@ -74,6 +82,7 @@ impl Editor {
             image_size: self.image_size,
             tool: self.tool,
             stroke_width: self.stroke_width,
+            stroke_color: self.stroke_color,
             annotations: &self.annotations,
             cache: &self.annotation_cache,
         })
@@ -89,6 +98,7 @@ impl Editor {
                 ))
                 .center_x(Fill),
                 container(toolbar::stroke_width_controls(self.stroke_width)).center_x(Fill),
+                container(toolbar::stroke_color_controls(self.stroke_color)).center_x(Fill),
                 stack![picture, annotations].width(Fill).height(Fill),
             ]
             .spacing(12),
@@ -122,6 +132,7 @@ mod tests {
         Message::AddAnnotation(AnnotationDraft {
             tool,
             stroke_width: StrokeWidth::default(),
+            stroke_color: DEFAULT_STROKE_COLOR,
             start: bounds.position(),
             end: Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
         })
@@ -247,36 +258,51 @@ mod tests {
     }
 
     #[test]
-    fn stroke_width_changes_preserve_existing_figures_and_history() {
+    fn appearance_changes_preserve_existing_figures_and_history() {
         let mut editor = editor();
+        let blue = Color::from_rgb8(64, 128, 255);
+        let green = Color::from_rgb8(64, 200, 96);
+
         let thin = Message::AddAnnotation(AnnotationDraft {
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thin,
+            stroke_color: DEFAULT_STROKE_COLOR,
             start: Point::new(10.0, 10.0),
             end: Point::new(30.0, 10.0),
         });
         let thick = Message::AddAnnotation(AnnotationDraft {
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thick,
+            stroke_color: blue,
             start: Point::new(10.0, 10.0),
             end: Point::new(30.0, 10.0),
         });
 
         editor.update(thin);
         editor.update(Message::SelectStrokeWidth(StrokeWidth::Thick));
+        editor.update(Message::SelectStrokeColor(blue));
         editor.update(thick);
         editor.update(Message::Undo);
         editor.update(Message::SelectStrokeWidth(StrokeWidth::Medium));
+        editor.update(Message::SelectStrokeColor(green));
         editor.update(Message::Redo);
 
-        let widths = editor
+        let appearances = editor
             .annotations
             .iter()
-            .map(|annotation| annotation.stroke_width)
+            .map(|annotation| (annotation.stroke_width, annotation.stroke_color))
             .collect::<Vec<_>>();
 
-        assert_eq!(widths, [StrokeWidth::Thin, StrokeWidth::Thick]);
+        assert_eq!(
+            appearances,
+            [
+                (StrokeWidth::Thin, DEFAULT_STROKE_COLOR),
+                (StrokeWidth::Thick, blue)
+            ]
+        );
+
         assert_eq!(editor.stroke_width, StrokeWidth::Medium);
+        assert_eq!(editor.stroke_color, green);
         assert!(editor.undone_annotations.is_empty());
     }
 }

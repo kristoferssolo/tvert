@@ -6,7 +6,7 @@ use crate::{
     viewport::Viewport,
 };
 use iced::{
-    Event, Rectangle, Renderer, Size, Theme,
+    Color, Event, Rectangle, Renderer, Size, Theme,
     keyboard::{
         Event as KeyboardEvent,
         Key::{self},
@@ -24,6 +24,7 @@ pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
     pub tool: Tool,
     pub stroke_width: StrokeWidth,
+    pub stroke_color: Color,
     pub annotations: &'a [Annotation],
     pub cache: &'a Cache,
 }
@@ -73,6 +74,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 *state = Some(AnnotationDraft {
                     tool: self.tool,
                     stroke_width: self.stroke_width,
+                    stroke_color: self.stroke_color,
                     start,
                     end: start,
                 });
@@ -183,9 +185,8 @@ fn history_shortcut(event: &Event) -> Option<Message> {
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches;
-
     use super::*;
+    use crate::annotation::DEFAULT_STROKE_COLOR;
     use claims::{assert_none, assert_some};
     use iced::{
         Point,
@@ -193,6 +194,7 @@ mod tests {
         widget::canvas::Program,
     };
     use rstest::rstest;
+    use std::assert_matches;
 
     fn dispatch(
         drag: &mut Option<AnnotationDraft>,
@@ -214,6 +216,7 @@ mod tests {
             image_size: Size::new(200.0, 100.0),
             tool,
             stroke_width: StrokeWidth::default(),
+            stroke_color: DEFAULT_STROKE_COLOR,
             annotations: &[],
             cache: &cache,
         }
@@ -269,6 +272,7 @@ mod tests {
             Message::AddAnnotation(AnnotationDraft {
                 tool: Tool::Rectangle,
                 stroke_width: StrokeWidth::default(),
+                stroke_color: DEFAULT_STROKE_COLOR,
                 start: Point::new(50.0, 25.0),
                 end: expected,
             })
@@ -299,6 +303,7 @@ mod tests {
             Message::AddAnnotation(AnnotationDraft {
                 tool: Tool::Rectangle,
                 stroke_width: StrokeWidth::default(),
+                stroke_color: DEFAULT_STROKE_COLOR,
                 start: Point::new(50.0, 25.0),
                 end: Point::new(150.0, 75.0)
             })
@@ -424,6 +429,7 @@ mod tests {
             image_size: Size::new(200.0, 100.0),
             tool: Tool::Ellipse,
             stroke_width: StrokeWidth::default(),
+            stroke_color: DEFAULT_STROKE_COLOR,
             annotations: &[],
             cache: &cache,
         };
@@ -469,6 +475,7 @@ mod tests {
             Some(Message::AddAnnotation(AnnotationDraft {
                 tool: Tool::Ellipse,
                 stroke_width: StrokeWidth::default(),
+                stroke_color: DEFAULT_STROKE_COLOR,
                 start: Point::new(50.0, 25.0),
                 end: Point::new(150.0, 75.0),
             })),
@@ -519,6 +526,7 @@ mod tests {
             image_size: Size::new(200.0, 100.0),
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thin,
+            stroke_color: DEFAULT_STROKE_COLOR,
             annotations: &[],
             cache: &cache,
         };

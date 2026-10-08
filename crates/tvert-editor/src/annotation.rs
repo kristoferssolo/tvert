@@ -4,11 +4,15 @@ use iced::{
     widget::canvas::{Frame, Stroke},
 };
 
+/// The initial color selected for annotation strokes
+pub const DEFAULT_STROKE_COLOR: Color = Color::from_rgb8(255, 64, 64);
+
 /// A potential annotation described by a drag in captured-image coordinates
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AnnotationDraft {
     pub tool: Tool,
     pub stroke_width: StrokeWidth,
+    pub stroke_color: Color,
     pub start: Point,
     pub end: Point,
 }
@@ -20,6 +24,8 @@ pub struct Annotation {
     pub figure: Box<dyn Figure>,
     /// The width retained by this annotation
     pub stroke_width: StrokeWidth,
+    /// The color retained by this annotation
+    pub stroke_color: Color,
 }
 
 /// The selected tool cannot create geometry from the draft's endpoints
@@ -30,7 +36,7 @@ pub struct InvalidAnnotation;
 impl Annotation {
     pub fn draw(&self, frame: &mut Frame, viewport: Viewport) {
         let stroke = Stroke::default()
-            .with_color(Color::from_rgb8(255, 64, 64))
+            .with_color(self.stroke_color)
             .with_width(viewport.canvas_length(self.stroke_width.pixels()));
 
         frame.stroke(&self.figure.path(viewport), stroke);
@@ -49,6 +55,7 @@ impl TryFrom<AnnotationDraft> for Annotation {
         Ok(Self {
             figure,
             stroke_width: draft.stroke_width,
+            stroke_color: draft.stroke_color,
         })
     }
 }
@@ -72,6 +79,7 @@ mod tests {
         let error = assert_err!(Annotation::try_from(AnnotationDraft {
             tool,
             stroke_width: StrokeWidth::Medium,
+            stroke_color: DEFAULT_STROKE_COLOR,
             start,
             end
         }));

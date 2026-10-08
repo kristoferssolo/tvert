@@ -1,3 +1,4 @@
+use crate::annotation::DEFAULT_STROKE_COLOR;
 use crate::stroke_width::StrokeWidth;
 use crate::{message::Message, tool::Tool, viewport::Viewport};
 use iced::widget::{button, canvas, container, space, text, tooltip};
@@ -92,6 +93,50 @@ pub fn stroke_width_controls(selected: StrokeWidth) -> Element<'static, Message>
     .gap(8)
     .style(container::rounded_box)
     .into()
+}
+
+/// Builds controls for the color of new annotation strokes
+pub fn stroke_color_controls(selected: Color) -> Element<'static, Message> {
+    let colors = [
+        ("Red", DEFAULT_STROKE_COLOR),
+        ("Blue", Color::from_rgb8(64, 128, 255)),
+        ("Green", Color::from_rgb8(64, 200, 96)),
+        ("Yellow", Color::from_rgb8(255, 208, 64)),
+        ("White", Color::WHITE),
+        ("Black", Color::BLACK),
+    ];
+
+    let buttons = colors.into_iter().map(|(label, color)| {
+        let swatch = container(space())
+            .width(16)
+            .height(16)
+            .style(move |theme: &Theme| container::Style {
+                background: Some(color.into()),
+                border: Border {
+                    color: theme.extended_palette().background.strong.color,
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                ..Default::default()
+            });
+
+        let control = button(swatch)
+            .padding(6)
+            .on_press(Message::SelectStrokeColor(color))
+            .style(move |theme, status| button_style(theme, status, color == selected));
+
+        tooltip(control, text(label).size(12), tooltip::Position::Bottom)
+            .gap(8)
+            .style(container::rounded_box)
+            .into()
+    });
+
+    Row::new()
+        .push(text("Color").size(14))
+        .push(Row::with_children(buttons).spacing(4))
+        .spacing(8)
+        .align_y(Vertical::Center)
+        .into()
 }
 
 fn icon_button(

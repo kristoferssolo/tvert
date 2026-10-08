@@ -20,6 +20,7 @@ tvert-workflow = { path = "crates/tvert-workflow" }
 clap = { version = "4.6" }
 color-eyre = "0.6"
 iced = { version = "0.14", default-features = false, features = [
+  "advanced",
   "canvas",
   "image-without-codecs",
   "thread-pool",

@@ -1,24 +1,20 @@
 mod annotation;
 mod annotation_canvas;
 mod editor;
+mod error;
 mod figure;
 mod message;
+mod render;
 mod stroke_width;
 mod tool;
 mod toolbar;
 mod viewport;
 
+pub use error::Error;
+
 use crate::editor::Editor;
 use iced::{Size, Theme, widget::image::Handle, window};
 use tvert_image::CapturedImage;
-
-/// An editor window failure
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    /// Iced could not start or run the editor
-    #[error("failed to run the editor")]
-    Runtime(#[from] iced::Error),
-}
 
 /// Opens an editor window containing the captured image.
 ///

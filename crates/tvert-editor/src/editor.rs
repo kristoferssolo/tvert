@@ -1,4 +1,6 @@
+use crate::Error;
 use crate::annotation::DEFAULT_STROKE_COLOR;
+use crate::render::render_image;
 use crate::{
     annotation::Annotation, annotation_canvas::AnnotationCanvas, message::Message,
     stroke_width::StrokeWidth, tool::Tool, toolbar,
@@ -9,6 +11,7 @@ use iced::{
     ContentFit, Element, Fill, Size,
     widget::{canvas::Cache, image::Handle},
 };
+use tvert_image::CapturedImage;
 
 pub struct Editor {
     preview: Handle,
@@ -107,6 +110,16 @@ impl Editor {
         .width(Fill)
         .height(Fill)
         .into()
+    }
+
+    /// Renders committed annotations over the original capture at full resolution.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if preparing the pixels or export viewport fails.
+    #[expect(dead_code)]
+    pub fn render_image(&self) -> Result<CapturedImage, Error> {
+        render_image(&self.preview, &self.annotations)
     }
 }
 

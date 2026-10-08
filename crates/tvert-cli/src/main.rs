@@ -90,16 +90,22 @@ fn main() -> Result<ExitCode> {
             tvert_editor::run(
                 image,
                 move |action, image| -> Result<(), tvert_workflow::Error> {
-                    match action {
-                        ExportAction::Copy => {
-                            let offer = prepare_png_copy(image)?;
-                            editor_clipboard.replace(Some(offer));
+                    let offer = match action {
+                        ExportAction::Copy | ExportAction::CopyAndSave => {
+                            Some(prepare_png_copy(image)?)
                         }
-                        ExportAction::Save => {
-                            save_png(&path, image)?;
-                            println!("Saved {} to {}", image.size(), path.display());
-                        }
+                        ExportAction::Save => None,
+                    };
+
+                    if matches!(action, ExportAction::Save | ExportAction::CopyAndSave) {
+                        save_png(&path, image)?;
+                        println!("Saved {} to {}", image.size(), path.display());
                     }
+
+                    if let Some(offer) = offer {
+                        editor_clipboard.replace(Some(offer));
+                    }
+
                     Ok(())
                 },
             )?;

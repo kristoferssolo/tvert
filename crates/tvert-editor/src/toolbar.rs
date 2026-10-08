@@ -73,6 +73,12 @@ pub fn view(
             "Save (Ctrl+S)".into(),
             Some(Message::Export(ExportAction::Save)),
             false,
+        ))
+        .push(icon_button(
+            Icon::ClipboardCopy,
+            "Copy and save (Ctrl+Shift+C)".into(),
+            Some(Message::Export(ExportAction::CopyAndSave)),
+            false,
         ));
 
     container(controls)

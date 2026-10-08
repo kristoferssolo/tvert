@@ -32,7 +32,7 @@ use tvert_image::CapturedImage;
 /// Takes ownership of the pixels and runs until the window closes.
 /// Call this on the main thread after closing the selection overlay.
 ///
-/// Copy and Save invoke the caller's callback with the requested action.
+/// Export controls invoke the caller's callback with the requested action.
 /// The window closes only on success; export errors appear in the editor.
 /// The caller must retain and serve clipboard ownership after this returns.
 ///
@@ -91,16 +91,16 @@ fn export_shortcut(event: Event, status: event::Status, _window: window::Id) -> 
         return None;
     };
 
-    if !modifiers.control() || modifiers.shift() || modifiers.alt() || modifiers.logo() {
+    // Ctrl must be held; Alt/Logo must not. Shift is decided per shortcut
+    if !modifiers.control() || modifiers.alt() || modifiers.logo() {
         return None;
     }
 
-    let action = if character.eq_ignore_ascii_case("c") {
-        ExportAction::Copy
-    } else if character.eq_ignore_ascii_case("s") {
-        ExportAction::Save
-    } else {
-        return None;
+    let action = match (character.to_ascii_lowercase().as_str(), modifiers.shift()) {
+        ("c", false) => ExportAction::Copy,
+        ("c", true) => ExportAction::CopyAndSave,
+        ("s", false) => ExportAction::Save,
+        _ => return None,
     };
 
     Some(Message::Export(action))

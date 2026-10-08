@@ -3,4 +3,5 @@
 pub enum ExportAction {
     Copy,
     Save,
+    CopyAndSave,
 }

@@ -210,8 +210,10 @@ mod tests {
             tool,
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
-            start: bounds.position(),
-            end: Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
+            points: vec![
+                bounds.position(),
+                Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
+            ],
         })
     }
 
@@ -236,10 +238,10 @@ mod tests {
         let expected = expected
             .iter()
             .map(|&(tool, bounds)| {
-                assert_some!(tool.figure(
+                assert_some!(tool.figure(vec![
                     bounds.position(),
                     Point::new(bounds.x + bounds.width, bounds.y + bounds.height)
-                ))
+                ]))
                 .path(viewport)
                 .raw()
                 .iter()
@@ -344,15 +346,13 @@ mod tests {
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thin,
             stroke_color: DEFAULT_STROKE_COLOR,
-            start: Point::new(10.0, 10.0),
-            end: Point::new(30.0, 10.0),
+            points: vec![Point::new(10.0, 10.0), Point::new(30.0, 10.0)],
         });
         let thick = Message::AddAnnotation(AnnotationDraft {
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thick,
             stroke_color: blue,
-            start: Point::new(10.0, 10.0),
-            end: Point::new(30.0, 10.0),
+            points: vec![Point::new(10.0, 10.0), Point::new(30.0, 10.0)],
         });
 
         let _ = editor.update(thin);

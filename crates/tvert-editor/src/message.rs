@@ -3,7 +3,7 @@ use crate::{
 };
 use iced::Color;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     AddAnnotation(AnnotationDraft),
     SelectTool(Tool),

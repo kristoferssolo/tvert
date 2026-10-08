@@ -1,5 +1,5 @@
 use crate::{
-    figure::{ArrowFigure, EllipseFigure, Figure, LineFigure, RectangleFigure},
+    figure::{ArrowFigure, EllipseFigure, Figure, LineFigure, PencilFigure, RectangleFigure},
     viewport::rectangle_between,
 };
 use iced::Point;
@@ -14,23 +14,35 @@ pub enum Tool {
     Line,
     #[default]
     Arrow,
+    Pencil,
 }
 
 impl Tool {
-    pub fn figure(self, start: Point, end: Point) -> Option<Box<dyn Figure>> {
-        if ![start.x, start.y, end.x, end.y]
-            .into_iter()
-            .all(f32::is_finite)
-            || start == end
-        {
+    pub fn figure(self, points: Vec<Point>) -> Option<Box<dyn Figure>> {
+        let (&start, &end) = (points.first()?, points.last()?);
+
+        if !points.iter().all(|p| p.x.is_finite() && p.y.is_finite()) {
             return None;
         }
-        Some(match self {
+
+        let empty = match self {
+            Self::Pencil => points.iter().all(|p| *p == start),
+            _ => start == end,
+        };
+
+        if empty {
+            return None;
+        }
+
+        let figure: Box<dyn Figure> = match self {
             Self::Rectangle => Box::new(RectangleFigure::from(rectangle_between(start, end)?)),
             Self::Ellipse => Box::new(EllipseFigure::from(rectangle_between(start, end)?)),
             Self::Line => Box::new(LineFigure::new(start, end)),
             Self::Arrow => Box::new(ArrowFigure::new(start, end)),
-        })
+            Self::Pencil => Box::new(PencilFigure::new(points)),
+        };
+
+        Some(figure)
     }
 
     pub const fn icon(self) -> Icon {
@@ -39,6 +51,7 @@ impl Tool {
             Self::Ellipse => Icon::Circle,
             Self::Line => Icon::Minus,
             Self::Arrow => Icon::ArrowRight,
+            Self::Pencil => Icon::Pencil,
         }
     }
 }
@@ -55,10 +68,10 @@ mod tests {
     fn accepts_lines_and_arrows_without_rectangle_area(#[case] end: Point) {
         let start = Point::new(10.0, 10.0);
 
-        assert_some!(Tool::Line.figure(start, end));
-        assert_some!(Tool::Arrow.figure(start, end));
-        assert_none!(Tool::Rectangle.figure(start, end));
-        assert_none!(Tool::Ellipse.figure(start, end));
+        assert_some!(Tool::Line.figure(vec![start, end]));
+        assert_some!(Tool::Arrow.figure(vec![start, end]));
+        assert_none!(Tool::Rectangle.figure(vec![start, end]));
+        assert_none!(Tool::Ellipse.figure(vec![start, end]));
     }
 
     #[rstest]
@@ -67,7 +80,7 @@ mod tests {
     #[case(Point::new(10.0, 10.0), Point::new(f32::INFINITY, 20.0))]
     fn rejects_unusable_endpoints(#[case] start: Point, #[case] end: Point) {
         for &tool in Tool::VARIANTS {
-            assert_none!(tool.figure(start, end));
+            assert_none!(tool.figure(vec![start, end]));
         }
     }
 }

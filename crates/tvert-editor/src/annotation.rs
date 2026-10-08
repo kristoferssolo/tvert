@@ -7,24 +7,20 @@ use iced::{
 /// The initial color selected for annotation strokes
 pub const DEFAULT_STROKE_COLOR: Color = Color::from_rgb8(255, 64, 64);
 
-/// A potential annotation described by a drag in captured-image coordinates
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// A potential annotation described by points in captured-image coordinates
+#[derive(Debug, Clone, PartialEq)]
 pub struct AnnotationDraft {
     pub tool: Tool,
     pub stroke_width: StrokeWidth,
     pub stroke_color: Color,
-    pub start: Point,
-    pub end: Point,
+    pub points: Vec<Point>,
 }
 
 /// A stored figure and its retained appearance.
 #[derive(Debug)]
 pub struct Annotation {
-    /// The annotation geometry in captured-image coordinates
     pub figure: Box<dyn Figure>,
-    /// The width retained by this annotation
     pub stroke_width: StrokeWidth,
-    /// The color retained by this annotation
     pub stroke_color: Color,
 }
 
@@ -33,13 +29,42 @@ pub struct Annotation {
 #[error("annotation draft has invalid or emtpy geometry")]
 pub struct InvalidAnnotation;
 
+impl AnnotationDraft {
+    pub fn new(tool: Tool, stroke_width: StrokeWidth, stroke_color: Color, start: Point) -> Self {
+        Self {
+            tool,
+            stroke_width,
+            stroke_color,
+            points: vec![start],
+        }
+    }
+
+    /// Retains every pencil sample, or updates the endpoint of another tool
+    pub fn record(&mut self, point: Point) {
+        if self.points.last() == Some(&point) {
+            return;
+        }
+
+        match self.points.as_mut_slice() {
+            [_, .., end] if self.tool != Tool::Pencil => *end = point,
+            _ => self.points.push(point),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.points
+            .first()
+            .is_none_or(|start| self.points.iter().all(|point| point == start))
+    }
+}
+
 impl Annotation {
     pub fn draw(&self, frame: &mut Frame, viewport: Viewport) {
         let stroke = Stroke::default()
             .with_color(self.stroke_color)
             .with_width(viewport.canvas_length(self.stroke_width.pixels()));
 
-        frame.stroke(&self.figure.path(viewport), stroke);
+        self.figure.draw(frame, viewport, stroke);
     }
 }
 
@@ -47,10 +72,7 @@ impl TryFrom<AnnotationDraft> for Annotation {
     type Error = InvalidAnnotation;
 
     fn try_from(draft: AnnotationDraft) -> Result<Self, Self::Error> {
-        let figure = draft
-            .tool
-            .figure(draft.start, draft.end)
-            .ok_or(InvalidAnnotation)?;
+        let figure = draft.tool.figure(draft.points).ok_or(InvalidAnnotation)?;
 
         Ok(Self {
             figure,
@@ -80,8 +102,7 @@ mod tests {
             tool,
             stroke_width: StrokeWidth::Medium,
             stroke_color: DEFAULT_STROKE_COLOR,
-            start,
-            end
+            points: vec![start, end]
         }));
 
         assert_eq!(error, InvalidAnnotation);

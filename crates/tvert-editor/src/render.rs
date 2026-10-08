@@ -149,8 +149,7 @@ mod tests {
             tool: Tool::Line,
             stroke_width: width,
             stroke_color: color,
-            start,
-            end,
+            points: vec![start, end,]
         }))
     }
 
@@ -213,5 +212,27 @@ mod tests {
 
         assert_eq!(pixel(&image, 0, 0), [0, 0, 255, 128]);
         assert_eq!(pixel(&image, 8, 16), [170, 0, 85, 192]);
+    }
+
+    #[test]
+    fn exports_a_pencil_loop_using_its_intermediate_points() {
+        let preview = Handle::from_rgba(32, 32, [20, 40, 60, 255].repeat(1024));
+        let annotation = assert_ok!(Annotation::try_from(AnnotationDraft {
+            tool: Tool::Pencil,
+            stroke_width: StrokeWidth::Medium,
+            stroke_color: Color::from_rgb8(255, 0, 0),
+            points: vec![
+                Point::new(4.0, 4.0),
+                Point::new(24.0, 4.0),
+                Point::new(24.0, 24.0),
+                Point::new(4.0, 4.0),
+            ],
+        }));
+
+        let image = assert_ok!(render_image(&preview, &[annotation]));
+
+        assert_eq!(pixel(&image, 12, 4), [255, 0, 0, 255]);
+        assert_eq!(pixel(&image, 24, 12), [255, 0, 0, 255]);
+        assert_eq!(pixel(&image, 0, 0), [20, 40, 60, 255]);
     }
 }

@@ -108,6 +108,7 @@ fn stroke_width_controls(selected: StrokeWidth) -> Element<'static, Message> {
         shaping: Shaping::default(),
     }))
     .padding([9, 10])
+    .style(stroke_width_style)
     .into()
 }
 
@@ -126,7 +127,7 @@ fn stroke_color_controls(selected: Color, open: bool) -> Element<'static, Messag
     .height(36)
     .padding(8)
     .on_press(Message::ToggleColorPallete)
-    .style(move |theme, status| color_trigger_style(theme, status, open));
+    .style(button::text);
 
     let rows = COLORS.chunks(3).map(|colors| {
         Row::with_children(colors.iter().copied().map(|color| {
@@ -217,22 +218,28 @@ fn color_swatch(color: Color) -> Element<'static, Message> {
         .into()
 }
 
-fn color_trigger_style(theme: &Theme, status: button::Status, open: bool) -> button::Style {
-    let is_hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-
-    let status = if open {
-        pick_list::Status::Opened { is_hovered }
-    } else if is_hovered {
-        pick_list::Status::Hovered
-    } else {
-        pick_list::Status::Active
+fn stroke_width_style(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
+    let (status, open) = match status {
+        pick_list::Status::Active => (button::Status::Active, false),
+        pick_list::Status::Hovered => (button::Status::Hovered, false),
+        pick_list::Status::Opened { is_hovered } => (
+            if is_hovered {
+                button::Status::Hovered
+            } else {
+                button::Status::Active
+            },
+            true,
+        ),
     };
-    let style = pick_list::default(theme, status);
+    let style = button_style(theme, status, open);
 
-    button::Style {
-        background: Some(style.background),
-        text_color: style.handle_color,
+    pick_list::Style {
+        text_color: style.text_color,
+        placeholder_color: style.text_color,
+        handle_color: style.text_color,
+        background: style
+            .background
+            .unwrap_or_else(|| Color::TRANSPARENT.into()),
         border: style.border,
-        ..Default::default()
     }
 }

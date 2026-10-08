@@ -133,8 +133,7 @@ impl Editor {
                 !self.undone_annotations.is_empty()
             ),
             preview
-        ]
-        .spacing(12);
+        ];
 
         if let Some(error) = &self.export_error {
             content = content.push(text(error_message(error)).style(text::danger));

@@ -25,6 +25,9 @@ const COLORS: &[Color] = &[
 
 const ICON_FONT: Font = Font::with_name("lucide");
 
+pub const HEIGHT: f32 = 44.0;
+pub const MIN_WIDTH: f32 = 640.0;
+
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
     selected: Tool,
@@ -83,8 +86,8 @@ pub fn view(
 
     container(controls)
         .padding(4)
-        .width(Fill)
-        .style(container::rounded_box)
+        .height(HEIGHT)
+        .center_x(Fill)
         .into()
 }
 

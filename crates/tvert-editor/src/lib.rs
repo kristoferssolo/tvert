@@ -15,8 +15,11 @@ mod viewport;
 pub use error::Error;
 pub use export::ExportAction;
 
-use crate::editor::{Editor, ExportHandler};
-use iced::{Size, Theme, event, widget::image::Handle, window};
+use crate::{
+    editor::{Editor, ExportHandler},
+    toolbar::{HEIGHT, MIN_WIDTH},
+};
+use iced::{ContentFit, Size, Theme, event, widget::image::Handle, window};
 use std::{error::Error as StdError, rc::Rc};
 use tvert_image::CapturedImage;
 
@@ -62,8 +65,15 @@ where
         },
         ..Default::default()
     })
-    .window_size((1080.0, 720.0))
+    .window_size(initial_window_size(image_size))
     .resizable(true)
     .run()?;
     Ok(())
+}
+
+fn initial_window_size(image_size: Size) -> Size {
+    let available = Size::new(1080.0, 720.0 - HEIGHT);
+    let fitted = ContentFit::Contain.fit(image_size, available);
+
+    Size::new(fitted.width.max(MIN_WIDTH), fitted.height + HEIGHT)
 }

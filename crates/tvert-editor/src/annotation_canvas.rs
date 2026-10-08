@@ -62,14 +62,11 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 *state = Some(self.new_draft(start));
                 Some(self.redraw())
             }
-            Event::Mouse(MouseEvent::CursorMoved { .. }) => {
-                let draft = state.as_mut()?;
-                draft.record(viewport.clamped_image_position(position?)?);
-                Some(self.redraw())
+            Event::Mouse(MouseEvent::CursorMoved { position }) => {
+                self.record_motion(state, *position, bounds, viewport)
             }
             Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
                 let mut draft = state.take()?;
-                // self.cache.clear(); // TEST:
                 if let Some(point) = position.and_then(|p| viewport.clamped_image_position(p)) {
                     draft.record(point);
                 }
@@ -168,6 +165,19 @@ impl AnnotationCanvas<'_> {
         } else {
             action
         })
+    }
+
+    fn record_motion(
+        &self,
+        state: &mut DraftState,
+        position: Point,
+        bounds: Rectangle,
+        viewport: Viewport,
+    ) -> Option<Action<Message>> {
+        let draft = state.as_mut()?;
+        let local = Cursor::Available(position).position_from(bounds.position())?;
+        draft.record(viewport.clamped_image_position(local)?);
+        Some(self.redraw())
     }
 }
 
@@ -614,5 +624,36 @@ mod tests {
             })
         );
         assert_none!(drag.as_ref());
+    }
+
+    #[test]
+    fn records_each_motion_position_instead_of_the_cursor_snapshot() {
+        let mut draft = None;
+        assert_none!(dispatch_with_tool(
+            &mut draft,
+            &Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
+            Some(Point::new(120.0, 190.0)),
+            Tool::Pencil,
+        ));
+
+        let snapshot = Point::new(320.0, 290.0);
+        for position in [Point::new(220.0, 190.0), snapshot] {
+            assert_none!(dispatch_with_tool(
+                &mut draft,
+                &Event::Mouse(MouseEvent::CursorMoved { position }),
+                Some(snapshot),
+                Tool::Pencil,
+            ));
+        }
+
+        let draft = assert_some!(draft);
+        assert_eq!(
+            draft.points,
+            vec![
+                Point::new(50.0, 25.0),
+                Point::new(100.0, 25.0),
+                Point::new(150.0, 75.0),
+            ]
+        );
     }
 }

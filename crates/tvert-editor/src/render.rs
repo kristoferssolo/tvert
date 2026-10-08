@@ -234,5 +234,6 @@ mod tests {
         assert_eq!(pixel(&image, 12, 4), [255, 0, 0, 255]);
         assert_eq!(pixel(&image, 24, 12), [255, 0, 0, 255]);
         assert_eq!(pixel(&image, 0, 0), [20, 40, 60, 255]);
+        assert_eq!(pixel(&image, 24, 4), [20, 40, 60, 255]);
     }
 }

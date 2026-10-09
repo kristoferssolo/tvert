@@ -4,7 +4,7 @@ use crate::{
     tool::Tool,
     viewport::Viewport,
 };
-use iced::{Color, widget::canvas::Frame};
+use iced::widget::canvas::Frame;
 
 /// An ordered drawing or pixel effect in the editor's history
 #[derive(Debug)]
@@ -23,10 +23,10 @@ impl Edit {
     }
 
     /// Draws an in-progress annotation or pixel-effect selection outline
-    pub fn draw_draft(&self, frame: &mut Frame, viewport: Viewport, selection_color: Color) {
+    pub fn draw_draft(&self, frame: &mut Frame, viewport: Viewport) {
         match self {
             Self::Annotation(annotation) => annotation.draw(frame, viewport),
-            Self::Pixelation(effect) => effect.draw_selection(frame, viewport, selection_color),
+            Self::Pixelation(effect) => effect.draw_selection(frame, viewport),
         }
     }
 }

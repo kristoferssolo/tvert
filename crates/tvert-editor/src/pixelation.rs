@@ -5,7 +5,7 @@ use crate::{
 };
 use iced::{
     Color, Rectangle,
-    widget::canvas::{Frame, Path, Stroke},
+    widget::canvas::{Frame, LineDash, Path, Stroke},
 };
 use num_traits::ToPrimitive;
 use std::num::NonZeroU32;
@@ -45,10 +45,21 @@ impl Pixelation {
     }
 
     /// Draws the temporary region outline without applying the pixel effect
-    pub fn draw_selection(&self, frame: &mut Frame, viewport: Viewport, color: Color) {
+    pub fn draw_selection(&self, frame: &mut Frame, viewport: Viewport) {
         let bounds = viewport.canvas_rectangle(self.bounds);
         let path = Path::rectangle(bounds.position(), bounds.size());
-        frame.stroke(&path, Stroke::default().with_color(color).with_width(1.0));
+        let stroke = Stroke::default().with_width(1.0);
+        frame.stroke(&path, stroke.with_color(Color::BLACK));
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: LineDash {
+                    segments: &[6.0, 6.0],
+                    offset: 0,
+                },
+                ..stroke.with_color(Color::WHITE)
+            },
+        );
     }
 }
 

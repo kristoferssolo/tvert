@@ -9,10 +9,12 @@ use crate::{
 use tvert_image::{CapturedImage, PixelSize};
 use wayland_client::protocol::wl_output::Transform;
 
-const BORDER_COLOR: [u8; 4] = [255, 64, 64, 255];
+const BORDER_LIGHT: [u8; 4] = [255, 255, 255, 255];
+const BORDER_DARK: [u8; 4] = [0, 0, 0, 255];
 const BORDER_WIDTH: f64 = 2.0;
+const DASH_LENGTH: f64 = 6.0;
 
-/// Renders an inward selection outline over a copy of the frozen image.
+/// Renders an inward black-and-white dashed outline over the frozen image.
 ///
 /// The rectangle is in surface coordinates. The returned image retains the
 /// original buffer dimensions and orientation. Coverage uses pixel centers.
@@ -62,8 +64,8 @@ pub fn selection_outline(
         {
             let x = f64::from(u32::try_from(x).map_err(|_| Error::InvalidShmLayout)?) + 0.5;
 
-            if outline.contains(x, y) {
-                *pixel = BORDER_COLOR;
+            if let Some(color) = outline.color(x, y) {
+                *pixel = color;
             }
         }
     }
@@ -78,6 +80,8 @@ struct Outline {
     bottom: f64,
     stroke_x: f64,
     stroke_y: f64,
+    scale_x: f64,
+    scale_y: f64,
 }
 
 impl Outline {
@@ -98,13 +102,18 @@ impl Outline {
             _ => (surface_width, surface_height),
         };
 
+        let scale_x = f64::from(pixels.width().get()) / axis_width;
+        let scale_y = f64::from(pixels.height().get()) / axis_height;
+
         Ok(Self {
             left,
             top,
             right,
             bottom,
-            stroke_x: BORDER_WIDTH * f64::from(pixels.width().get()) / axis_width,
-            stroke_y: BORDER_WIDTH * f64::from(pixels.height().get()) / axis_height,
+            stroke_x: BORDER_WIDTH * scale_x,
+            stroke_y: BORDER_WIDTH * scale_y,
+            scale_x,
+            scale_y,
         })
     }
 
@@ -117,6 +126,30 @@ impl Outline {
             || x >= self.right - self.stroke_x
             || y < self.top + self.stroke_y
             || y >= self.bottom - self.stroke_y
+    }
+
+    fn color(&self, x: f64, y: f64) -> Option<[u8; 4]> {
+        if !self.contains(x, y) {
+            return None;
+        }
+
+        let width = (self.right - self.left) / self.scale_x;
+        let height = (self.bottom - self.top) / self.scale_y;
+        let distance = if y < self.top + self.stroke_y {
+            (x - self.left) / self.scale_x
+        } else if x >= self.right - self.stroke_x {
+            width + (y - self.top) / self.scale_y
+        } else if y >= self.bottom - self.stroke_y {
+            width + height + (self.right - x) / self.scale_x
+        } else {
+            2.0f64.mul_add(width, height) + (self.bottom - y) / self.scale_y
+        };
+
+        Some(if distance.rem_euclid(2.0 * DASH_LENGTH) < DASH_LENGTH {
+            BORDER_LIGHT
+        } else {
+            BORDER_DARK
+        })
     }
 }
 
@@ -194,7 +227,7 @@ mod tests {
                     .0
                     .iter()
                     .map(|pixel| {
-                        if *pixel == BORDER_COLOR {
+                        if matches!(*pixel, BORDER_LIGHT | BORDER_DARK) {
                             '#'
                         } else {
                             assert_eq!(*pixel, original);
@@ -238,11 +271,11 @@ mod tests {
         ));
         let pixels = rendered.rgba().as_chunks::<4>().0;
 
-        assert_eq!(assert_some!(pixels.get(9)), &BORDER_COLOR);
+        assert_eq!(assert_some!(pixels.get(9)), &BORDER_LIGHT);
         assert_eq!(
             pixels
                 .iter()
-                .filter(|pixel| **pixel == BORDER_COLOR)
+                .filter(|pixel| matches!(**pixel, BORDER_LIGHT | BORDER_DARK))
                 .count(),
             1
         );

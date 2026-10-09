@@ -77,7 +77,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         &self,
         state: &Self::State,
         renderer: &Renderer,
-        theme: &Theme,
+        _theme: &Theme,
         bounds: Rectangle,
         _cursor: Cursor,
     ) -> Vec<iced::widget::canvas::Geometry<Renderer>> {
@@ -91,7 +91,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 if let Some(draft) = state
                     && let Ok(edit) = Edit::try_from(draft.clone())
                 {
-                    edit.draw_draft(frame, viewport, theme.palette().primary);
+                    edit.draw_draft(frame, viewport);
                 }
             });
 

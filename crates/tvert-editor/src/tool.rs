@@ -1,5 +1,8 @@
 use crate::{
-    figure::{ArrowFigure, EllipseFigure, Figure, LineFigure, PencilFigure, RectangleFigure},
+    figure::{
+        ArrowFigure, EllipseFigure, Figure, HighlighterFigure, LineFigure, PencilFigure,
+        RectangleFigure,
+    },
     viewport::rectangle_between,
 };
 use iced::Point;
@@ -15,6 +18,7 @@ pub enum Tool {
     #[default]
     Arrow,
     Pencil,
+    Highlighter,
 }
 
 impl Tool {
@@ -40,6 +44,7 @@ impl Tool {
             Self::Line => Box::new(LineFigure::new(start, end)),
             Self::Arrow => Box::new(ArrowFigure::new(start, end)),
             Self::Pencil => Box::new(PencilFigure::new(points)),
+            Self::Highlighter => Box::new(HighlighterFigure::from(rectangle_between(start, end)?)),
         };
 
         Some(figure)
@@ -52,6 +57,7 @@ impl Tool {
             Self::Line => Icon::Minus,
             Self::Arrow => Icon::ArrowRight,
             Self::Pencil => Icon::Pencil,
+            Self::Highlighter => Icon::Highlighter,
         }
     }
 }
@@ -72,6 +78,7 @@ mod tests {
         assert_some!(Tool::Arrow.figure(vec![start, end]));
         assert_none!(Tool::Rectangle.figure(vec![start, end]));
         assert_none!(Tool::Ellipse.figure(vec![start, end]));
+        assert_none!(Tool::Highlighter.figure(vec![start, end]));
     }
 
     #[rstest]

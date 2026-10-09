@@ -64,7 +64,8 @@ pub fn view(
         ))
         .push(separator())
         .push(stroke_color_controls(stroke_color, color_pallete_open))
-        .push(stroke_width_controls(stroke_width))
+        // .push(stroke_width_controls(stroke_width))
+        .extend((selected != Tool::Highlighter).then(|| stroke_width_controls(stroke_width)))
         .push(icon_button(
             Icon::Copy,
             "Copy (Ctrl+C)".into(),

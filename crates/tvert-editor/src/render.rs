@@ -236,4 +236,20 @@ mod tests {
         assert_eq!(pixel(&image, 0, 0), [20, 40, 60, 255]);
         assert_eq!(pixel(&image, 24, 4), [20, 40, 60, 255]);
     }
+
+    #[test]
+    fn fills_a_highlight_without_hiding_the_original_pixels() {
+        let preview = Handle::from_rgba(32, 32, [255, 255, 255, 255].repeat(1024));
+        let highlight = assert_ok!(Annotation::try_from(AnnotationDraft {
+            tool: Tool::Highlighter,
+            stroke_width: StrokeWidth::Medium,
+            stroke_color: Color::from_rgb8(255, 255, 0),
+            points: vec![Point::new(24.0, 24.0), Point::new(4.0, 4.0)],
+        }));
+
+        let image = assert_ok!(render_image(&preview, &[highlight]));
+
+        assert_eq!(pixel(&image, 12, 12), [255, 255, 178, 255]);
+        assert_eq!(pixel(&image, 0, 0), [255, 255, 255, 255]);
+    }
 }

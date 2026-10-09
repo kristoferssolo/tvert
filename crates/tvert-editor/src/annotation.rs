@@ -7,6 +7,8 @@ use iced::{
 /// The initial color selected for annotation strokes
 pub const DEFAULT_STROKE_COLOR: Color = Color::from_rgb8(255, 64, 64);
 
+const HIGHLIGHT_OPACITY: f32 = 0.3;
+
 /// A potential annotation described by points in captured-image coordinates
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnotationDraft {
@@ -73,11 +75,15 @@ impl TryFrom<AnnotationDraft> for Annotation {
 
     fn try_from(draft: AnnotationDraft) -> Result<Self, Self::Error> {
         let figure = draft.tool.figure(draft.points).ok_or(InvalidAnnotation)?;
+        let stroke_color = match draft.tool {
+            Tool::Highlighter => draft.stroke_color.scale_alpha(HIGHLIGHT_OPACITY),
+            _ => draft.stroke_color,
+        };
 
         Ok(Self {
             figure,
             stroke_width: draft.stroke_width,
-            stroke_color: draft.stroke_color,
+            stroke_color,
         })
     }
 }

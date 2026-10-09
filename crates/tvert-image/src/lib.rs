@@ -1,6 +1,7 @@
 mod encode;
 mod error;
 mod image;
+mod pixelate;
 mod size;
 mod transform;
 

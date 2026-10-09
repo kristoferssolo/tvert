@@ -1,5 +1,5 @@
-use crate::{Error, PixelSize};
-use std::ops::Range;
+use crate::{Error, PixelSize, pixelate::pixelate};
+use std::{num::NonZeroU32, ops::Range};
 
 /// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
 ///
@@ -90,6 +90,27 @@ impl CapturedImage {
         }
 
         Self::new(size, rgba)
+    }
+
+    /// Pixelates a region in place using square blocks of captured-image pixels.
+    ///
+    /// Range ends are exclusive. Blocks start at the region's top-left corner
+    /// and are clipped at its edges. Pixels outside the region are unchanged.
+    /// Colors are averaged with alpha weighting and stored with straight alpha.
+    /// A block size of one leaves visible pixels unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPixelationBounds`] for empty, reversed, or
+    /// out-of-bounds ranges, or [`Error::SizeOverflow`] if dimensions, offsets,
+    /// or channel totals cannot be represented.
+    pub fn pixelate(
+        &mut self,
+        x: Range<usize>,
+        y: Range<usize>,
+        block_size: NonZeroU32,
+    ) -> Result<(), Error> {
+        pixelate(&mut self.rgba, self.size, x, y, block_size)
     }
 }
 

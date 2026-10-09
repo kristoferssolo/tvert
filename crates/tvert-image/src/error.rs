@@ -26,4 +26,8 @@ pub enum Error {
     /// At least one pixel dimension is zero
     #[error("image dimensions must be nonzero")]
     ZeroDimensions,
+
+    /// The pixelation region is empty, reversed, or outside the image
+    #[error("pixelation bounds must describe a nonempty region inside the image")]
+    InvalidPixelationBounds,
 }

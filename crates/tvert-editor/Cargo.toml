@@ -12,6 +12,7 @@ tvert-image.workspace = true
 iced.workspace = true
 iced_aw.workspace = true
 lucide-icons.workspace = true
+num-traits.workspace = true
 strum.workspace = true
 thiserror.workspace = true
 

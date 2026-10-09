@@ -1,4 +1,4 @@
-use crate::{Error, annotation::Annotation, viewport::Viewport};
+use crate::{Error, annotation::Annotation, edit::Edit, viewport::Viewport};
 use iced::{
     Color, Font, Pixels, Renderer, Size,
     advanced::{
@@ -9,15 +9,49 @@ use iced::{
 };
 use tvert_image::{CapturedImage, Error as ImageError, PixelSize};
 
-/// Renders committed annotations over decoded image pixels at their original size.
+/// Renders drawings over decoded image pixels at their original size.
 ///
-/// Pixels outside annotation strokes retain their original straight RGBA values.
+/// Pixels outside the drawings retain their original straight RGBA values.
 ///
 /// # Errors
 ///
 /// Returns an error for an unsupported preview handle, invalid image storage,
 /// an invalid viewport, or an allocation or compositing failure.
 pub fn render_image(preview: &Handle, annotations: &[Annotation]) -> Result<CapturedImage, Error> {
+    draw_annotations(image_from_handle(preview)?, annotations.iter())
+}
+
+/// Replays drawings and pixel effects in their original history order.
+///
+/// # Errors
+///
+/// Returns an error if preparing, rendering, or applying an edit fails.
+pub fn render_edits(preview: &Handle, edits: &[Edit]) -> Result<CapturedImage, Error> {
+    let mut image = image_from_handle(preview)?;
+    let mut remaining = edits;
+
+    while let Some((edit, rest)) = remaining.split_first() {
+        match edit {
+            Edit::Pixelation(effect) => {
+                effect.apply(&mut image)?;
+                remaining = rest;
+            }
+            Edit::Annotation(_) => {
+                let count = remaining
+                    .iter()
+                    .take_while(|edit| matches!(edit, Edit::Annotation(_)))
+                    .count();
+                let (annotations, rest) = remaining.split_at(count);
+                image = draw_annotations(image, annotations.iter().filter_map(Edit::annotation))?;
+                remaining = rest;
+            }
+        }
+    }
+
+    Ok(image)
+}
+
+fn image_from_handle(preview: &Handle) -> Result<CapturedImage, Error> {
     let Handle::Rgba {
         width,
         height,
@@ -43,11 +77,21 @@ pub fn render_image(preview: &Handle, annotations: &[Annotation]) -> Result<Capt
     rgba.try_reserve_exact(expected).map_err(ImageError::from)?;
     rgba.extend_from_slice(pixels);
 
-    if annotations.is_empty() {
-        return Ok(CapturedImage::new(size, rgba)?);
+    Ok(CapturedImage::new(size, rgba)?)
+}
+
+fn draw_annotations<'a>(
+    image: CapturedImage,
+    annotations: impl Iterator<Item = &'a Annotation>,
+) -> Result<CapturedImage, Error> {
+    let mut annotations = annotations.peekable();
+    if annotations.peek().is_none() {
+        return Ok(image);
     }
 
-    let image_size = Size::from((*width, *height));
+    let size = image.size();
+    let (width, height) = size.into();
+    let image_size = Size::from((width, height));
     let viewport = Viewport::new(image_size, image_size).ok_or(Error::InvalidViewport)?;
     let mut rendered = Renderer::new(Font::default(), Pixels(16.0));
     let mut frame = Frame::new(&rendered, image_size);
@@ -58,8 +102,8 @@ pub fn render_image(preview: &Handle, annotations: &[Annotation]) -> Result<Capt
 
     rendered.draw_geometry(frame.into_geometry());
 
-    let overlay = rendered.screenshot(Size::new(*width, *height), 1.0, Color::TRANSPARENT);
-
+    let overlay = rendered.screenshot(Size::new(width, height), 1.0, Color::TRANSPARENT);
+    let expected = size.rgba_len()?;
     if overlay.len() != expected {
         return Err(ImageError::InvalidPixelLength {
             expected,
@@ -67,6 +111,8 @@ pub fn render_image(preview: &Handle, annotations: &[Annotation]) -> Result<Capt
         }
         .into());
     }
+
+    let mut rgba = image.into_rgba();
 
     for (background, foreground) in rgba
         .as_chunks_mut::<4>()
@@ -251,5 +297,37 @@ mod tests {
 
         assert_eq!(pixel(&image, 12, 12), [255, 255, 178, 255]);
         assert_eq!(pixel(&image, 0, 0), [255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn pixelates_earlier_drawings_and_keeps_later_drawings_on_top() {
+        let preview = Handle::from_rgba(32, 16, [0, 0, 0, 255].repeat(512));
+        let mut edits = vec![
+            Edit::Annotation(line(
+                Color::from_rgb8(255, 0, 0),
+                StrokeWidth::Medium,
+                Point::new(0.0, 8.0),
+                Point::new(32.0, 8.0),
+            )),
+            assert_ok!(Edit::try_from(AnnotationDraft {
+                tool: Tool::Pixelate,
+                stroke_width: StrokeWidth::Medium,
+                stroke_color: Color::BLACK,
+                points: vec![Point::new(16.0, 16.0), Point::ORIGIN],
+            })),
+        ];
+
+        let image = assert_ok!(render_edits(&preview, &edits));
+        assert_eq!(pixel(&image, 8, 8), [63, 0, 0, 255]);
+        assert_eq!(pixel(&image, 24, 8), [255, 0, 0, 255]);
+
+        edits.push(Edit::Annotation(line(
+            Color::from_rgb8(0, 0, 255),
+            StrokeWidth::Thin,
+            Point::new(8.0, 0.0),
+            Point::new(8.0, 16.0),
+        )));
+        let image = assert_ok!(render_edits(&preview, &edits));
+        assert_eq!(pixel(&image, 8, 8), [0, 0, 255, 255]);
     }
 }

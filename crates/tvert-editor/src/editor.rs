@@ -1,10 +1,11 @@
 use crate::{
     Error,
-    annotation::{Annotation, DEFAULT_STROKE_COLOR},
+    annotation::DEFAULT_STROKE_COLOR,
     annotation_canvas::AnnotationCanvas,
+    edit::Edit,
     export::ExportAction,
     message::Message,
-    render::render_image,
+    render::{render_edits, render_image},
     stroke_width::StrokeWidth,
     tool::Tool,
     toolbar,
@@ -21,47 +22,49 @@ use tvert_image::CapturedImage;
 pub type ExportHandler = Rc<dyn Fn(ExportAction, &CapturedImage) -> Result<(), Error>>;
 
 pub struct Editor {
+    original: Handle,
     preview: Handle,
     image_size: Size,
     tool: Tool,
     stroke_width: StrokeWidth,
     stroke_color: Color,
     export: ExportHandler,
-    export_error: Option<Error>,
-    annotations: Vec<Annotation>,
-    undone_annotations: Vec<Annotation>,
-    annotation_cache: Cache,
+    error: Option<Error>,
+    edits: Vec<Edit>,
+    undone_edits: Vec<Edit>,
+    cache: Cache,
     color_pallete_open: bool,
 }
 
 impl Editor {
     pub fn new(preview: Handle, image_size: Size, export: ExportHandler) -> Self {
         Self {
+            original: preview.clone(),
             preview,
             image_size,
             tool: Tool::default(),
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
             export,
-            export_error: None,
-            annotations: Vec::new(),
-            undone_annotations: Vec::new(),
-            annotation_cache: Cache::new(),
+            error: None,
+            edits: Vec::new(),
+            undone_edits: Vec::new(),
+            cache: Cache::new(),
             color_pallete_open: false,
         }
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::AddAnnotation(draft) => {
-                let Ok(annotation) = Annotation::try_from(draft) else {
+            Message::AddEdit(draft) => {
+                let Ok(edit) = Edit::try_from(draft) else {
                     return Task::none();
                 };
-                self.annotations.push(annotation);
-                self.undone_annotations.clear();
+                self.add_edit(edit);
             }
             Message::SelectTool(tool) => {
                 self.tool = tool;
+                self.color_pallete_open = false;
                 return Task::none();
             }
             Message::SelectStrokeWidth(stroke_width) => {
@@ -81,21 +84,11 @@ impl Editor {
                 self.color_pallete_open = false;
                 return Task::none();
             }
-            Message::Undo => {
-                let Some(annotation) = self.annotations.pop() else {
-                    return Task::none();
-                };
-                self.undone_annotations.push(annotation);
-            }
-            Message::Redo => {
-                let Some(anootation) = self.undone_annotations.pop() else {
-                    return Task::none();
-                };
-                self.annotations.push(anootation);
-            }
+            Message::Undo => self.undo(),
+            Message::Redo => self.redo(),
             Message::Export(action) => return self.export(action),
         }
-        self.annotation_cache.clear();
+        self.cache.clear();
         Task::none()
     }
 
@@ -110,8 +103,7 @@ impl Editor {
             tool: self.tool,
             stroke_width: self.stroke_width,
             stroke_color: self.stroke_color,
-            annotations: &self.annotations,
-            cache: &self.annotation_cache,
+            cache: &self.cache,
         })
         .width(Fill)
         .height(Fill);
@@ -129,26 +121,26 @@ impl Editor {
                 self.stroke_width,
                 self.stroke_color,
                 self.color_pallete_open,
-                !self.annotations.is_empty(),
-                !self.undone_annotations.is_empty()
+                !self.edits.is_empty(),
+                !self.undone_edits.is_empty()
             ),
             preview
         ];
 
-        if let Some(error) = &self.export_error {
+        if let Some(error) = &self.error {
             content = content.push(text(error_message(error)).style(text::danger));
         }
 
         container(content).width(Fill).height(Fill).into()
     }
 
-    /// Renders committed annotations over the original capture at full resolution.
+    /// Returns the committed image at full resolution.
     ///
     /// # Errors
     ///
-    /// Returns an error if preparing the pixels or export viewport fails.
+    /// Returns an error if preparing the pixel storage fails.
     pub fn render_image(&self) -> Result<CapturedImage, Error> {
-        render_image(&self.preview, &self.annotations)
+        render_image(&self.preview, &[])
     }
 
     pub fn export(&mut self, action: ExportAction) -> Task<Message> {
@@ -157,12 +149,59 @@ impl Editor {
             .and_then(|image| (self.export)(action, &image))
         {
             Ok(()) => {
-                self.export_error = None;
+                self.error = None;
                 iced::exit()
             }
             Err(error) => {
-                self.export_error = Some(error);
+                self.error = Some(error);
                 Task::none()
+            }
+        }
+    }
+
+    fn add_edit(&mut self, edit: Edit) {
+        self.edits.push(edit);
+        if self.refresh_preview() {
+            self.undone_edits.clear();
+            return;
+        }
+        let _ = self.edits.pop();
+    }
+
+    fn undo(&mut self) {
+        let Some(edit) = self.edits.pop() else {
+            return;
+        };
+        if self.refresh_preview() {
+            self.undone_edits.push(edit);
+            return;
+        }
+        self.edits.push(edit);
+    }
+
+    fn redo(&mut self) {
+        let Some(edit) = self.undone_edits.pop() else {
+            return;
+        };
+        self.edits.push(edit);
+        if !self.refresh_preview()
+            && let Some(edit) = self.edits.pop()
+        {
+            self.undone_edits.push(edit);
+        }
+    }
+
+    fn refresh_preview(&mut self) -> bool {
+        match render_edits(&self.original, &self.edits) {
+            Ok(image) => {
+                let (width, height) = image.size().into();
+                self.preview = Handle::from_rgba(width, height, image.into_rgba());
+                self.error = None;
+                true
+            }
+            Err(error) => {
+                self.error = Some(error);
+                false
             }
         }
     }
@@ -185,7 +224,7 @@ fn error_message(error: &dyn StdError) -> String {
 mod tests {
     use super::*;
     use crate::{annotation::AnnotationDraft, viewport::Viewport};
-    use claims::assert_some;
+    use claims::{assert_ok, assert_some};
     use iced::{Point, Rectangle};
 
     fn editor() -> Editor {
@@ -201,7 +240,7 @@ mod tests {
     }
 
     fn add_figure(tool: Tool, bounds: Rectangle) -> Message {
-        Message::AddAnnotation(AnnotationDraft {
+        Message::AddEdit(AnnotationDraft {
             tool,
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
@@ -212,7 +251,7 @@ mod tests {
         })
     }
 
-    fn assert_figures(figures: &[Annotation], expected: &[(Tool, Rectangle)]) {
+    fn assert_figures(figures: &[Edit], expected: &[(Tool, Rectangle)]) {
         let viewport = assert_some!(Viewport::new(
             Size::new(100.0, 100.0),
             Size::new(100.0, 100.0),
@@ -220,7 +259,8 @@ mod tests {
 
         let actual = figures
             .iter()
-            .map(|annotation| {
+            .map(|edit| {
+                let annotation = assert_some!(edit.annotation());
                 annotation
                     .figure
                     .path(viewport)
@@ -258,17 +298,17 @@ mod tests {
         }
 
         let _ = editor.update(Message::Undo);
-        assert_figures(&editor.annotations, &[first]);
+        assert_figures(&editor.edits, &[first]);
 
         let _ = editor.update(Message::Undo);
-        assert_figures(&editor.annotations, &[]);
+        assert_figures(&editor.edits, &[]);
 
         let _ = editor.update(Message::Redo);
-        assert_figures(&editor.annotations, &[first]);
+        assert_figures(&editor.edits, &[first]);
 
         let _ = editor.update(Message::Redo);
-        assert_figures(&editor.annotations, &[first, second]);
-        assert_figures(&editor.undone_annotations, &[]);
+        assert_figures(&editor.edits, &[first, second]);
+        assert_figures(&editor.undone_edits, &[]);
     }
 
     #[test]
@@ -286,8 +326,8 @@ mod tests {
         let _ = editor.update(add_figure(replacement.0, replacement.1));
         let _ = editor.update(Message::Redo);
 
-        assert_figures(&editor.annotations, &[first, replacement]);
-        assert_figures(&editor.undone_annotations, &[]);
+        assert_figures(&editor.edits, &[first, replacement]);
+        assert_figures(&editor.undone_edits, &[]);
     }
 
     #[test]
@@ -296,21 +336,21 @@ mod tests {
 
         let _ = editor.update(Message::Undo);
         let _ = editor.update(Message::Redo);
-        assert_figures(&editor.annotations, &[]);
-        assert_figures(&editor.undone_annotations, &[]);
+        assert_figures(&editor.edits, &[]);
+        assert_figures(&editor.undone_edits, &[]);
 
         let figure = (Tool::Rectangle, bounds(10.0));
         let _ = editor.update(add_figure(figure.0, figure.1));
 
         let _ = editor.update(Message::Undo);
         let _ = editor.update(Message::Undo);
-        assert_figures(&editor.annotations, &[]);
-        assert_figures(&editor.undone_annotations, &[figure]);
+        assert_figures(&editor.edits, &[]);
+        assert_figures(&editor.undone_edits, &[figure]);
 
         let _ = editor.update(Message::Redo);
         let _ = editor.update(Message::Redo);
-        assert_figures(&editor.annotations, &[figure]);
-        assert_figures(&editor.undone_annotations, &[]);
+        assert_figures(&editor.edits, &[figure]);
+        assert_figures(&editor.undone_edits, &[]);
     }
 
     #[test]
@@ -323,12 +363,12 @@ mod tests {
         let _ = editor.update(Message::SelectTool(Tool::Ellipse));
 
         assert_eq!(editor.tool, Tool::Ellipse);
-        assert_figures(&editor.annotations, &[]);
-        assert_figures(&editor.undone_annotations, &[figure]);
+        assert_figures(&editor.edits, &[]);
+        assert_figures(&editor.undone_edits, &[figure]);
 
         let _ = editor.update(Message::Redo);
-        assert_figures(&editor.annotations, &[figure]);
-        assert_figures(&editor.undone_annotations, &[]);
+        assert_figures(&editor.edits, &[figure]);
+        assert_figures(&editor.undone_edits, &[]);
     }
 
     #[test]
@@ -337,13 +377,13 @@ mod tests {
         let blue = Color::from_rgb8(64, 128, 255);
         let green = Color::from_rgb8(64, 200, 96);
 
-        let thin = Message::AddAnnotation(AnnotationDraft {
+        let thin = Message::AddEdit(AnnotationDraft {
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thin,
             stroke_color: DEFAULT_STROKE_COLOR,
             points: vec![Point::new(10.0, 10.0), Point::new(30.0, 10.0)],
         });
-        let thick = Message::AddAnnotation(AnnotationDraft {
+        let thick = Message::AddEdit(AnnotationDraft {
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thick,
             stroke_color: blue,
@@ -360,9 +400,12 @@ mod tests {
         let _ = editor.update(Message::Redo);
 
         let appearances = editor
-            .annotations
+            .edits
             .iter()
-            .map(|annotation| (annotation.stroke_width, annotation.stroke_color))
+            .map(|edit| {
+                let annotation = assert_some!(edit.annotation());
+                (annotation.stroke_width, annotation.stroke_color)
+            })
             .collect::<Vec<_>>();
 
         assert_eq!(
@@ -375,6 +418,41 @@ mod tests {
 
         assert_eq!(editor.stroke_width, StrokeWidth::Medium);
         assert_eq!(editor.stroke_color, green);
-        assert!(editor.undone_annotations.is_empty());
+        assert!(editor.undone_edits.is_empty());
+    }
+
+    #[test]
+    fn pixelation_history_restores_pixels_and_preserves_the_original() {
+        let pixels = (0..512)
+            .flat_map(|index| [u8::from(index % 2 == 0) * 255, 0, 0, 255])
+            .collect::<Vec<_>>();
+        let original = Handle::from_rgba(32, 16, pixels.clone());
+        let mut editor = Editor::new(original, Size::new(32.0, 16.0), Rc::new(|_, _| Ok(())));
+        let region = Rectangle::new(Point::ORIGIN, Size::new(16.0, 16.0));
+
+        let _ = editor.update(add_figure(Tool::Pixelate, region));
+        let pixelated = assert_ok!(editor.render_image());
+        assert_ne!(pixelated.rgba(), pixels);
+        assert_eq!(
+            assert_ok!(render_image(&editor.original, &[])).rgba(),
+            pixels
+        );
+
+        let _ = editor.update(Message::Undo);
+        assert_eq!(assert_ok!(editor.render_image()).rgba(), pixels);
+
+        let _ = editor.update(Message::Redo);
+        assert_eq!(assert_ok!(editor.render_image()).rgba(), pixelated.rgba());
+
+        let _ = editor.update(Message::Undo);
+        let invalid = Rectangle::new(Point::new(40.0, 0.0), Size::new(8.0, 8.0));
+        let _ = editor.update(add_figure(Tool::Pixelate, invalid));
+        assert!(editor.error.is_some());
+        assert!(editor.edits.is_empty());
+        assert_eq!(editor.undone_edits.len(), 1);
+        assert_eq!(assert_ok!(editor.render_image()).rgba(), pixels);
+
+        let _ = editor.update(Message::Redo);
+        assert_eq!(assert_ok!(editor.render_image()).rgba(), pixelated.rgba());
     }
 }

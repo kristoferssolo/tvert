@@ -2947,6 +2947,7 @@ dependencies = [
  "iced",
  "iced_aw",
  "lucide-icons",
+ "num-traits",
  "rstest",
  "strum",
  "thiserror 2.0.21",

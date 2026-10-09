@@ -1,10 +1,12 @@
 mod annotation;
 mod annotation_canvas;
+mod edit;
 mod editor;
 mod error;
 mod export;
 mod figure;
 mod message;
+mod pixelation;
 mod render;
 mod shortcuts;
 mod stroke_width;

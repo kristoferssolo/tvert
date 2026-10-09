@@ -26,7 +26,7 @@ const COLORS: &[Color] = &[
 const ICON_FONT: Font = Font::with_name("lucide");
 
 pub const HEIGHT: f32 = 44.0;
-pub const MIN_WIDTH: f32 = 640.0;
+pub const MIN_WIDTH: f32 = 680.0;
 
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
@@ -63,9 +63,14 @@ pub fn view(
             false,
         ))
         .push(separator())
-        .push(stroke_color_controls(stroke_color, color_pallete_open))
-        // .push(stroke_width_controls(stroke_width))
-        .extend((selected != Tool::Highlighter).then(|| stroke_width_controls(stroke_width)))
+        .extend(
+            (selected != Tool::Pixelate)
+                .then(|| stroke_color_controls(stroke_color, color_pallete_open)),
+        )
+        .extend(
+            (!matches!(selected, Tool::Highlighter | Tool::Pixelate))
+                .then(|| stroke_width_controls(stroke_width)),
+        )
         .push(icon_button(
             Icon::Copy,
             "Copy (Ctrl+C)".into(),

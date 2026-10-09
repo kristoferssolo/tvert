@@ -9,7 +9,7 @@ use iced::Point;
 use lucide_icons::Icon;
 use strum::{Display, VariantArray};
 
-/// The figure created by the next drag
+/// The edit created by the next drag
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Display, VariantArray)]
 pub enum Tool {
     Rectangle,
@@ -19,6 +19,7 @@ pub enum Tool {
     Arrow,
     Pencil,
     Highlighter,
+    Pixelate,
 }
 
 impl Tool {
@@ -45,6 +46,7 @@ impl Tool {
             Self::Arrow => Box::new(ArrowFigure::new(start, end)),
             Self::Pencil => Box::new(PencilFigure::new(points)),
             Self::Highlighter => Box::new(HighlighterFigure::from(rectangle_between(start, end)?)),
+            Self::Pixelate => return None,
         };
 
         Some(figure)
@@ -58,6 +60,7 @@ impl Tool {
             Self::Arrow => Icon::ArrowRight,
             Self::Pencil => Icon::Pencil,
             Self::Highlighter => Icon::Highlighter,
+            Self::Pixelate => Icon::Grid2x2,
         }
     }
 }

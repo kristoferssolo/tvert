@@ -1,10 +1,6 @@
 use crate::{
-    annotation::{Annotation, AnnotationDraft},
-    message::Message,
-    shortcuts,
-    stroke_width::StrokeWidth,
-    tool::Tool,
-    viewport::Viewport,
+    annotation::AnnotationDraft, edit::Edit, message::Message, shortcuts,
+    stroke_width::StrokeWidth, tool::Tool, viewport::Viewport,
 };
 use iced::{
     Color, Event, Point, Rectangle, Renderer, Size, Theme,
@@ -28,7 +24,6 @@ pub struct AnnotationCanvas<'a> {
     pub tool: Tool,
     pub stroke_width: StrokeWidth,
     pub stroke_color: Color,
-    pub annotations: &'a [Annotation],
     pub cache: &'a Cache,
 }
 
@@ -82,7 +77,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         &self,
         state: &Self::State,
         renderer: &Renderer,
-        _theme: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         _cursor: Cursor,
     ) -> Vec<iced::widget::canvas::Geometry<Renderer>> {
@@ -93,14 +88,10 @@ impl Program<Message> for AnnotationCanvas<'_> {
         let geometry = self
             .cache
             .draw_with_bounds(renderer, viewport.bounds, |frame| {
-                for annotation in self.annotations {
-                    annotation.draw(frame, viewport);
-                }
-
                 if let Some(draft) = state
-                    && let Ok(annotation) = Annotation::try_from(draft.clone())
+                    && let Ok(edit) = Edit::try_from(draft.clone())
                 {
-                    annotation.draw(frame, viewport);
+                    edit.draw_draft(frame, viewport, theme.palette().primary);
                 }
             });
 
@@ -140,7 +131,7 @@ impl AnnotationCanvas<'_> {
         if draft.is_empty() {
             return Action::request_redraw().and_capture();
         }
-        Action::publish(Message::AddAnnotation(draft)).and_capture()
+        Action::publish(Message::AddEdit(draft)).and_capture()
     }
 
     fn handle_canel(&self, state: &mut DraftState, event: &Event) -> Option<Action<Message>> {
@@ -201,7 +192,6 @@ mod tests {
             tool,
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
-            annotations: &[],
             cache,
         }
     }
@@ -253,7 +243,7 @@ mod tests {
     }
 
     fn expected_annotation(tool: Tool, points: Vec<Point>) -> Message {
-        Message::AddAnnotation(AnnotationDraft {
+        Message::AddEdit(AnnotationDraft {
             tool,
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
@@ -402,7 +392,7 @@ mod tests {
         let message = dispatch_canvas(&canvas, &mut draft, &RELEASE, Some(END));
         assert_some_eq!(
             message,
-            Message::AddAnnotation(AnnotationDraft {
+            Message::AddEdit(AnnotationDraft {
                 tool,
                 stroke_width: width,
                 stroke_color: color,
@@ -426,7 +416,7 @@ mod tests {
         ));
         let message = dispatch_with_tool(&mut draft, &RELEASE, Some(release), Tool::Line);
         let points = assert_some!(message.and_then(|message| match message {
-            Message::AddAnnotation(AnnotationDraft {
+            Message::AddEdit(AnnotationDraft {
                 tool: Tool::Line,
                 points,
                 ..

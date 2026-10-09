@@ -5,7 +5,7 @@ use iced::Color;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
-    AddAnnotation(AnnotationDraft),
+    AddEdit(AnnotationDraft),
     SelectTool(Tool),
     SelectStrokeWidth(StrokeWidth),
     SelectStrokeColor(Color),

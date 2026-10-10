@@ -9,23 +9,10 @@ use iced::{
 };
 use tvert_image::{CapturedImage, Error as ImageError, PixelSize};
 
-/// Renders drawings over decoded image pixels at their original size.
-///
-/// Pixels outside the drawings retain their original straight RGBA values.
-///
-/// # Errors
-///
-/// Returns an error for an unsupported preview handle, invalid image storage,
-/// an invalid viewport, or an allocation or compositing failure.
 pub fn render_image(preview: &Handle, annotations: &[Annotation]) -> Result<CapturedImage, Error> {
     draw_annotations(image_from_handle(preview)?, annotations.iter())
 }
 
-/// Replays drawings and pixel effects in their original history order.
-///
-/// # Errors
-///
-/// Returns an error if preparing, rendering, or applying an edit fails.
 pub fn render_edits(preview: &Handle, edits: &[Edit]) -> Result<CapturedImage, Error> {
     let mut image = image_from_handle(preview)?;
     let mut remaining = edits;
@@ -63,21 +50,7 @@ fn image_from_handle(preview: &Handle) -> Result<CapturedImage, Error> {
     };
 
     let size = PixelSize::try_from((*width, *height))?;
-    let expected = size.rgba_len()?;
-
-    if pixels.len() != expected {
-        return Err(ImageError::InvalidPixelLength {
-            expected,
-            actual: pixels.len(),
-        }
-        .into());
-    }
-
-    let mut rgba = Vec::new();
-    rgba.try_reserve_exact(expected).map_err(ImageError::from)?;
-    rgba.extend_from_slice(pixels);
-
-    Ok(CapturedImage::new(size, rgba)?)
+    Ok(CapturedImage::try_from((size, pixels.as_ref()))?)
 }
 
 fn draw_annotations<'a>(
@@ -103,14 +76,7 @@ fn draw_annotations<'a>(
     rendered.draw_geometry(frame.into_geometry());
 
     let overlay = rendered.screenshot(Size::new(width, height), 1.0, Color::TRANSPARENT);
-    let expected = size.rgba_len()?;
-    if overlay.len() != expected {
-        return Err(ImageError::InvalidPixelLength {
-            expected,
-            actual: overlay.len(),
-        }
-        .into());
-    }
+    size.validate_rbga(&overlay)?;
 
     let mut rgba = image.into_rgba();
 
@@ -203,7 +169,7 @@ mod tests {
     }
 
     fn pixel(image: &CapturedImage, x: usize, y: usize) -> [u8; 4] {
-        let width = assert_ok!(usize::try_from(image.size().width().get()));
+        let (width, _): (usize, usize) = assert_ok!(image.size().try_into());
         let position = assert_some!(y.checked_mul(width).and_then(|row| row.checked_add(x)));
         *assert_some!(image.rgba().as_chunks::<4>().0.get(position))
     }

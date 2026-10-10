@@ -34,12 +34,9 @@ impl PixelSize {
     /// Returns [`Error::SizeOverflow`] if the dimensions or byte
     /// length cannot be represented by this process.
     pub fn rgba_len(self) -> Result<usize, Error> {
-        let width = usize::try_from(self.width.get()).map_err(|_| Error::SizeOverflow)?;
-        let height = usize::try_from(self.height.get()).map_err(|_| Error::SizeOverflow)?;
-
-        width
+        let (_, height) = self.try_into()?;
+        self.row_byes()?
             .checked_mul(height)
-            .and_then(|pixels| pixels.checked_mul(4))
             .ok_or(Error::SizeOverflow)
     }
 
@@ -58,6 +55,33 @@ impl PixelSize {
             | ImageTransform::Flipped
             | ImageTransform::Flipped180 => self,
         }
+    }
+
+    /// Returns the byte length of one tightly packed RGBA8 row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::SizeOverflow`] if the row length cannot be represented.
+    pub fn row_byes(self) -> Result<usize, Error> {
+        let (width, _): (usize, usize) = self.try_into()?;
+        width.checked_mul(4).ok_or(Error::SizeOverflow)
+    }
+
+    /// Validates the storage length of a tightly packed RGBA8 buffer.
+    ///
+    /// This checks layout only, regardless of how alpha is represented.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::SizeOverflow`] if the expected length cannot be
+    /// represented, or [`Error::InvalidPixelLength`] if the lengths differ.
+    pub fn validate_rbga(self, rgba: &[u8]) -> Result<(), Error> {
+        let expected = self.rgba_len()?;
+        let actual = rgba.len();
+        if actual != expected {
+            return Err(Error::InvalidPixelLength { expected, actual });
+        }
+        Ok(())
     }
 }
 

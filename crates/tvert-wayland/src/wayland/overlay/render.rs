@@ -32,10 +32,10 @@ pub fn selection_outline(
     transform: Transform,
 ) -> Result<CapturedImage, Error> {
     let outline = Outline::new(rectangle, surface_size, image.size(), transform)?;
-    let row_bytes = usize::try_from(image.size().width().get())
-        .ok()
-        .and_then(|width| width.checked_mul(4))
-        .ok_or(Error::InvalidShmLayout)?;
+    let row_bytes = image
+        .size()
+        .row_byes()
+        .map_err(|_| Error::InvalidShmLayout)?;
 
     let mut rgba = Vec::new();
     rgba.try_reserve_exact(image.rgba().len())?;

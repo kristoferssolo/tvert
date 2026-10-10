@@ -41,16 +41,13 @@ impl CapturedImage {
         }
 
         let source_size = self.size();
-        let width = usize::try_from(source_size.width().get()).map_err(|_| Error::SizeOverflow)?;
-        let height =
-            usize::try_from(source_size.height().get()).map_err(|_| Error::SizeOverflow)?;
+        let (width, height): (usize, usize) = source_size.try_into()?;
         let last_x = width.checked_sub(1).ok_or(Error::SizeOverflow)?;
         let last_y = height.checked_sub(1).ok_or(Error::SizeOverflow)?;
-        let row_bytes = width.checked_mul(4).ok_or(Error::SizeOverflow)?;
+        let row_bytes = source_size.row_byes()?;
 
         let destination_size = source_size.transformed(transform);
-        let destination_width =
-            usize::try_from(destination_size.width().get()).map_err(|_| Error::SizeOverflow)?;
+        let (destination_width, _) = destination_size.try_into()?;
         let byte_len = destination_size.rgba_len()?;
         let mut rgba = Vec::new();
         rgba.try_reserve_exact(byte_len)?;

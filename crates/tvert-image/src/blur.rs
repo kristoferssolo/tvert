@@ -1,4 +1,8 @@
-use crate::{Error, PixelSize};
+use crate::{
+    Error, PixelSize,
+    color::{average_color, weighted_channels},
+    region::RgbaRegion,
+};
 use std::{num::NonZeroU32, ops::Range};
 
 pub fn blur(
@@ -8,69 +12,46 @@ pub fn blur(
     y: Range<usize>,
     radius: NonZeroU32,
 ) -> Result<(), Error> {
-    let (width, height) = size.try_into()?;
-    if x.is_empty() || y.is_empty() || x.end > width || y.end > height {
-        return Err(Error::InvalidBlurBounds);
-    }
+    let region = RgbaRegion::new(size, x, y)?.ok_or(Error::InvalidBlurBounds)?;
+    let (width, height) = region.size().try_into()?;
 
-    let row_bytes = width.checked_mul(4).ok_or(Error::SizeOverflow)?;
-    let start = x.start.checked_mul(4).ok_or(Error::SizeOverflow)?;
-    let end = x.end.checked_mul(4).ok_or(Error::SizeOverflow)?;
     let radius = usize::try_from(radius.get()).map_err(|_| Error::SizeOverflow)?;
-    let horizontal = horizontal_sums(rgba, row_bytes, start..end, y.clone(), radius)?;
-    let count = x.len().checked_mul(y.len()).ok_or(Error::SizeOverflow)?;
+    let horizontal = horizontal_sums(rgba, &region, radius)?;
 
     let mut output = Vec::new();
-    let len = count.checked_mul(4).ok_or(Error::SizeOverflow)?;
+    let len = region.size().rgba_len()?;
+
     output.try_reserve_exact(len)?;
     output.resize(len, 0);
-    blur_columns(&horizontal, &mut output, x.len(), y.len(), radius)?;
 
-    let output_row_bytes = x.len().checked_mul(4).ok_or(Error::SizeOverflow)?;
-    for (row, blurred) in rgba
-        .chunks_exact_mut(row_bytes)
-        .skip(y.start)
-        .zip(output.chunks_exact(output_row_bytes))
+    blur_columns(&horizontal, &mut output, width, height, radius)?;
+
+    for (row, blurred) in region
+        .rows_mut(rgba)
+        .zip(output.chunks_exact(region.size().row_byes()?))
     {
-        row.get_mut(start..end)
-            .ok_or(Error::SizeOverflow)?
-            .copy_from_slice(blurred);
+        row?.copy_from_slice(blurred);
     }
     Ok(())
 }
 
 fn horizontal_sums(
     rgba: &[u8],
-    row_bytes: usize,
-    columns: Range<usize>,
-    rows: Range<usize>,
+    region: &RgbaRegion,
     radius: usize,
 ) -> Result<Vec<[u64; 4]>, Error> {
-    let width = columns.len() / 4;
-    let count = width.checked_mul(rows.len()).ok_or(Error::SizeOverflow)?;
+    let (width, height): (usize, usize) = region.size().try_into()?;
+    let count = width.checked_mul(height).ok_or(Error::SizeOverflow)?;
+
     let mut horizontal = Vec::new();
     horizontal.try_reserve_exact(count)?;
 
-    for row in rgba
-        .chunks_exact(row_bytes)
-        .skip(rows.start)
-        .take(rows.len())
-    {
-        let selected = row.get(columns.clone()).ok_or(Error::SizeOverflow)?;
-        let pixels = selected.as_chunks::<4>().0;
+    for row in region.rows(rgba) {
+        let pixels = row?.as_chunks::<4>().0;
         blur_line(
             width,
             radius,
-            |column| {
-                let &[red, green, blue, alpha] = pixels.get(column).ok_or(Error::SizeOverflow)?;
-                let alpha = u64::from(alpha);
-                Ok([
-                    foo(red, alpha)?,
-                    foo(green, alpha)?,
-                    foo(blue, alpha)?,
-                    alpha,
-                ])
-            },
+            |column| weighted_channels(*pixels.get(column).ok_or(Error::SizeOverflow)?),
             |_, sums, _| {
                 let mut channels = [0; 4];
                 for (channel, sum) in channels.iter_mut().zip(sums) {
@@ -83,12 +64,6 @@ fn horizontal_sums(
     }
 
     Ok(horizontal)
-}
-
-fn foo(color: u8, alpha: u64) -> Result<u64, Error> {
-    u64::from(color)
-        .checked_mul(alpha)
-        .ok_or(Error::SizeOverflow)
 }
 
 fn blur_columns(
@@ -118,7 +93,7 @@ fn blur_columns(
                     .0
                     .get_mut(index)
                     .ok_or(Error::SizeOverflow)?;
-                *pixel = average(sums, count)?;
+                *pixel = average_color(sums, count)?;
                 Ok(())
             },
         )?;
@@ -166,23 +141,6 @@ fn blur_line(
         output(center, sums, bounds.len())?;
     }
     Ok(())
-}
-
-fn average([red, green, blue, alpha]: [u128; 4], count: u128) -> Result<[u8; 4], Error> {
-    if alpha == 0 {
-        return Ok([0; 4]);
-    }
-
-    let mut color = [0; 4];
-    for (channel, (sum, divisor)) in
-        color
-            .iter_mut()
-            .zip([(red, alpha), (green, alpha), (blue, alpha), (alpha, count)])
-    {
-        let value = sum.checked_div(divisor).ok_or(Error::SizeOverflow)?;
-        *channel = u8::try_from(value).map_err(|_| Error::SizeOverflow)?;
-    }
-    Ok(color)
 }
 
 #[cfg(test)]

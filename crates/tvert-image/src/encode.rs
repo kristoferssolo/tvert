@@ -14,9 +14,9 @@ use std::io::Write;
 ///
 /// Returns [`Error::PngEncoding`] if encoding or writing fails.
 pub fn write_png(output: impl Write, image: &CapturedImage) -> Result<(), Error> {
-    let size = image.size();
+    let (width, height) = image.size().into();
 
-    let mut encoder = Encoder::new(output, size.width().get(), size.height().get());
+    let mut encoder = Encoder::new(output, width, height);
     encoder.set_color(ColorType::Rgba);
     encoder.set_depth(BitDepth::Eight);
 

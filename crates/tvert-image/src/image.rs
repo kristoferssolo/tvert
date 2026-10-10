@@ -1,4 +1,4 @@
-use crate::{Error, PixelSize, blur::blur, pixelate::pixelate};
+use crate::{Error, PixelSize, blur::blur, pixelate::pixelate, region::RgbaRegion};
 use std::{num::NonZeroU32, ops::Range};
 
 /// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
@@ -21,12 +21,7 @@ impl CapturedImage {
     /// cannot be represented, or [`Error::InvalidPixelLength`] if the
     /// supplied storage length does not match.
     pub fn new(size: PixelSize, rgba: Vec<u8>) -> Result<Self, Error> {
-        let expected = size.rgba_len()?;
-        let actual = rgba.len();
-
-        if actual != expected {
-            return Err(Error::InvalidPixelLength { expected, actual });
-        }
+        size.validate_rbga(&rgba)?;
         Ok(Self { size, rgba })
     }
 
@@ -59,37 +54,14 @@ impl CapturedImage {
     /// ranges, [`Error::SizeOverflow`] if dimensions or offsets cannot be
     /// represented, or [`Error::Allocation`] if allocating the result fails.
     pub fn crop(&self, x: Range<usize>, y: Range<usize>) -> Result<Self, Error> {
-        let source_width =
-            usize::try_from(self.size.width().get()).map_err(|_| Error::SizeOverflow)?;
-        let source_height =
-            usize::try_from(self.size.height().get()).map_err(|_| Error::SizeOverflow)?;
-
-        if x.is_empty() || y.is_empty() || x.end > source_width || y.end > source_height {
-            return Err(Error::InvalidCropBounds);
-        }
-
-        let width = u32::try_from(x.len()).map_err(|_| Error::SizeOverflow)?;
-        let height = u32::try_from(y.len()).map_err(|_| Error::SizeOverflow)?;
-        let size = PixelSize::try_from((width, height))?;
-
-        let row_bytes = source_width.checked_mul(4).ok_or(Error::SizeOverflow)?;
-        let start = x.start.checked_mul(4).ok_or(Error::SizeOverflow)?;
-        let end = x.end.checked_mul(4).ok_or(Error::SizeOverflow)?;
-
+        let region = RgbaRegion::new(self.size, x, y)?.ok_or(Error::InvalidCropBounds)?;
         let mut rgba = Vec::new();
-        rgba.try_reserve_exact(size.rgba_len()?)?;
-
-        for row in self
-            .rgba
-            .chunks_exact(row_bytes)
-            .skip(y.start)
-            .take(y.len())
-        {
-            let selected = row.get(start..end).ok_or(Error::InvalidCropBounds)?;
-            rgba.extend_from_slice(selected);
+        rgba.try_reserve_exact(region.size().rgba_len()?)?;
+        for row in region.rows(&self.rgba) {
+            rgba.extend_from_slice(row?);
         }
 
-        Self::new(size, rgba)
+        Self::new(region.size(), rgba)
     }
 
     /// Pixelates a region in place using square blocks of captured-image pixels.
@@ -132,6 +104,18 @@ impl CapturedImage {
         radius: NonZeroU32,
     ) -> Result<(), Error> {
         blur(&mut self.rgba, self.size, x, y, radius)
+    }
+}
+
+impl TryFrom<(PixelSize, &[u8])> for CapturedImage {
+    type Error = Error;
+
+    fn try_from((size, rgba): (PixelSize, &[u8])) -> Result<Self, Self::Error> {
+        size.validate_rbga(rgba)?;
+        let mut copy = Vec::new();
+        copy.try_reserve_exact(rgba.len())?;
+        copy.extend_from_slice(rgba);
+        Ok(Self { size, rgba: copy })
     }
 }
 

@@ -1,4 +1,7 @@
-use crate::{figure::Figure, stroke_width::StrokeWidth, tool::Tool, viewport::Viewport};
+use crate::{
+    block_size::BlockSize, figure::Figure, stroke_width::StrokeWidth, tool::Tool,
+    viewport::Viewport,
+};
 use iced::{
     Color, Point,
     widget::canvas::{Frame, Stroke},
@@ -15,6 +18,7 @@ pub struct AnnotationDraft {
     pub tool: Tool,
     pub stroke_width: StrokeWidth,
     pub stroke_color: Color,
+    pub block_size: BlockSize,
     pub points: Vec<Point>,
 }
 
@@ -37,6 +41,7 @@ impl AnnotationDraft {
             tool,
             stroke_width,
             stroke_color,
+            block_size: BlockSize::default(),
             points: vec![start],
         }
     }
@@ -108,6 +113,7 @@ mod tests {
             tool,
             stroke_width: StrokeWidth::Medium,
             stroke_color: DEFAULT_STROKE_COLOR,
+            block_size: BlockSize::default(),
             points: vec![start, end]
         }));
 

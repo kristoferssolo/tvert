@@ -186,7 +186,9 @@ fn composite(background: &mut [u8; 4], foreground: [u8; 4]) -> Result<(), ImageE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{annotation::AnnotationDraft, stroke_width::StrokeWidth, tool::Tool};
+    use crate::{
+        annotation::AnnotationDraft, block_size::BlockSize, stroke_width::StrokeWidth, tool::Tool,
+    };
     use claims::{assert_ok, assert_some};
     use iced::Point;
 
@@ -195,6 +197,7 @@ mod tests {
             tool: Tool::Line,
             stroke_width: width,
             stroke_color: color,
+            block_size: BlockSize::default(),
             points: vec![start, end,]
         }))
     }
@@ -267,6 +270,7 @@ mod tests {
             tool: Tool::Pencil,
             stroke_width: StrokeWidth::Medium,
             stroke_color: Color::from_rgb8(255, 0, 0),
+            block_size: BlockSize::default(),
             points: vec![
                 Point::new(4.0, 4.0),
                 Point::new(24.0, 4.0),
@@ -290,6 +294,7 @@ mod tests {
             tool: Tool::Highlighter,
             stroke_width: StrokeWidth::Medium,
             stroke_color: Color::from_rgb8(255, 255, 0),
+            block_size: BlockSize::default(),
             points: vec![Point::new(24.0, 24.0), Point::new(4.0, 4.0)],
         }));
 
@@ -313,6 +318,7 @@ mod tests {
                 tool: Tool::Pixelate,
                 stroke_width: StrokeWidth::Medium,
                 stroke_color: Color::BLACK,
+                block_size: BlockSize::default(),
                 points: vec![Point::new(16.0, 16.0), Point::ORIGIN],
             })),
         ];

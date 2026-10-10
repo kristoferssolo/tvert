@@ -1,5 +1,6 @@
 mod annotation;
 mod annotation_canvas;
+mod block_size;
 mod edit;
 mod editor;
 mod error;

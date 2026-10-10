@@ -1,3 +1,6 @@
+use std::fmt::Display;
+
+use crate::block_size::BlockSize;
 use crate::{
     ExportAction, annotation::DEFAULT_STROKE_COLOR, message::Message, stroke_width::StrokeWidth,
     tool::Tool,
@@ -33,6 +36,7 @@ pub fn view(
     selected: Tool,
     stroke_width: StrokeWidth,
     stroke_color: Color,
+    block_size: BlockSize,
     color_pallete_open: bool,
     can_undo: bool,
     can_redo: bool,
@@ -67,10 +71,19 @@ pub fn view(
             (selected != Tool::Pixelate)
                 .then(|| stroke_color_controls(stroke_color, color_pallete_open)),
         )
-        .extend(
-            (!matches!(selected, Tool::Highlighter | Tool::Pixelate))
-                .then(|| stroke_width_controls(stroke_width)),
-        )
+        .extend(match selected {
+            Tool::Pixelate => Some(size_controls(
+                BlockSize::VARIANTS,
+                block_size,
+                Message::SelectBlockSize,
+            )),
+            Tool::Highlighter => None,
+            _ => Some(size_controls(
+                StrokeWidth::VARIANTS,
+                stroke_width,
+                Message::SelectStrokeWidth,
+            )),
+        })
         .push(icon_button(
             Icon::Copy,
             "Copy (Ctrl+C)".into(),
@@ -97,25 +110,28 @@ pub fn view(
         .into()
 }
 
-fn stroke_width_controls(selected: StrokeWidth) -> Element<'static, Message> {
-    pick_list(
-        StrokeWidth::VARIANTS,
-        Some(selected),
-        Message::SelectStrokeWidth,
-    )
-    .width(76)
-    .text_size(14)
-    .text_line_height(Pixels(18.0))
-    .handle(pick_list::Handle::Static(pick_list::Icon {
-        font: ICON_FONT,
-        code_point: char::from(Icon::ChevronDown),
-        size: Some(Pixels(14.0)),
-        line_height: LineHeight::default(),
-        shaping: Shaping::default(),
-    }))
-    .padding([9, 10])
-    .style(stroke_width_style)
-    .into()
+fn size_controls<T>(
+    options: &'static [T],
+    selected: T,
+    on_select: fn(T) -> Message,
+) -> Element<'static, Message>
+where
+    T: Copy + Display + PartialEq + 'static,
+{
+    pick_list(options, Some(selected), on_select)
+        .width(76)
+        .text_size(14)
+        .text_line_height(Pixels(18.0))
+        .handle(pick_list::Handle::Static(pick_list::Icon {
+            font: ICON_FONT,
+            code_point: char::from(Icon::ChevronDown),
+            size: Some(Pixels(14.0)),
+            line_height: LineHeight::default(),
+            shaping: Shaping::default(),
+        }))
+        .padding([9, 10])
+        .style(stroke_width_style)
+        .into()
 }
 
 fn stroke_color_controls(selected: Color, open: bool) -> Element<'static, Message> {

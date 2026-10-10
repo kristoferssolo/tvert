@@ -90,7 +90,7 @@ impl TryFrom<&AnnotationDraft> for Pixelation {
 
         Ok(Self {
             bounds: rectangle_between(start, end).ok_or(InvalidAnnotation)?,
-            block_size: NonZeroU32::new(16).ok_or(InvalidAnnotation)?,
+            block_size: NonZeroU32::new(draft.block_size.pixels()).ok_or(InvalidAnnotation)?,
         })
     }
 }
@@ -98,9 +98,12 @@ impl TryFrom<&AnnotationDraft> for Pixelation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{annotation::AnnotationDraft, stroke_width::StrokeWidth, tool::Tool};
+    use crate::{
+        annotation::AnnotationDraft, block_size::BlockSize, stroke_width::StrokeWidth, tool::Tool,
+    };
     use claims::assert_ok;
     use iced::Point;
+    use rstest::rstest;
     use tvert_image::PixelSize;
 
     #[test]
@@ -109,6 +112,7 @@ mod tests {
             tool: Tool::Pixelate,
             stroke_width: StrokeWidth::Medium,
             stroke_color: Color::BLACK,
+            block_size: BlockSize::default(),
             points: vec![Point::new(5.0, 2.0), Point::new(1.8, 0.2)],
         }));
         let size = assert_ok!(PixelSize::try_from((4, 1)));
@@ -123,5 +127,37 @@ mod tests {
             image.rgba(),
             [0, 0, 0, 255, 60, 0, 0, 255, 60, 0, 0, 255, 60, 0, 0, 255]
         );
+    }
+
+    #[rstest]
+    #[case(BlockSize::Small, [3, 11, 19, 27])]
+    #[case(BlockSize::Medium, [7, 7, 23, 23])]
+    #[case(BlockSize::Large, [15, 15, 15, 15])]
+    fn applies_the_block_size_retained_by_the_draft(
+        #[case] block_size: BlockSize,
+        #[case] expected: [u8; 4],
+    ) {
+        let effect = assert_ok!(Pixelation::try_from(&AnnotationDraft {
+            tool: Tool::Pixelate,
+            stroke_width: StrokeWidth::Medium,
+            stroke_color: Color::BLACK,
+            block_size,
+            points: vec![Point::ORIGIN, Point::new(32.0, 1.0)],
+        }));
+        let size = assert_ok!(PixelSize::try_from((32, 1)));
+        let rgba = (0..32).flat_map(|red| [red, 0, 0, 255]).collect();
+        let mut image = assert_ok!(CapturedImage::new(size, rgba));
+
+        assert_ok!(effect.apply(&mut image));
+
+        let actual = image
+            .rgba()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .step_by(8)
+            .map(|&[red, _, _, _]| red)
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
     }
 }

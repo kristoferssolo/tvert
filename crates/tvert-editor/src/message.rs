@@ -1,5 +1,6 @@
 use crate::{
-    annotation::AnnotationDraft, export::ExportAction, stroke_width::StrokeWidth, tool::Tool,
+    annotation::AnnotationDraft, block_size::BlockSize, export::ExportAction,
+    stroke_width::StrokeWidth, tool::Tool,
 };
 use iced::Color;
 
@@ -14,4 +15,5 @@ pub enum Message {
     Undo,
     Redo,
     Export(ExportAction),
+    SelectBlockSize(BlockSize),
 }

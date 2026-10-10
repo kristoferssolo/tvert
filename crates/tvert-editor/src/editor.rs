@@ -2,6 +2,7 @@ use crate::{
     Error,
     annotation::DEFAULT_STROKE_COLOR,
     annotation_canvas::AnnotationCanvas,
+    block_size::BlockSize,
     edit::Edit,
     export::ExportAction,
     message::Message,
@@ -34,6 +35,7 @@ pub struct Editor {
     undone_edits: Vec<Edit>,
     cache: Cache,
     color_pallete_open: bool,
+    block_size: BlockSize,
 }
 
 impl Editor {
@@ -51,6 +53,7 @@ impl Editor {
             undone_edits: Vec::new(),
             cache: Cache::new(),
             color_pallete_open: false,
+            block_size: BlockSize::default(),
         }
     }
 
@@ -87,6 +90,10 @@ impl Editor {
             Message::Undo => self.undo(),
             Message::Redo => self.redo(),
             Message::Export(action) => return self.export(action),
+            Message::SelectBlockSize(block_size) => {
+                self.block_size = block_size;
+                return Task::none();
+            }
         }
         self.cache.clear();
         Task::none()
@@ -103,6 +110,7 @@ impl Editor {
             tool: self.tool,
             stroke_width: self.stroke_width,
             stroke_color: self.stroke_color,
+            block_size: self.block_size,
             cache: &self.cache,
         })
         .width(Fill)
@@ -120,6 +128,7 @@ impl Editor {
                 self.tool,
                 self.stroke_width,
                 self.stroke_color,
+                self.block_size,
                 self.color_pallete_open,
                 !self.edits.is_empty(),
                 !self.undone_edits.is_empty()
@@ -244,6 +253,7 @@ mod tests {
             tool,
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
+            block_size: BlockSize::default(),
             points: vec![
                 bounds.position(),
                 Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
@@ -381,12 +391,14 @@ mod tests {
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thin,
             stroke_color: DEFAULT_STROKE_COLOR,
+            block_size: BlockSize::default(),
             points: vec![Point::new(10.0, 10.0), Point::new(30.0, 10.0)],
         });
         let thick = Message::AddEdit(AnnotationDraft {
             tool: Tool::Line,
             stroke_width: StrokeWidth::Thick,
             stroke_color: blue,
+            block_size: BlockSize::default(),
             points: vec![Point::new(10.0, 10.0), Point::new(30.0, 10.0)],
         });
 

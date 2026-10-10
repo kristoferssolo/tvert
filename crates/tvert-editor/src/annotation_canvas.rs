@@ -1,5 +1,5 @@
 use crate::{
-    annotation::AnnotationDraft, edit::Edit, message::Message, shortcuts,
+    annotation::AnnotationDraft, block_size::BlockSize, edit::Edit, message::Message, shortcuts,
     stroke_width::StrokeWidth, tool::Tool, viewport::Viewport,
 };
 use iced::{
@@ -23,6 +23,7 @@ pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
     pub tool: Tool,
     pub stroke_width: StrokeWidth,
+    pub block_size: BlockSize,
     pub stroke_color: Color,
     pub cache: &'a Cache,
 }
@@ -123,7 +124,10 @@ impl AnnotationCanvas<'_> {
     }
 
     fn new_draft(&self, start: Point) -> AnnotationDraft {
-        AnnotationDraft::new(self.tool, self.stroke_width, self.stroke_color, start)
+        let mut draft =
+            AnnotationDraft::new(self.tool, self.stroke_width, self.stroke_color, start);
+        draft.block_size = self.block_size;
+        draft
     }
 
     fn finish_draft(&self, draft: AnnotationDraft) -> Action<Message> {
@@ -192,6 +196,7 @@ mod tests {
             tool,
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
+            block_size: BlockSize::default(),
             cache,
         }
     }
@@ -247,6 +252,7 @@ mod tests {
             tool,
             stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
+            block_size: BlockSize::default(),
             points,
         })
     }
@@ -367,6 +373,7 @@ mod tests {
     #[case(Tool::Ellipse, StrokeWidth::Medium, DEFAULT_STROKE_COLOR)]
     #[case(Tool::Rectangle, StrokeWidth::Thin, DEFAULT_STROKE_COLOR)]
     #[case(Tool::Rectangle, StrokeWidth::Medium, Color::BLACK)]
+    #[case(Tool::Pixelate, StrokeWidth::Medium, Color::BLACK)]
     fn retains_the_appearance_selected_when_the_drag_started(
         #[case] tool: Tool,
         #[case] width: StrokeWidth,
@@ -377,7 +384,9 @@ mod tests {
         canvas.stroke_width = width;
         canvas.stroke_color = color;
         let mut draft = None;
+        canvas.block_size = BlockSize::Small;
         assert_none!(dispatch_canvas(&canvas, &mut draft, &PRESS, Some(START)));
+        canvas.block_size = BlockSize::Large;
 
         canvas.tool = Tool::Arrow;
         canvas.stroke_width = StrokeWidth::Thick;
@@ -396,6 +405,7 @@ mod tests {
                 tool,
                 stroke_width: width,
                 stroke_color: color,
+                block_size: BlockSize::Small,
                 points: vec![Point::new(50.0, 25.0), Point::new(150.0, 75.0)],
             })
         );

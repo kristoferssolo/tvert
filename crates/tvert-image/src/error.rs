@@ -34,4 +34,8 @@ pub enum Error {
     /// The blur region is empty, reversed, or outside the image
     #[error("blur bounds must describe a nonempty region inside the image")]
     InvalidBlurBounds,
+
+    /// Gaussian sigma is not a positive normal floating-point value
+    #[error("blur sigma must be positive, finite, and not subnormal")]
+    InvalidBlurSigma,
 }

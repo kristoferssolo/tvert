@@ -8,7 +8,7 @@ pub enum Message {
     SelectStrokeColor(Color),
     SelectStrokeWidth(u16),
     SelectBlockSize(u16),
-    SelectBlurRadius(u16),
+    SelectBlurSigma(u16),
     ToggleColorPallete,
     CloseColorPallete,
     Undo,

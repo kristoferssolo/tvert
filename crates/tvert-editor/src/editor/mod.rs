@@ -10,7 +10,7 @@ use crate::{
     export::ExportAction,
     render::{render_edits, render_image},
     style::{
-        BLOCK_SIZE_RANGE, BLUR_RADIUS_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_RADIUS,
+        BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_SIGMA,
         DEFAULT_STROKE_COLOR, DEFAULT_STROKE_WIDTH, STROKE_WIDTH_RANGE,
     },
     tool::Tool,
@@ -33,7 +33,7 @@ pub struct Editor {
     stroke_color: Color,
     stroke_width: u16,
     block_size: u16,
-    blur_radius: u16,
+    blur_sigma: u16,
     export: ExportHandler,
     error: Option<Error>,
     edits: Vec<Edit>,
@@ -52,7 +52,7 @@ impl Editor {
             stroke_color: DEFAULT_STROKE_COLOR,
             stroke_width: DEFAULT_STROKE_WIDTH,
             block_size: DEFAULT_BLOCK_SIZE,
-            blur_radius: DEFAULT_BLUR_RADIUS,
+            blur_sigma: DEFAULT_BLUR_SIGMA,
             export,
             error: None,
             edits: Vec::new(),
@@ -90,9 +90,8 @@ impl Editor {
                     block_size.clamp(*BLOCK_SIZE_RANGE.start(), *BLOCK_SIZE_RANGE.end());
                 return Task::none();
             }
-            Message::SelectBlurRadius(radius) => {
-                self.blur_radius =
-                    radius.clamp(*BLUR_RADIUS_RANGE.start(), *BLUR_RADIUS_RANGE.end());
+            Message::SelectBlurSigma(sigma) => {
+                self.blur_sigma = sigma.clamp(*BLUR_SIGMA_RANGE.start(), *BLUR_SIGMA_RANGE.end());
                 return Task::none();
             }
             Message::ToggleColorPallete => {
@@ -186,7 +185,7 @@ impl Editor {
     const fn selected_size(&self) -> u16 {
         match self.tool {
             Tool::Pixelate => self.block_size,
-            Tool::Blur => self.blur_radius,
+            Tool::Blur => self.blur_sigma,
             _ => self.stroke_width,
         }
     }
@@ -217,7 +216,7 @@ mod tests {
             stroke_color: DEFAULT_STROKE_COLOR,
             size: match tool {
                 Tool::Pixelate => DEFAULT_BLOCK_SIZE,
-                Tool::Blur => DEFAULT_BLUR_RADIUS,
+                Tool::Blur => DEFAULT_BLUR_SIGMA,
                 _ => DEFAULT_STROKE_WIDTH,
             },
             points: vec![

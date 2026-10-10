@@ -1,146 +1,65 @@
-use crate::{
-    Error, PixelSize,
-    color::{average_color, weighted_channels},
-    region::RgbaRegion,
-};
-use std::{num::NonZeroU32, ops::Range};
+use crate::{Error, PixelSize, region::RgbaRegion};
+use image::{Rgba, Rgba32FImage, RgbaImage, buffer::ConvertBuffer, imageops};
+use std::ops::Range;
 
 pub fn blur(
     rgba: &mut [u8],
     size: PixelSize,
     x: Range<usize>,
     y: Range<usize>,
-    radius: NonZeroU32,
+    sigma: f32,
 ) -> Result<(), Error> {
+    if !sigma.is_normal() || sigma <= 0.0 {
+        return Err(Error::InvalidBlurSigma);
+    }
+
     let region = RgbaRegion::new(size, x, y)?.ok_or(Error::InvalidBlurBounds)?;
-    let (width, height) = region.size().try_into()?;
+    let source = premultiplied_region(rgba, &region)?;
+    let mut output = imageops::blur(&source, sigma);
+    unpremultiply(&mut output);
 
-    let radius = usize::try_from(radius.get()).map_err(|_| Error::SizeOverflow)?;
-    let horizontal = horizontal_sums(rgba, &region, radius)?;
-
-    let mut output = Vec::new();
-    let len = region.size().rgba_len()?;
-
-    output.try_reserve_exact(len)?;
-    output.resize(len, 0);
-
-    blur_columns(&horizontal, &mut output, width, height, radius)?;
+    let output: RgbaImage = output.convert();
+    let row_bytes = region.size().row_byes()?;
 
     for (row, blurred) in region
         .rows_mut(rgba)
-        .zip(output.chunks_exact(region.size().row_byes()?))
+        .zip(output.as_raw().chunks_exact(row_bytes))
     {
         row?.copy_from_slice(blurred);
     }
+
     Ok(())
 }
 
-fn horizontal_sums(
-    rgba: &[u8],
-    region: &RgbaRegion,
-    radius: usize,
-) -> Result<Vec<[u64; 4]>, Error> {
-    let (width, height): (usize, usize) = region.size().try_into()?;
-    let count = width.checked_mul(height).ok_or(Error::SizeOverflow)?;
-
-    let mut horizontal = Vec::new();
-    horizontal.try_reserve_exact(count)?;
+fn premultiplied_region(rgba: &[u8], region: &RgbaRegion) -> Result<Rgba32FImage, Error> {
+    let mut pixels = Vec::new();
+    pixels.try_reserve_exact(region.size().rgba_len()?)?;
 
     for row in region.rows(rgba) {
-        let pixels = row?.as_chunks::<4>().0;
-        blur_line(
-            width,
-            radius,
-            |column| weighted_channels(*pixels.get(column).ok_or(Error::SizeOverflow)?),
-            |_, sums, _| {
-                let mut channels = [0; 4];
-                for (channel, sum) in channels.iter_mut().zip(sums) {
-                    *channel = u64::try_from(sum).map_err(|_| Error::SizeOverflow)?;
-                }
-                horizontal.push(channels);
-                Ok(())
-            },
-        )?;
-    }
-
-    Ok(horizontal)
-}
-
-fn blur_columns(
-    horizontal: &[[u64; 4]],
-    output: &mut [u8],
-    width: usize,
-    height: usize,
-    radius: usize,
-) -> Result<(), Error> {
-    for column in 0..width {
-        let columns =
-            u128::try_from(window(column, width, radius).len()).map_err(|_| Error::SizeOverflow)?;
-        blur_line(
-            height,
-            radius,
-            |row| {
-                let index = offset(row, column, width)?;
-                horizontal.get(index).copied().ok_or(Error::SizeOverflow)
-            },
-            |row, sums, rows| {
-                let count = columns
-                    .checked_mul(u128::try_from(rows).map_err(|_| Error::SizeOverflow)?)
-                    .ok_or(Error::SizeOverflow)?;
-                let index = offset(row, column, width)?;
-                let pixel = output
-                    .as_chunks_mut::<4>()
-                    .0
-                    .get_mut(index)
-                    .ok_or(Error::SizeOverflow)?;
-                *pixel = average_color(sums, count)?;
-                Ok(())
-            },
-        )?;
-    }
-    Ok(())
-}
-
-fn offset(row: usize, column: usize, width: usize) -> Result<usize, Error> {
-    row.checked_mul(width)
-        .and_then(|value| value.checked_add(column))
-        .ok_or(Error::SizeOverflow)
-}
-
-fn window(center: usize, length: usize, radius: usize) -> Range<usize> {
-    center.saturating_sub(radius)..center.saturating_add(radius).saturating_add(1).min(length)
-}
-
-fn blur_line(
-    length: usize,
-    radius: usize,
-    mut source: impl FnMut(usize) -> Result<[u64; 4], Error>,
-    mut output: impl FnMut(usize, [u128; 4], usize) -> Result<(), Error>,
-) -> Result<(), Error> {
-    let mut sums = [0u128; 4];
-    let mut left = 0;
-    let mut right = 0;
-    for center in 0..length {
-        let bounds = window(center, length, radius);
-        while right < bounds.end {
-            for (sum, channel) in sums.iter_mut().zip(source(right)?) {
-                *sum = sum
-                    .checked_add(u128::from(channel))
-                    .ok_or(Error::SizeOverflow)?;
-            }
-            right = right.checked_add(1).ok_or(Error::SizeOverflow)?;
+        for &[red, green, blue, alpha] in row?.as_chunks::<4>().0 {
+            let alpha = f32::from(alpha) / 255.0;
+            pixels.extend([
+                f32::from(red) / 255.0 * alpha,
+                f32::from(green) / 255.0 * alpha,
+                f32::from(blue) / 255.0 * alpha,
+                alpha,
+            ]);
         }
-        while left < bounds.start {
-            for (sum, channel) in sums.iter_mut().zip(source(left)?) {
-                *sum = sum
-                    .checked_sub(u128::from(channel))
-                    .ok_or(Error::SizeOverflow)?;
-            }
-            left = left.checked_add(1).ok_or(Error::SizeOverflow)?;
-        }
-        output(center, sums, bounds.len())?;
     }
-    Ok(())
+
+    let (width, height) = region.size().into();
+    Rgba32FImage::from_raw(width, height, pixels).ok_or(Error::SizeOverflow)
+}
+
+fn unpremultiply(image: &mut Rgba32FImage) {
+    for Rgba(channels) in image.pixels_mut() {
+        let [red, green, blue, alpha] = *channels;
+        *channels = if alpha > 0.0 {
+            [red / alpha, green / alpha, blue / alpha, alpha]
+        } else {
+            [0.0; 4]
+        };
+    }
 }
 
 #[cfg(test)]
@@ -157,48 +76,111 @@ mod tests {
     }
 
     #[test]
-    fn blurs_in_two_dimensions_without_changing_surrounding_pixels() {
-        let reds = [
-            200, 200, 200, 200, 200, 200, 0, 0, 0, 200, 200, 0, 255, 0, 200, 200, 0, 0, 0, 200,
-            200, 200, 200, 200, 200,
-        ];
-        let rgba = reds.into_iter().flat_map(|red| [red, 0, 0, 255]).collect();
-        let mut image = image(5, 5, rgba);
-        assert_ok!(image.blur(1..4, 1..4, assert_some!(NonZeroU32::new(1))));
-        let expected = [
-            200, 200, 200, 200, 200, 200, 63, 42, 63, 200, 200, 42, 28, 42, 200, 200, 63, 42, 63,
-            200, 200, 200, 200, 200, 200,
-        ]
-        .into_iter()
-        .flat_map(|red| [red, 0, 0, 255])
-        .collect::<Vec<_>>();
-        assert_eq!(image.rgba(), expected);
+    fn blurs_in_two_dimensions_without_sampling_or_changing_surrounding_pixels() {
+        let mut images = [0, 200].map(|outside| {
+            let mut pixels = [outside, 0, 0, 255].repeat(25);
+            for row in 1..4 {
+                for column in 1..4 {
+                    let index = row * 5 + column;
+                    let pixel = assert_some!(pixels.as_chunks_mut::<4>().0.get_mut(index));
+                    *pixel = [0, 0, 0, 255];
+                }
+            }
+
+            *assert_some!(pixels.as_chunks_mut::<4>().0.get_mut(12)) = [255, 0, 0, 255];
+            image(5, 5, pixels)
+        });
+
+        for image in &mut images {
+            let original = image.rgba().to_vec();
+            assert_ok!(image.blur(1..4, 1..4, 1.0));
+
+            for (index, (pixel, source)) in image
+                .rgba()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(original.as_chunks::<4>().0)
+                .enumerate()
+            {
+                let inside = (1..4).contains(&(index / 5)) && (1..4).contains(&(index % 5));
+                if !inside {
+                    assert_eq!(pixel, source);
+                }
+            }
+
+            let cropped = assert_ok!(image.crop(1..4, 1..4));
+            let reds = cropped
+                .rgba()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|&[red, _, _, _]| red)
+                .collect::<Vec<_>>();
+
+            let center = *assert_some!(reds.get(4));
+            let horizontal = *assert_some!(reds.get(3));
+            let vertical = *assert_some!(reds.get(1));
+
+            assert!(center < 255 && center > horizontal);
+            assert!(horizontal > 0 && vertical > 0);
+            assert_eq!(horizontal, vertical);
+        }
+
+        let [dark, light] = images;
+        assert_eq!(
+            assert_ok!(dark.crop(1..4, 1..4)).rgba(),
+            assert_ok!(light.crop(1..4, 1..4)).rgba()
+        );
+    }
+
+    #[test]
+    fn sigma_changes_how_far_the_blur_spreads() {
+        let mut pixels = [0, 0, 0, 255].repeat(49);
+        *assert_some!(pixels.as_chunks_mut::<4>().0.get_mut(24)) = [255, 0, 0, 255];
+
+        let mut narrow = image(7, 7, pixels.clone());
+        let mut wide = image(7, 7, pixels);
+
+        assert_ok!(narrow.blur(0..7, 0..7, 0.5));
+        assert_ok!(wide.blur(0..7, 0..7, 2.0));
+
+        let [narrow_red, _, _, _] = *assert_some!(narrow.rgba().as_chunks::<4>().0.get(24));
+        let [wide_red, _, _, _] = *assert_some!(wide.rgba().as_chunks::<4>().0.get(24));
+        assert!(narrow_red > wide_red);
     }
 
     #[rstest]
-    #[case(1, [15, 30, 60, 90, 105])]
-    #[case(u32::MAX, [60; 5])]
-    fn moves_the_window_and_clips_large_radii(#[case] radius: u32, #[case] expected: [u8; 5]) {
-        let rgba = [0, 30, 60, 90, 120]
-            .into_iter()
-            .flat_map(|red| [red, 0, 0, 255])
-            .collect();
-        let mut image = image(5, 1, rgba);
-        assert_ok!(image.blur(0..5, 0..1, assert_some!(NonZeroU32::new(radius))));
-        let expected = expected
-            .into_iter()
-            .flat_map(|red| [red, 0, 0, 255])
-            .collect::<Vec<_>>();
-        assert_eq!(image.rgba(), expected);
-    }
-
-    #[rstest]
-    #[case(255, [255, 0, 0, 127])]
-    #[case(0, [0; 4])]
-    fn transparent_pixels_do_not_tint_the_blur(#[case] alpha: u8, #[case] expected: [u8; 4]) {
+    #[case(255)]
+    #[case(0)]
+    fn transparent_pixels_do_not_tint_the_blur(#[case] alpha: u8) {
         let mut image = image(2, 1, vec![255, 0, 0, alpha, 0, 0, 255, 0]);
-        assert_ok!(image.blur(0..2, 0..1, NonZeroU32::MAX));
-        assert_eq!(image.rgba(), expected.repeat(2));
+        assert_ok!(image.blur(0..2, 0..1, 1.0));
+
+        for &[red, green, blue, blurred_alpha] in image.rgba().as_chunks::<4>().0 {
+            if alpha == 0 {
+                assert_eq!([red, green, blue, blurred_alpha], [0; 4]);
+            } else {
+                assert_eq!([red, green, blue], [255, 0, 0]);
+                assert!(blurred_alpha > 0 && blurred_alpha < 255);
+            }
+        }
+    }
+
+    #[rstest]
+    #[case(0.0)]
+    #[case(-1.0)]
+    #[case(f32::NAN)]
+    #[case(f32::INFINITY)]
+    #[case(f32::NEG_INFINITY)]
+    #[case(f32::MIN_POSITIVE / 2.0)]
+    fn rejects_invalid_sigma_without_changing_pixels(#[case] sigma: f32) {
+        let original = vec![255, 0, 0, 255, 0, 0, 255, 255];
+        let mut image = image(2, 1, original.clone());
+
+        let error = assert_err!(image.blur(0..2, 0..1, sigma));
+        assert_matches!(error, Error::InvalidBlurSigma);
+        assert_eq!(image.rgba(), original);
     }
 
     #[rstest]
@@ -212,7 +194,8 @@ mod tests {
         let [left, right, top, bottom] = edges;
         let original = vec![255, 0, 0, 255, 0, 0, 255, 255];
         let mut image = image(2, 1, original.clone());
-        let error = assert_err!(image.blur(left..right, top..bottom, NonZeroU32::MAX));
+
+        let error = assert_err!(image.blur(left..right, top..bottom, 1.0));
         assert_matches!(error, Error::InvalidBlurBounds);
         assert_eq!(image.rgba(), original);
     }

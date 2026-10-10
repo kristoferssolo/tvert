@@ -268,8 +268,8 @@ mod tests {
 
     #[rstest]
     #[case(Tool::Pixelate, 16, 63)]
-    #[case(Tool::Blur, 8, 63)]
-    #[case(Tool::Blur, 3, 145)]
+    #[case(Tool::Blur, 8, 50)]
+    #[case(Tool::Blur, 3, 126)]
     fn pixel_effects_process_earlier_drawings_and_keep_later_drawings_on_top(
         #[case] tool: Tool,
         #[case] size: u16,

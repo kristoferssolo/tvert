@@ -2,13 +2,12 @@ use crate::{
     annotation::{AnnotationDraft, InvalidAnnotation},
     pixel_effect::{EffectRegion, PixelEffect},
 };
-use std::num::NonZeroU32;
 
-/// A retained box-blur region and its radius in captured-image pixels
+/// A retained Gaussian blur region and its sigma in captured-image pixels
 #[derive(Debug)]
 pub struct Blur {
     region: EffectRegion,
-    radius: NonZeroU32,
+    sigma: f32,
 }
 
 impl PixelEffect for Blur {
@@ -18,7 +17,7 @@ impl PixelEffect for Blur {
 
     fn apply(&self, image: &mut tvert_image::CapturedImage) -> Result<(), crate::Error> {
         let (x, y) = self.region.pixel_ranges(image.size())?;
-        image.blur(x, y, self.radius)?;
+        image.blur(x, y, self.sigma)?;
         Ok(())
     }
 }
@@ -27,9 +26,13 @@ impl TryFrom<&AnnotationDraft> for Blur {
     type Error = InvalidAnnotation;
 
     fn try_from(draft: &AnnotationDraft) -> Result<Self, Self::Error> {
+        if draft.size == 0 {
+            return Err(InvalidAnnotation);
+        }
+
         Ok(Self {
             region: EffectRegion::try_from(draft)?,
-            radius: NonZeroU32::new(u32::from(draft.size)).ok_or(InvalidAnnotation)?,
+            sigma: f32::from(draft.size),
         })
     }
 }

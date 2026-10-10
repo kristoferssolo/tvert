@@ -6,7 +6,7 @@ use crate::{
     ExportAction,
     editor::Message,
     style::{
-        BLOCK_SIZE_RANGE, BLUR_RADIUS_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_RADIUS,
+        BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_SIGMA,
         DEFAULT_STROKE_WIDTH, STROKE_WIDTH_RANGE,
     },
     tool::Tool,
@@ -70,11 +70,11 @@ pub fn view(
                 Message::SelectBlockSize,
             )),
             Tool::Blur => Some(size::view(
-                BLUR_RADIUS_RANGE,
+                BLUR_SIGMA_RANGE,
                 selected_size,
-                DEFAULT_BLUR_RADIUS,
-                "Blur radius",
-                Message::SelectBlurRadius,
+                DEFAULT_BLUR_SIGMA,
+                "Blur strength",
+                Message::SelectBlurSigma,
             )),
             Tool::Highlighter => None,
             _ => Some(size::view(

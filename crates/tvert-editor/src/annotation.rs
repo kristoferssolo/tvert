@@ -10,7 +10,7 @@ const HIGHLIGHT_OPACITY: f32 = 0.3;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnotationDraft {
     pub tool: Tool,
-    /// Stroke width, pixelation block side, or blur radius in captured-image pixels
+    /// Stroke width, pixelation block side, or blur sigma in captured-image pixels
     pub size: u16,
     pub stroke_color: Color,
     pub points: Vec<Point>,

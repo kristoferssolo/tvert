@@ -1,9 +1,4 @@
-use crate::{
-    figure::Figure,
-    style::{BlockSize, StrokeWidth},
-    tool::Tool,
-    viewport::Viewport,
-};
+use crate::{figure::Figure, tool::Tool, viewport::Viewport};
 use iced::{
     Color, Point,
     widget::canvas::{Frame, Stroke},
@@ -15,9 +10,9 @@ const HIGHLIGHT_OPACITY: f32 = 0.3;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnotationDraft {
     pub tool: Tool,
-    pub stroke_width: StrokeWidth,
+    /// Stroke width, pixelation block side, or blur radius in captured-image pixels
+    pub size: u16,
     pub stroke_color: Color,
-    pub block_size: BlockSize,
     pub points: Vec<Point>,
 }
 
@@ -25,7 +20,7 @@ pub struct AnnotationDraft {
 #[derive(Debug)]
 pub struct Annotation {
     pub figure: Box<dyn Figure>,
-    pub stroke_width: StrokeWidth,
+    pub stroke_width: u16,
     pub stroke_color: Color,
 }
 
@@ -35,12 +30,11 @@ pub struct Annotation {
 pub struct InvalidAnnotation;
 
 impl AnnotationDraft {
-    pub fn new(tool: Tool, stroke_width: StrokeWidth, stroke_color: Color, start: Point) -> Self {
+    pub fn new(tool: Tool, size: u16, stroke_color: Color, start: Point) -> Self {
         Self {
             tool,
-            stroke_width,
+            size,
             stroke_color,
-            block_size: BlockSize::default(),
             points: vec![start],
         }
     }
@@ -68,7 +62,7 @@ impl Annotation {
     pub fn draw(&self, frame: &mut Frame, viewport: Viewport) {
         let stroke = Stroke::default()
             .with_color(self.stroke_color)
-            .with_width(viewport.canvas_length(self.stroke_width.pixels()));
+            .with_width(viewport.canvas_length(f32::from(self.stroke_width)));
 
         self.figure.draw(frame, viewport, stroke);
     }
@@ -86,7 +80,7 @@ impl TryFrom<AnnotationDraft> for Annotation {
 
         Ok(Self {
             figure,
-            stroke_width: draft.stroke_width,
+            stroke_width: draft.size,
             stroke_color,
         })
     }
@@ -111,9 +105,8 @@ mod tests {
     ) {
         let error = assert_err!(Annotation::try_from(AnnotationDraft {
             tool,
-            stroke_width: StrokeWidth::Medium,
+            size: 4,
             stroke_color: DEFAULT_STROKE_COLOR,
-            block_size: BlockSize::default(),
             points: vec![start, end]
         }));
 

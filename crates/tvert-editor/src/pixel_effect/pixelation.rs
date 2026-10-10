@@ -31,7 +31,7 @@ impl TryFrom<&AnnotationDraft> for Pixelation {
     fn try_from(draft: &AnnotationDraft) -> Result<Self, Self::Error> {
         Ok(Self {
             region: EffectRegion::try_from(draft)?,
-            block_size: NonZeroU32::new(draft.block_size.pixels()).ok_or(InvalidAnnotation)?,
+            block_size: NonZeroU32::new(u32::from(draft.size)).ok_or(InvalidAnnotation)?,
         })
     }
 }
@@ -39,11 +39,7 @@ impl TryFrom<&AnnotationDraft> for Pixelation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        annotation::AnnotationDraft,
-        style::{BlockSize, StrokeWidth},
-        tool::Tool,
-    };
+    use crate::{annotation::AnnotationDraft, style::DEFAULT_BLOCK_SIZE, tool::Tool};
     use claims::assert_ok;
     use iced::{Color, Point};
     use rstest::rstest;
@@ -53,9 +49,8 @@ mod tests {
     fn includes_fractional_edge_pixels_and_clips_to_the_image() {
         let effect = assert_ok!(Pixelation::try_from(&AnnotationDraft {
             tool: Tool::Pixelate,
-            stroke_width: StrokeWidth::Medium,
+            size: DEFAULT_BLOCK_SIZE,
             stroke_color: Color::BLACK,
-            block_size: BlockSize::default(),
             points: vec![Point::new(5.0, 2.0), Point::new(1.8, 0.2)],
         }));
         let size = assert_ok!(PixelSize::try_from((4, 1)));
@@ -73,18 +68,17 @@ mod tests {
     }
 
     #[rstest]
-    #[case(BlockSize::Small, [3, 11, 19, 27])]
-    #[case(BlockSize::Medium, [7, 7, 23, 23])]
-    #[case(BlockSize::Large, [15, 15, 15, 15])]
+    #[case(7, [3, 10, 17, 24])]
+    #[case(13, [6, 6, 19, 19])]
+    #[case(29, [14, 14, 14, 14])]
     fn applies_the_block_size_retained_by_the_draft(
-        #[case] block_size: BlockSize,
+        #[case] block_size: u16,
         #[case] expected: [u8; 4],
     ) {
         let effect = assert_ok!(Pixelation::try_from(&AnnotationDraft {
             tool: Tool::Pixelate,
-            stroke_width: StrokeWidth::Medium,
+            size: block_size,
             stroke_color: Color::BLACK,
-            block_size,
             points: vec![Point::ORIGIN, Point::new(32.0, 1.0)],
         }));
         let size = assert_ok!(PixelSize::try_from((32, 1)));

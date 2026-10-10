@@ -9,7 +9,10 @@ use crate::{
     edit::Edit,
     export::ExportAction,
     render::{render_edits, render_image},
-    style::{BlockSize, DEFAULT_STROKE_COLOR, StrokeWidth},
+    style::{
+        BLOCK_SIZE_RANGE, BLUR_RADIUS_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_RADIUS,
+        DEFAULT_STROKE_COLOR, DEFAULT_STROKE_WIDTH, STROKE_WIDTH_RANGE,
+    },
     tool::Tool,
 };
 use iced::{
@@ -27,15 +30,16 @@ pub struct Editor {
     preview: Handle,
     image_size: Size,
     tool: Tool,
-    stroke_width: StrokeWidth,
     stroke_color: Color,
+    stroke_width: u16,
+    block_size: u16,
+    blur_radius: u16,
     export: ExportHandler,
     error: Option<Error>,
     edits: Vec<Edit>,
     undone_edits: Vec<Edit>,
     cache: Cache,
     color_pallete_open: bool,
-    block_size: BlockSize,
 }
 
 impl Editor {
@@ -45,15 +49,16 @@ impl Editor {
             preview,
             image_size,
             tool: Tool::default(),
-            stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
+            stroke_width: DEFAULT_STROKE_WIDTH,
+            block_size: DEFAULT_BLOCK_SIZE,
+            blur_radius: DEFAULT_BLUR_RADIUS,
             export,
             error: None,
             edits: Vec::new(),
             undone_edits: Vec::new(),
             cache: Cache::new(),
             color_pallete_open: false,
-            block_size: BlockSize::default(),
         }
     }
 
@@ -70,13 +75,24 @@ impl Editor {
                 self.color_pallete_open = false;
                 return Task::none();
             }
-            Message::SelectStrokeWidth(stroke_width) => {
-                self.stroke_width = stroke_width;
-                return Task::none();
-            }
             Message::SelectStrokeColor(stroke_color) => {
                 self.stroke_color = stroke_color;
                 self.color_pallete_open = false;
+                return Task::none();
+            }
+            Message::SelectStrokeWidth(stroke_width) => {
+                self.stroke_width =
+                    stroke_width.clamp(*STROKE_WIDTH_RANGE.start(), *STROKE_WIDTH_RANGE.end());
+                return Task::none();
+            }
+            Message::SelectBlockSize(block_size) => {
+                self.block_size =
+                    block_size.clamp(*BLOCK_SIZE_RANGE.start(), *BLOCK_SIZE_RANGE.end());
+                return Task::none();
+            }
+            Message::SelectBlurRadius(radius) => {
+                self.blur_radius =
+                    radius.clamp(*BLUR_RADIUS_RANGE.start(), *BLUR_RADIUS_RANGE.end());
                 return Task::none();
             }
             Message::ToggleColorPallete => {
@@ -90,10 +106,6 @@ impl Editor {
             Message::Undo => self.undo(),
             Message::Redo => self.redo(),
             Message::Export(action) => return self.export(action),
-            Message::SelectBlockSize(block_size) => {
-                self.block_size = block_size;
-                return Task::none();
-            }
         }
         self.cache.clear();
         Task::none()
@@ -170,6 +182,14 @@ impl Editor {
             }
         }
     }
+
+    const fn selected_size(&self) -> u16 {
+        match self.tool {
+            Tool::Pixelate => self.block_size,
+            Tool::Blur => self.blur_radius,
+            _ => self.stroke_width,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -194,9 +214,12 @@ mod tests {
     fn add_figure(tool: Tool, bounds: Rectangle) -> Message {
         Message::AddEdit(AnnotationDraft {
             tool,
-            stroke_width: StrokeWidth::default(),
             stroke_color: DEFAULT_STROKE_COLOR,
-            block_size: BlockSize::default(),
+            size: match tool {
+                Tool::Pixelate => DEFAULT_BLOCK_SIZE,
+                Tool::Blur => DEFAULT_BLUR_RADIUS,
+                _ => DEFAULT_STROKE_WIDTH,
+            },
             points: vec![
                 bounds.position(),
                 Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
@@ -332,25 +355,23 @@ mod tests {
 
         let thin = Message::AddEdit(AnnotationDraft {
             tool: Tool::Line,
-            stroke_width: StrokeWidth::Thin,
             stroke_color: DEFAULT_STROKE_COLOR,
-            block_size: BlockSize::default(),
+            size: 2,
             points: vec![Point::new(10.0, 10.0), Point::new(30.0, 10.0)],
         });
         let thick = Message::AddEdit(AnnotationDraft {
             tool: Tool::Line,
-            stroke_width: StrokeWidth::Thick,
             stroke_color: blue,
-            block_size: BlockSize::default(),
+            size: 8,
             points: vec![Point::new(10.0, 10.0), Point::new(30.0, 10.0)],
         });
 
         let _ = editor.update(thin);
-        let _ = editor.update(Message::SelectStrokeWidth(StrokeWidth::Thick));
+        let _ = editor.update(Message::SelectStrokeWidth(8));
         let _ = editor.update(Message::SelectStrokeColor(blue));
         let _ = editor.update(thick);
         let _ = editor.update(Message::Undo);
-        let _ = editor.update(Message::SelectStrokeWidth(StrokeWidth::Medium));
+        let _ = editor.update(Message::SelectStrokeWidth(4));
         let _ = editor.update(Message::SelectStrokeColor(green));
         let _ = editor.update(Message::Redo);
 
@@ -363,15 +384,9 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            appearances,
-            [
-                (StrokeWidth::Thin, DEFAULT_STROKE_COLOR),
-                (StrokeWidth::Thick, blue)
-            ]
-        );
+        assert_eq!(appearances, [(2, DEFAULT_STROKE_COLOR), (8, blue)]);
 
-        assert_eq!(editor.stroke_width, StrokeWidth::Medium);
+        assert_eq!(editor.stroke_width, 4);
         assert_eq!(editor.stroke_color, green);
         assert!(editor.undone_edits.is_empty());
     }

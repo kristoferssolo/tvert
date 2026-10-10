@@ -152,21 +152,16 @@ fn composite(background: &mut [u8; 4], foreground: [u8; 4]) -> Result<(), ImageE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        annotation::AnnotationDraft,
-        style::{BlockSize, StrokeWidth},
-        tool::Tool,
-    };
+    use crate::{annotation::AnnotationDraft, tool::Tool};
     use claims::{assert_ok, assert_some};
     use iced::Point;
     use rstest::rstest;
 
-    fn line(color: Color, width: StrokeWidth, start: Point, end: Point) -> Annotation {
+    fn line(color: Color, width: u16, start: Point, end: Point) -> Annotation {
         assert_ok!(Annotation::try_from(AnnotationDraft {
             tool: Tool::Line,
-            stroke_width: width,
+            size: width,
             stroke_color: color,
-            block_size: BlockSize::default(),
             points: vec![start, end,]
         }))
     }
@@ -193,13 +188,13 @@ mod tests {
         let annotations = [
             line(
                 Color::from_rgb8(255, 0, 0),
-                StrokeWidth::Thin,
+                2,
                 Point::new(4.0, 16.0),
                 Point::new(28.0, 16.0),
             ),
             line(
                 Color::from_rgb8(0, 0, 255),
-                StrokeWidth::Thick,
+                8,
                 Point::new(16.0, 4.0),
                 Point::new(16.0, 28.0),
             ),
@@ -221,7 +216,7 @@ mod tests {
         let preview = Handle::from_rgba(32, 32, pixels);
         let annotations = [line(
             Color::from_rgba8(255, 0, 0, 0.5),
-            StrokeWidth::Medium,
+            4,
             Point::new(4.0, 16.0),
             Point::new(28.0, 16.0),
         )];
@@ -237,9 +232,8 @@ mod tests {
         let preview = Handle::from_rgba(32, 32, [20, 40, 60, 255].repeat(1024));
         let annotation = assert_ok!(Annotation::try_from(AnnotationDraft {
             tool: Tool::Pencil,
-            stroke_width: StrokeWidth::Medium,
+            size: 4,
             stroke_color: Color::from_rgb8(255, 0, 0),
-            block_size: BlockSize::default(),
             points: vec![
                 Point::new(4.0, 4.0),
                 Point::new(24.0, 4.0),
@@ -261,9 +255,8 @@ mod tests {
         let preview = Handle::from_rgba(32, 32, [255, 255, 255, 255].repeat(1024));
         let highlight = assert_ok!(Annotation::try_from(AnnotationDraft {
             tool: Tool::Highlighter,
-            stroke_width: StrokeWidth::Medium,
+            size: 4,
             stroke_color: Color::from_rgb8(255, 255, 0),
-            block_size: BlockSize::default(),
             points: vec![Point::new(24.0, 24.0), Point::new(4.0, 4.0)],
         }));
 
@@ -274,33 +267,37 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Tool::Pixelate)]
-    #[case(Tool::Blur)]
-    fn pixel_effects_process_earlier_drawings_and_keep_later_drawings_on_top(#[case] tool: Tool) {
+    #[case(Tool::Pixelate, 16, 63)]
+    #[case(Tool::Blur, 8, 63)]
+    #[case(Tool::Blur, 3, 145)]
+    fn pixel_effects_process_earlier_drawings_and_keep_later_drawings_on_top(
+        #[case] tool: Tool,
+        #[case] size: u16,
+        #[case] expected_red: u8,
+    ) {
         let preview = Handle::from_rgba(32, 16, [0, 0, 0, 255].repeat(512));
         let mut edits = vec![
             Edit::Annotation(line(
                 Color::from_rgb8(255, 0, 0),
-                StrokeWidth::Medium,
+                4,
                 Point::new(0.0, 8.0),
                 Point::new(32.0, 8.0),
             )),
             assert_ok!(Edit::try_from(AnnotationDraft {
                 tool,
-                stroke_width: StrokeWidth::Medium,
+                size,
                 stroke_color: Color::BLACK,
-                block_size: BlockSize::default(),
                 points: vec![Point::new(16.0, 16.0), Point::ORIGIN],
             })),
         ];
 
         let image = assert_ok!(render_edits(&preview, &edits));
-        assert_eq!(pixel(&image, 8, 8), [63, 0, 0, 255]);
+        assert_eq!(pixel(&image, 8, 8), [expected_red, 0, 0, 255]);
         assert_eq!(pixel(&image, 24, 8), [255, 0, 0, 255]);
 
         edits.push(Edit::Annotation(line(
             Color::from_rgb8(0, 0, 255),
-            StrokeWidth::Thin,
+            2,
             Point::new(8.0, 0.0),
             Point::new(8.0, 16.0),
         )));

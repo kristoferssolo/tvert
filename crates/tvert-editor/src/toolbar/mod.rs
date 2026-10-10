@@ -5,7 +5,10 @@ mod size;
 use crate::{
     ExportAction,
     editor::Message,
-    style::{BlockSize, StrokeWidth},
+    style::{
+        BLOCK_SIZE_RANGE, BLUR_RADIUS_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_RADIUS,
+        DEFAULT_STROKE_WIDTH, STROKE_WIDTH_RANGE,
+    },
     tool::Tool,
     toolbar::button::{icon_button, separator},
 };
@@ -17,14 +20,13 @@ use strum::VariantArray;
 const ICON_FONT: Font = Font::with_name("lucide");
 
 pub const HEIGHT: f32 = 44.0;
-pub const MIN_WIDTH: f32 = 720.0;
+pub const MIN_WIDTH: f32 = 800.0;
 
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
     selected: Tool,
-    stroke_width: StrokeWidth,
+    selected_size: u16,
     stroke_color: Color,
-    block_size: BlockSize,
     color_pallete_open: bool,
     can_undo: bool,
     can_redo: bool,
@@ -61,14 +63,25 @@ pub fn view(
         )
         .extend(match selected {
             Tool::Pixelate => Some(size::view(
-                BlockSize::VARIANTS,
-                block_size,
+                BLOCK_SIZE_RANGE,
+                selected_size,
+                DEFAULT_BLOCK_SIZE,
+                "Pixelation block size",
                 Message::SelectBlockSize,
             )),
-            Tool::Highlighter | Tool::Blur => None,
+            Tool::Blur => Some(size::view(
+                BLUR_RADIUS_RANGE,
+                selected_size,
+                DEFAULT_BLUR_RADIUS,
+                "Blur radius",
+                Message::SelectBlurRadius,
+            )),
+            Tool::Highlighter => None,
             _ => Some(size::view(
-                StrokeWidth::VARIANTS,
-                stroke_width,
+                STROKE_WIDTH_RANGE,
+                selected_size,
+                DEFAULT_STROKE_WIDTH,
+                "Stroke width",
                 Message::SelectStrokeWidth,
             )),
         })

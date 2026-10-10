@@ -1,21 +1,17 @@
-use crate::{
-    annotation::AnnotationDraft,
-    export::ExportAction,
-    style::{BlockSize, StrokeWidth},
-    tool::Tool,
-};
+use crate::{annotation::AnnotationDraft, export::ExportAction, tool::Tool};
 use iced::Color;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     AddEdit(AnnotationDraft),
     SelectTool(Tool),
-    SelectStrokeWidth(StrokeWidth),
     SelectStrokeColor(Color),
+    SelectStrokeWidth(u16),
+    SelectBlockSize(u16),
+    SelectBlurRadius(u16),
     ToggleColorPallete,
     CloseColorPallete,
     Undo,
     Redo,
     Export(ExportAction),
-    SelectBlockSize(BlockSize),
 }

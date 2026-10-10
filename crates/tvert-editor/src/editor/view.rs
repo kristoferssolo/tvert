@@ -12,9 +12,8 @@ impl Editor {
         let mut content = column![
             toolbar::view(
                 self.tool,
-                self.stroke_width,
+                self.selected_size(),
                 self.stroke_color,
-                self.block_size,
                 self.color_pallete_open,
                 !self.edits.is_empty(),
                 !self.undone_edits.is_empty()
@@ -38,9 +37,8 @@ impl Editor {
         let annotations = canvas(AnnotationCanvas {
             image_size: self.image_size,
             tool: self.tool,
-            stroke_width: self.stroke_width,
+            size: self.selected_size(),
             stroke_color: self.stroke_color,
-            block_size: self.block_size,
             cache: &self.cache,
         })
         .width(Fill)

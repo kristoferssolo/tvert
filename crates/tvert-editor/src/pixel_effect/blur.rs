@@ -29,7 +29,7 @@ impl TryFrom<&AnnotationDraft> for Blur {
     fn try_from(draft: &AnnotationDraft) -> Result<Self, Self::Error> {
         Ok(Self {
             region: EffectRegion::try_from(draft)?,
-            radius: NonZeroU32::new(8).ok_or(InvalidAnnotation)?,
+            radius: NonZeroU32::new(u32::from(draft.size)).ok_or(InvalidAnnotation)?,
         })
     }
 }

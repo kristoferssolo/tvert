@@ -1,3 +1,4 @@
+mod blur;
 mod encode;
 mod error;
 mod image;

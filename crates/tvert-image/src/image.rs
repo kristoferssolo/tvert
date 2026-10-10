@@ -1,4 +1,4 @@
-use crate::{Error, PixelSize, pixelate::pixelate};
+use crate::{Error, PixelSize, blur::blur, pixelate::pixelate};
 use std::{num::NonZeroU32, ops::Range};
 
 /// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
@@ -111,6 +111,27 @@ impl CapturedImage {
         block_size: NonZeroU32,
     ) -> Result<(), Error> {
         pixelate(&mut self.rgba, self.size, x, y, block_size)
+    }
+
+    /// Applies an alpha-weighted box blur to a region in place.
+    ///
+    /// The radius is measured in captured-image pixels. Range ends are exclusive.
+    /// Each window is clipped to the selected region; pixels outside it are
+    /// neither sampled nor changed. Channels are stored with straight alpha.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidBlurBounds`] for empty, reversed, or out-of-bounds
+    /// ranges, [`Error::SizeOverflow`] if dimensions, offsets, or channel totals
+    /// cannot be represented, or [`Error::Allocation`] if allocating working
+    /// storage fails. The image remains unchanged on error.
+    pub fn blur(
+        &mut self,
+        x: Range<usize>,
+        y: Range<usize>,
+        radius: NonZeroU32,
+    ) -> Result<(), Error> {
+        blur(&mut self.rgba, self.size, x, y, radius)
     }
 }
 

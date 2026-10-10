@@ -30,4 +30,8 @@ pub enum Error {
     /// The pixelation region is empty, reversed, or outside the image
     #[error("pixelation bounds must describe a nonempty region inside the image")]
     InvalidPixelationBounds,
+
+    /// The blur region is empty, reversed, or outside the image
+    #[error("blur bounds must describe a nonempty region inside the image")]
+    InvalidBlurBounds,
 }

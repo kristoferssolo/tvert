@@ -77,6 +77,23 @@ impl From<PixelSize> for (u32, u32) {
     }
 }
 
+impl TryFrom<PixelSize> for (usize, usize) {
+    type Error = Error;
+
+    fn try_from(size: PixelSize) -> Result<Self, Self::Error> {
+        Ok((
+            size.width
+                .get()
+                .try_into()
+                .map_err(|_| Error::SizeOverflow)?,
+            size.height
+                .get()
+                .try_into()
+                .map_err(|_| Error::SizeOverflow)?,
+        ))
+    }
+}
+
 impl Display for PixelSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}x{}", self.width, self.height)

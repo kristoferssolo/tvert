@@ -19,35 +19,22 @@ tvert-workflow = { path = "crates/tvert-workflow" }
 
 clap = { version = "4.6" }
 color-eyre = "0.6"
-iced = { version = "0.14", default-features = false, features = [
-  "advanced",
-  "canvas",
-  "image-without-codecs",
-  "thread-pool",
-  "tiny-skia",
-  "wayland",
-] }
-iced_aw = { version = "0.14", default-features = false, features = [
-  "drop_down",
-] }
+iced = { version = "0.14", default-features = false }
+iced_aw = { version = "0.14", default-features = false }
 image = { version = "0.25", default-features = false }
 lucide-icons = "1.53"
 num-traits = "0.2"
 png = "0.18"
-rustix = { version = "1", features = ["fs"] }
-strum = { version = "0.28", features = ["derive"] }
+rustix = "1"
+strum = "0.28"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3" }
 wl-clipboard-rs = "0.9"
 
 wayland-client = "0.31"
-wayland-protocols = { version = "0.32", features = [
-  "client",
-  "staging",
-  "unstable",
-] }
-wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-protocols = "0.32"
+wayland-protocols-wlr = "0.3"
 
 # dev dependencies
 claims = "0.8"

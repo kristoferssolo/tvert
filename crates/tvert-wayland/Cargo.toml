@@ -9,13 +9,17 @@ license.workspace = true
 [dependencies]
 tvert-image.workspace = true
 
-rustix.workspace = true
+rustix = { workspace = true, features = ["fs"] }
 thiserror.workspace = true
 tracing.workspace = true
 
 wayland-client.workspace = true
-wayland-protocols-wlr.workspace = true
-wayland-protocols.workspace = true
+wayland-protocols-wlr = { workspace = true, features = ["client"] }
+wayland-protocols = { workspace = true, features = [
+  "client",
+  "staging",
+  "unstable",
+] }
 
 [dev-dependencies]
 claims.workspace = true

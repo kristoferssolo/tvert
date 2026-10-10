@@ -19,7 +19,7 @@ pub fn render_edits(preview: &Handle, edits: &[Edit]) -> Result<CapturedImage, E
 
     while let Some((edit, rest)) = remaining.split_first() {
         match edit {
-            Edit::Pixelation(effect) => {
+            Edit::PixelEffect(effect) => {
                 effect.apply(&mut image)?;
                 remaining = rest;
             }
@@ -153,7 +153,9 @@ fn composite(background: &mut [u8; 4], foreground: [u8; 4]) -> Result<(), ImageE
 mod tests {
     use super::*;
     use crate::{
-        annotation::AnnotationDraft, block_size::BlockSize, stroke_width::StrokeWidth, tool::Tool,
+        annotation::AnnotationDraft,
+        style::{BlockSize, StrokeWidth},
+        tool::Tool,
     };
     use claims::{assert_ok, assert_some};
     use iced::Point;

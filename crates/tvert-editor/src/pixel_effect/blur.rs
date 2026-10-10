@@ -1,7 +1,6 @@
 use crate::{
     annotation::{AnnotationDraft, InvalidAnnotation},
-    effect_region::EffectRegion,
-    pixel_effect::PixelEffect,
+    pixel_effect::{EffectRegion, PixelEffect},
 };
 use std::num::NonZeroU32;
 

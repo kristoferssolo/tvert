@@ -1,14 +1,13 @@
 use crate::{
-    block_size::BlockSize, figure::Figure, stroke_width::StrokeWidth, tool::Tool,
+    figure::Figure,
+    style::{BlockSize, StrokeWidth},
+    tool::Tool,
     viewport::Viewport,
 };
 use iced::{
     Color, Point,
     widget::canvas::{Frame, Stroke},
 };
-
-/// The initial color selected for annotation strokes
-pub const DEFAULT_STROKE_COLOR: Color = Color::from_rgb8(255, 64, 64);
 
 const HIGHLIGHT_OPACITY: f32 = 0.3;
 
@@ -96,6 +95,7 @@ impl TryFrom<AnnotationDraft> for Annotation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::style::DEFAULT_STROKE_COLOR;
     use claims::assert_err;
     use rstest::rstest;
 

@@ -1,22 +1,22 @@
+mod message;
+pub mod shortcuts;
+mod view;
+
+pub use message::Message;
+
 use crate::{
     Error,
-    annotation::DEFAULT_STROKE_COLOR,
-    annotation_canvas::AnnotationCanvas,
-    block_size::BlockSize,
     edit::Edit,
     export::ExportAction,
-    message::Message,
     render::{render_edits, render_image},
-    stroke_width::StrokeWidth,
+    style::{BlockSize, DEFAULT_STROKE_COLOR, StrokeWidth},
     tool::Tool,
-    toolbar,
 };
-use iced::widget::{canvas, column, container, image, opaque, space, stack, text};
 use iced::{
-    Color, ContentFit, Element, Fill, Size, Task,
+    Color, Size, Task,
     widget::{canvas::Cache, image::Handle},
 };
-use std::{error::Error as StdError, rc::Rc};
+use std::rc::Rc;
 use tvert_image::CapturedImage;
 
 /// Exports an edited image using the caller's clipboard or save policy
@@ -99,50 +99,6 @@ impl Editor {
         Task::none()
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
-        let picture = image(&self.preview)
-            .width(Fill)
-            .height(Fill)
-            .content_fit(ContentFit::Contain);
-
-        let annotations = canvas(AnnotationCanvas {
-            image_size: self.image_size,
-            tool: self.tool,
-            stroke_width: self.stroke_width,
-            stroke_color: self.stroke_color,
-            block_size: self.block_size,
-            cache: &self.cache,
-        })
-        .width(Fill)
-        .height(Fill);
-
-        let mut preview = stack![picture, annotations].width(Fill).height(Fill);
-
-        // Dismissing the palette must not start a drag on the image
-        if self.color_pallete_open {
-            preview = preview.push(opaque(space().width(Fill).height(Fill)));
-        }
-
-        let mut content = column![
-            toolbar::view(
-                self.tool,
-                self.stroke_width,
-                self.stroke_color,
-                self.block_size,
-                self.color_pallete_open,
-                !self.edits.is_empty(),
-                !self.undone_edits.is_empty()
-            ),
-            preview
-        ];
-
-        if let Some(error) = &self.error {
-            content = content.push(text(error_message(error)).style(text::danger));
-        }
-
-        container(content).width(Fill).height(Fill).into()
-    }
-
     /// Returns the committed image at full resolution.
     ///
     /// # Errors
@@ -214,19 +170,6 @@ impl Editor {
             }
         }
     }
-}
-
-fn error_message(error: &dyn StdError) -> String {
-    let mut message = error.to_string();
-    let mut source = error.source();
-
-    while let Some(error) = source {
-        message.push_str(": ");
-        message.push_str(&error.to_string());
-        source = error.source();
-    }
-
-    message
 }
 
 #[cfg(test)]

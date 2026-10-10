@@ -2,15 +2,9 @@ use crate::{CapturedImage, Error};
 use png::{BitDepth, ColorType, Encoder};
 use std::io::Write;
 
-/// Writes an RGBA8 image as a complete PNG.
-///
-/// Validates the image before writing any bytes.
-/// Accepts any [`Write`] destination, including a file or byte vector.
+/// Writes a complete RGBA8 PNG to the supplied destination.
 ///
 /// # Errors
-///
-/// Returns [`Error::SizeOverflow`] or [`Error::InvalidPixelLength`]
-/// if the image layout is invalid.
 ///
 /// Returns [`Error::PngEncoding`] if encoding or writing fails.
 pub fn write_png(output: impl Write, image: &CapturedImage) -> Result<(), Error> {

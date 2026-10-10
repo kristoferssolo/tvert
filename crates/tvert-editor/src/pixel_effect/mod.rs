@@ -1,4 +1,12 @@
-use crate::{Error, effect_region::EffectRegion, viewport::Viewport};
+mod blur;
+mod pixelation;
+mod region;
+
+pub use blur::Blur;
+pub use pixelation::Pixelation;
+pub use region::EffectRegion;
+
+use crate::{Error, viewport::Viewport};
 use iced::widget::canvas::Frame;
 use std::fmt::Debug;
 use tvert_image::CapturedImage;

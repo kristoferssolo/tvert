@@ -1,6 +1,8 @@
 use crate::{
-    annotation::AnnotationDraft, block_size::BlockSize, export::ExportAction,
-    stroke_width::StrokeWidth, tool::Tool,
+    annotation::AnnotationDraft,
+    export::ExportAction,
+    style::{BlockSize, StrokeWidth},
+    tool::Tool,
 };
 use iced::Color;
 

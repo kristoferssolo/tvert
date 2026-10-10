@@ -1,4 +1,4 @@
-use crate::{ExportAction, message::Message};
+use crate::{ExportAction, editor::message::Message};
 use iced::{
     Event, event,
     keyboard::{Event as KeyboardEvent, Key},

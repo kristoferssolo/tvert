@@ -1,19 +1,13 @@
 mod annotation;
 mod annotation_canvas;
-mod block_size;
-mod blur;
 mod edit;
 mod editor;
-mod effect_region;
 mod error;
 mod export;
 mod figure;
-mod message;
 mod pixel_effect;
-mod pixelation;
 mod render;
-mod shortcuts;
-mod stroke_width;
+mod style;
 mod tool;
 mod toolbar;
 mod viewport;
@@ -22,7 +16,7 @@ pub use error::Error;
 pub use export::ExportAction;
 
 use crate::{
-    editor::{Editor, ExportHandler},
+    editor::{Editor, ExportHandler, shortcuts},
     toolbar::{HEIGHT, MIN_WIDTH},
 };
 use iced::{ContentFit, Size, Theme, event, widget::image::Handle, window};

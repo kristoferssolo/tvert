@@ -1,8 +1,7 @@
 use crate::{
     Error,
     annotation::{AnnotationDraft, InvalidAnnotation},
-    effect_region::EffectRegion,
-    pixel_effect::PixelEffect,
+    pixel_effect::{EffectRegion, PixelEffect},
 };
 use std::num::NonZeroU32;
 use tvert_image::CapturedImage;
@@ -15,7 +14,7 @@ pub struct Pixelation {
 }
 
 impl PixelEffect for Pixelation {
-    fn region(&self) -> &crate::effect_region::EffectRegion {
+    fn region(&self) -> &EffectRegion {
         &self.region
     }
 
@@ -41,7 +40,9 @@ impl TryFrom<&AnnotationDraft> for Pixelation {
 mod tests {
     use super::*;
     use crate::{
-        annotation::AnnotationDraft, block_size::BlockSize, stroke_width::StrokeWidth, tool::Tool,
+        annotation::AnnotationDraft,
+        style::{BlockSize, StrokeWidth},
+        tool::Tool,
     };
     use claims::assert_ok;
     use iced::{Color, Point};

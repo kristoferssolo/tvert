@@ -6,7 +6,6 @@ use crate::{
     viewport::rectangle_between,
 };
 use iced::Point;
-use lucide_icons::Icon;
 use strum::{Display, VariantArray};
 
 /// The edit created by the next drag
@@ -51,19 +50,6 @@ impl Tool {
         };
 
         Some(figure)
-    }
-
-    pub const fn icon(self) -> Icon {
-        match self {
-            Self::Rectangle => Icon::Square,
-            Self::Ellipse => Icon::Circle,
-            Self::Line => Icon::Minus,
-            Self::Arrow => Icon::ArrowRight,
-            Self::Pencil => Icon::Pencil,
-            Self::Highlighter => Icon::Highlighter,
-            Self::Pixelate => Icon::Grid2x2,
-            Self::Blur => Icon::CloudFog,
-        }
     }
 }
 

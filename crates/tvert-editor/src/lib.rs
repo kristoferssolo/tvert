@@ -1,12 +1,15 @@
 mod annotation;
 mod annotation_canvas;
 mod block_size;
+mod blur;
 mod edit;
 mod editor;
+mod effect_region;
 mod error;
 mod export;
 mod figure;
 mod message;
+mod pixel_effect;
 mod pixelation;
 mod render;
 mod shortcuts;

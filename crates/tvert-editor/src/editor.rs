@@ -433,18 +433,27 @@ mod tests {
         assert!(editor.undone_edits.is_empty());
     }
 
-    #[test]
-    fn pixelation_history_restores_pixels_and_preserves_the_original() {
+    #[rstest::rstest]
+    #[case(Tool::Pixelate)]
+    #[case(Tool::Blur)]
+    fn pixel_effect_history_restores_pixels_and_preserves_the_original(#[case] tool: Tool) {
         let pixels = (0..512)
-            .flat_map(|index| [u8::from(index % 2 == 0) * 255, 0, 0, 255])
+            .flat_map(|index| {
+                if index % 2 == 0 {
+                    [255, 0, 0, 255]
+                } else {
+                    [0, 0, 0, 255]
+                }
+            })
             .collect::<Vec<_>>();
         let original = Handle::from_rgba(32, 16, pixels.clone());
         let mut editor = Editor::new(original, Size::new(32.0, 16.0), Rc::new(|_, _| Ok(())));
         let region = Rectangle::new(Point::ORIGIN, Size::new(16.0, 16.0));
 
-        let _ = editor.update(add_figure(Tool::Pixelate, region));
-        let pixelated = assert_ok!(editor.render_image());
-        assert_ne!(pixelated.rgba(), pixels);
+        let _ = editor.update(add_figure(tool, region));
+        let processed = assert_ok!(editor.render_image());
+
+        assert_ne!(processed.rgba(), pixels);
         assert_eq!(
             assert_ok!(render_image(&editor.original, &[])).rgba(),
             pixels
@@ -454,17 +463,18 @@ mod tests {
         assert_eq!(assert_ok!(editor.render_image()).rgba(), pixels);
 
         let _ = editor.update(Message::Redo);
-        assert_eq!(assert_ok!(editor.render_image()).rgba(), pixelated.rgba());
+        assert_eq!(assert_ok!(editor.render_image()).rgba(), processed.rgba());
 
         let _ = editor.update(Message::Undo);
         let invalid = Rectangle::new(Point::new(40.0, 0.0), Size::new(8.0, 8.0));
-        let _ = editor.update(add_figure(Tool::Pixelate, invalid));
+        let _ = editor.update(add_figure(tool, invalid));
+
         assert!(editor.error.is_some());
         assert!(editor.edits.is_empty());
         assert_eq!(editor.undone_edits.len(), 1);
         assert_eq!(assert_ok!(editor.render_image()).rgba(), pixels);
 
         let _ = editor.update(Message::Redo);
-        assert_eq!(assert_ok!(editor.render_image()).rgba(), pixelated.rgba());
+        assert_eq!(assert_ok!(editor.render_image()).rgba(), processed.rgba());
     }
 }

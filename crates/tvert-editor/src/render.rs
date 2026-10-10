@@ -157,6 +157,7 @@ mod tests {
     };
     use claims::{assert_ok, assert_some};
     use iced::Point;
+    use rstest::rstest;
 
     fn line(color: Color, width: StrokeWidth, start: Point, end: Point) -> Annotation {
         assert_ok!(Annotation::try_from(AnnotationDraft {
@@ -270,8 +271,10 @@ mod tests {
         assert_eq!(pixel(&image, 0, 0), [255, 255, 255, 255]);
     }
 
-    #[test]
-    fn pixelates_earlier_drawings_and_keeps_later_drawings_on_top() {
+    #[rstest]
+    #[case(Tool::Pixelate)]
+    #[case(Tool::Blur)]
+    fn pixel_effects_process_earlier_drawings_and_keep_later_drawings_on_top(#[case] tool: Tool) {
         let preview = Handle::from_rgba(32, 16, [0, 0, 0, 255].repeat(512));
         let mut edits = vec![
             Edit::Annotation(line(
@@ -281,7 +284,7 @@ mod tests {
                 Point::new(32.0, 8.0),
             )),
             assert_ok!(Edit::try_from(AnnotationDraft {
-                tool: Tool::Pixelate,
+                tool,
                 stroke_width: StrokeWidth::Medium,
                 stroke_color: Color::BLACK,
                 block_size: BlockSize::default(),

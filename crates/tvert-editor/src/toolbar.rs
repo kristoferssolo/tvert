@@ -29,7 +29,7 @@ const COLORS: &[Color] = &[
 const ICON_FONT: Font = Font::with_name("lucide");
 
 pub const HEIGHT: f32 = 44.0;
-pub const MIN_WIDTH: f32 = 680.0;
+pub const MIN_WIDTH: f32 = 720.0;
 
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
@@ -68,7 +68,7 @@ pub fn view(
         ))
         .push(separator())
         .extend(
-            (selected != Tool::Pixelate)
+            (!matches!(selected, Tool::Pixelate | Tool::Blur))
                 .then(|| stroke_color_controls(stroke_color, color_pallete_open)),
         )
         .extend(match selected {

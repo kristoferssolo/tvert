@@ -1,95 +1,37 @@
 use crate::{
     Error,
     annotation::{AnnotationDraft, InvalidAnnotation},
-    viewport::{Viewport, rectangle_between},
+    effect_region::EffectRegion,
+    pixel_effect::PixelEffect,
 };
-use iced::{
-    Color, Rectangle,
-    widget::canvas::{Frame, LineDash, Path, Stroke},
-};
-use num_traits::ToPrimitive;
 use std::num::NonZeroU32;
 use tvert_image::CapturedImage;
 
 /// A retained pixelation region measured in captured-image pixels
 #[derive(Debug)]
 pub struct Pixelation {
-    bounds: Rectangle,
+    region: EffectRegion,
     block_size: NonZeroU32,
 }
 
-impl Pixelation {
-    /// Applies the effect to the image's current pixels.
-    ///
-    /// Fractional edges include every intersected pixel.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the region cannot be converted to valid pixel ranges
-    /// or pixelation fails.
-    pub fn apply(&self, image: &mut CapturedImage) -> Result<(), Error> {
-        let size = image.size();
-        let left = pixel_edge(f64::from(self.bounds.x).floor(), size.width().get())?;
-        let top = pixel_edge(f64::from(self.bounds.y).floor(), size.height().get())?;
-        let right = pixel_edge(
-            (f64::from(self.bounds.x) + f64::from(self.bounds.width)).ceil(),
-            size.width().get(),
-        )?;
-        let bottom = pixel_edge(
-            (f64::from(self.bounds.y) + f64::from(self.bounds.height)).ceil(),
-            size.height().get(),
-        )?;
+impl PixelEffect for Pixelation {
+    fn region(&self) -> &crate::effect_region::EffectRegion {
+        &self.region
+    }
 
-        image.pixelate(left..right, top..bottom, self.block_size)?;
+    fn apply(&self, image: &mut CapturedImage) -> Result<(), Error> {
+        let (x, y) = self.region.pixel_ranges(image.size())?;
+        image.pixelate(x, y, self.block_size)?;
         Ok(())
     }
-
-    /// Draws the temporary region outline without applying the pixel effect
-    pub fn draw_selection(&self, frame: &mut Frame, viewport: Viewport) {
-        let bounds = viewport.canvas_rectangle(self.bounds);
-        let path = Path::rectangle(bounds.position(), bounds.size());
-        let stroke = Stroke::default().with_width(1.0);
-        frame.stroke(&path, stroke.with_color(Color::BLACK));
-        frame.stroke(
-            &path,
-            Stroke {
-                line_dash: LineDash {
-                    segments: &[6.0, 6.0],
-                    offset: 0,
-                },
-                ..stroke.with_color(Color::WHITE)
-            },
-        );
-    }
-}
-
-fn pixel_edge(value: f64, extent: u32) -> Result<usize, Error> {
-    value
-        .clamp(0.0, f64::from(extent))
-        .to_usize()
-        .ok_or(Error::InvalidViewport)
 }
 
 impl TryFrom<&AnnotationDraft> for Pixelation {
     type Error = InvalidAnnotation;
 
     fn try_from(draft: &AnnotationDraft) -> Result<Self, Self::Error> {
-        let (&start, &end) = draft
-            .points
-            .first()
-            .zip(draft.points.last())
-            .ok_or(InvalidAnnotation)?;
-
-        if !draft
-            .points
-            .iter()
-            .all(|p| p.x.is_finite() && p.y.is_finite())
-        {
-            return Err(InvalidAnnotation);
-        }
-
         Ok(Self {
-            bounds: rectangle_between(start, end).ok_or(InvalidAnnotation)?,
+            region: EffectRegion::try_from(draft)?,
             block_size: NonZeroU32::new(draft.block_size.pixels()).ok_or(InvalidAnnotation)?,
         })
     }
@@ -102,7 +44,7 @@ mod tests {
         annotation::AnnotationDraft, block_size::BlockSize, stroke_width::StrokeWidth, tool::Tool,
     };
     use claims::assert_ok;
-    use iced::Point;
+    use iced::{Color, Point};
     use rstest::rstest;
     use tvert_image::PixelSize;
 

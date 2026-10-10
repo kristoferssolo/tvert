@@ -1,5 +1,7 @@
 use crate::{
     annotation::{Annotation, AnnotationDraft, InvalidAnnotation},
+    blur::Blur,
+    pixel_effect::PixelEffect,
     pixelation::Pixelation,
     tool::Tool,
     viewport::Viewport,
@@ -10,7 +12,7 @@ use iced::widget::canvas::Frame;
 #[derive(Debug)]
 pub enum Edit {
     Annotation(Annotation),
-    Pixelation(Pixelation),
+    Pixelation(Box<dyn PixelEffect>),
 }
 
 impl Edit {
@@ -36,7 +38,8 @@ impl TryFrom<AnnotationDraft> for Edit {
 
     fn try_from(draft: AnnotationDraft) -> Result<Self, Self::Error> {
         match draft.tool {
-            Tool::Pixelate => Ok(Self::Pixelation(Pixelation::try_from(&draft)?)),
+            Tool::Pixelate => Ok(Self::Pixelation(Box::new(Pixelation::try_from(&draft)?))),
+            Tool::Blur => Ok(Self::Pixelation(Box::new(Blur::try_from(&draft)?))),
             _ => Ok(Self::Annotation(Annotation::try_from(draft)?)),
         }
     }

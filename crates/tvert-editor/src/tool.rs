@@ -20,6 +20,7 @@ pub enum Tool {
     Pencil,
     Highlighter,
     Pixelate,
+    Blur,
 }
 
 impl Tool {
@@ -46,7 +47,7 @@ impl Tool {
             Self::Arrow => Box::new(ArrowFigure::new(start, end)),
             Self::Pencil => Box::new(PencilFigure::new(points)),
             Self::Highlighter => Box::new(HighlighterFigure::from(rectangle_between(start, end)?)),
-            Self::Pixelate => return None,
+            Self::Pixelate | Self::Blur => return None,
         };
 
         Some(figure)
@@ -61,6 +62,7 @@ impl Tool {
             Self::Pencil => Icon::Pencil,
             Self::Highlighter => Icon::Highlighter,
             Self::Pixelate => Icon::Grid2x2,
+            Self::Blur => Icon::CloudFog,
         }
     }
 }

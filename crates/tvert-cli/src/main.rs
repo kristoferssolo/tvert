@@ -32,6 +32,7 @@ fn main() -> miette::Result<ExitCode> {
 
     match args.command {
         Command::CheckConfig => {
+            config::load(args.config.as_deref())?;
             println!("Configuration is valid");
             Ok(ExitCode::SUCCESS)
         }

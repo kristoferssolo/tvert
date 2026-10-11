@@ -2,10 +2,13 @@ mod args;
 mod config;
 mod error;
 
-use crate::args::{Args, Command};
+use crate::{
+    args::{Args, Command},
+    error::ConfigError,
+};
 use clap::Parser;
-use miette::{IntoDiagnostic, miette};
-use std::{cell::RefCell, process::ExitCode, rc::Rc};
+use miette::{Diagnostic, IntoDiagnostic, MietteHandlerOpts, ReportHandler, miette};
+use std::{cell::RefCell, error::Error as StdError, process::ExitCode, rc::Rc};
 use tracing::debug;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
 use tvert_editor::ExportAction;
@@ -13,6 +16,7 @@ use tvert_wayland::Wayland;
 use tvert_workflow::{capture_output_to_png, prepare_png_copy, save_png};
 
 fn main() -> miette::Result<ExitCode> {
+    miette::set_hook(Box::new(reported_handler))?;
     let args = match Args::try_parse() {
         Ok(args) => args,
         Err(error) => {
@@ -134,4 +138,20 @@ fn main() -> miette::Result<ExitCode> {
     }
 
     Ok(ExitCode::SUCCESS)
+}
+
+fn reported_handler(diagnostic: &(dyn Diagnostic + 'static)) -> Box<dyn ReportHandler> {
+    let error: &(dyn StdError + 'static) = diagnostic;
+    let options = MietteHandlerOpts::new();
+
+    let options = if matches!(
+        error.downcast_ref::<ConfigError>(),
+        Some(ConfigError::Deserialize(_))
+    ) {
+        options.without_cause_chain()
+    } else {
+        options
+    };
+
+    Box::new(options.build())
 }

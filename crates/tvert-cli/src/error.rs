@@ -54,6 +54,23 @@ pub enum ConfigError {
         #[source]
         cause: EditorError,
     },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Deserialize(Box<DeserializeError>),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("invalid value at {path} in {}: {}", .source_code.name(), .cause.message())]
+#[diagnostic(code(tvert::config::value))]
+pub struct DeserializeError {
+    path: String,
+    #[source_code]
+    source_code: Arc<NamedSource<String>>,
+    #[label("{}", .cause.message())]
+    span: Option<SourceSpan>,
+    #[source]
+    cause: toml::de::Error,
 }
 
 impl ConfigError {
@@ -84,6 +101,29 @@ impl ConfigError {
             },
             _ => Self::Editor { source_code, cause },
         }
+    }
+
+    pub fn deserialize(
+        name: &str,
+        source: &str,
+        error: serde_path_to_error::Error<toml::de::Error>,
+    ) -> Self {
+        let path = if error.path().iter().next().is_none() {
+            "configuration root".to_owned()
+        } else {
+            error.path().to_string()
+        };
+
+        let mut cause = error.into_inner();
+        let span = cause.span().map(SourceSpan::from);
+        cause.set_input(None);
+
+        Self::Deserialize(Box::new(DeserializeError {
+            path,
+            source_code: Arc::new(NamedSource::new(name, source.to_owned())),
+            span,
+            cause,
+        }))
     }
 }
 

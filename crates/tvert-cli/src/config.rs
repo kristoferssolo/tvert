@@ -134,8 +134,8 @@ fn parse_document<'a>(name: &str, source: &'a str) -> Result<Spanned<DeTable<'a>
 }
 
 fn decode(document: &Spanned<DeTable<'_>>, name: &str, source: &str) -> Result<Settings> {
-    let config = Config::deserialize(Deserializer::from(document.clone()))
-        .map_err(|error| ConfigError::toml(name, source, error))?;
+    let config: Config = serde_path_to_error::deserialize(Deserializer::from(document.clone()))
+        .map_err(|error| ConfigError::deserialize(name, source, error))?;
 
     config
         .editor
@@ -278,5 +278,18 @@ mod tests {
         let settings = assert_ok!(parse("test.toml", &source));
 
         assert_eq!(settings.stroke_color.into_rgba8(), expected);
+    }
+
+    #[test]
+    fn deserialization_diagnostics_put_the_field_before_the_reason() {
+        let error = assert_err!(parse("user.toml", "[editor]\ntool = 'arrows'"));
+        let message = error.to_string();
+
+        assert!(
+            message
+                .starts_with("invalid value at editor.tool in user.toml: unknown variant `arrows`")
+        );
+        assert!(message.contains("expected one of"));
+        assert!(!message.contains("\nin `editor.tool`"));
     }
 }

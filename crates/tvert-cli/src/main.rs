@@ -3,7 +3,7 @@ mod config;
 mod error;
 
 use crate::{
-    args::{Args, Command},
+    args::{Args, CaptureCommand, Command},
     error::ConfigError,
 };
 use clap::Parser;
@@ -11,12 +11,13 @@ use miette::{Diagnostic, IntoDiagnostic, MietteHandlerOpts, ReportHandler, miett
 use std::{cell::RefCell, error::Error as StdError, process::ExitCode, rc::Rc};
 use tracing::debug;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
-use tvert_editor::ExportAction;
+use tvert_editor::{ExportAction, Settings};
 use tvert_wayland::Wayland;
 use tvert_workflow::{capture_output_to_png, prepare_png_copy, save_png};
 
 fn main() -> miette::Result<ExitCode> {
     miette::set_hook(Box::new(reported_handler))?;
+
     let args = match Args::try_parse() {
         Ok(args) => args,
         Err(error) => {
@@ -30,12 +31,22 @@ fn main() -> miette::Result<ExitCode> {
     };
     let settings = config::load(args.config.as_deref())?;
 
-    let output_name = match &args.command {
-        Command::CaptureOutput { output, .. }
-        | Command::CaptureRegion { output, .. }
-        | Command::EditRegion { output, .. }
-        | Command::ProbeOverlay { output }
-        | Command::SelectRegion { output } => output,
+    match args.command {
+        Command::CheckConfig => {
+            println!("Configuration is valid");
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Capture(command) => run_capture(command, settings),
+    }
+}
+
+fn run_capture(command: CaptureCommand, settings: Settings) -> miette::Result<ExitCode> {
+    let output_name = match &command {
+        CaptureCommand::CaptureOutput { output, .. }
+        | CaptureCommand::CaptureRegion { output, .. }
+        | CaptureCommand::EditRegion { output, .. }
+        | CaptureCommand::ProbeOverlay { output }
+        | CaptureCommand::SelectRegion { output } => output,
     };
 
     tracing_subscriber::fmt()
@@ -64,12 +75,12 @@ fn main() -> miette::Result<ExitCode> {
 
     debug!(?output_id, ?output_name, "selected output");
 
-    match args.command {
-        Command::CaptureOutput { path, .. } => {
+    match command {
+        CaptureCommand::CaptureOutput { path, .. } => {
             capture_output_to_png(&mut wayland, output_id, &path).into_diagnostic()?;
             println!("Saved {}", path.display());
         }
-        Command::CaptureRegion { path, .. } => {
+        CaptureCommand::CaptureRegion { path, .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
 
             let Some(image) = wayland.select_region(output_id).into_diagnostic()? else {
@@ -80,7 +91,7 @@ fn main() -> miette::Result<ExitCode> {
             save_png(&path, &image).into_diagnostic()?;
             println!("Saved {} to {}", image.size(), path.display());
         }
-        Command::EditRegion { path, .. } => {
+        CaptureCommand::EditRegion { path, .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
 
             let Some(image) = wayland.select_region(output_id).into_diagnostic()? else {
@@ -123,11 +134,11 @@ fn main() -> miette::Result<ExitCode> {
                 offer.serve().into_diagnostic()?;
             }
         }
-        Command::ProbeOverlay { .. } => {
+        CaptureCommand::ProbeOverlay { .. } => {
             let configure = wayland.prepare_overlay(output_id).into_diagnostic()?;
             println!("Overlay configure: {configure} surface-local units");
         }
-        Command::SelectRegion { .. } => {
+        CaptureCommand::SelectRegion { .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
 
             match wayland.select_region(output_id).into_diagnostic()? {

@@ -15,6 +15,15 @@ pub struct Args {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Validate configuration without connecting to Wayland
+    CheckConfig,
+
+    #[command(flatten)]
+    Capture(CaptureCommand),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CaptureCommand {
     /// Capture a monitor and save it as a PNG. Right-click to cancel
     CaptureOutput {
         /// Output name, such as DP-1

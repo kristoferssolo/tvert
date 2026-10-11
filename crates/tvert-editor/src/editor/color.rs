@@ -49,7 +49,7 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editor::Message;
+    use crate::{Settings, editor::Message};
     use iced::{Size, widget::image::Handle};
     use std::rc::Rc;
 
@@ -57,6 +57,7 @@ mod tests {
         Editor::new(
             Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
             Size::new(1.0, 1.0),
+            Settings::default(),
             Rc::new(|_, _| Ok(())),
         )
     }

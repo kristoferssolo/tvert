@@ -7,6 +7,7 @@ mod export;
 mod figure;
 mod pixel_effect;
 mod render;
+mod settings;
 mod style;
 mod tool;
 mod toolbar;
@@ -14,6 +15,7 @@ mod viewport;
 
 pub use error::Error;
 pub use export::ExportAction;
+pub use settings::Settings;
 
 use crate::{
     editor::{Editor, ExportHandler, shortcuts},
@@ -34,14 +36,18 @@ use tvert_image::CapturedImage;
 ///
 /// # Errors
 ///
-/// Returns [`Error::Runtime`] if Iced cannot start or run the window.
+/// Returns [`Error::InvalidSetting`] if a setting is outside its supported range,
+/// or [`Error::Runtime`] if Iced cannot start or run the window.
 pub fn run<E>(
     image: CapturedImage,
+    settings: Settings,
     export: impl Fn(ExportAction, &CapturedImage) -> Result<(), E> + 'static,
 ) -> Result<(), Error>
 where
     E: StdError + Send + Sync + 'static,
 {
+    settings.validate()?;
+
     let (width, height) = image.size().into();
     let image_size = Size::from((width, height));
     let preview = Handle::from_rgba(width, height, image.into_rgba());
@@ -50,7 +56,7 @@ where
     });
 
     iced::application(
-        move || Editor::new(preview.clone(), image_size, export.clone()),
+        move || Editor::new(preview.clone(), image_size, settings, export.clone()),
         Editor::update,
         Editor::view,
     )

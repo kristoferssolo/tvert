@@ -1,4 +1,5 @@
 mod args;
+mod config;
 
 use crate::args::{Args, Command};
 use clap::Parser;
@@ -24,6 +25,7 @@ fn main() -> Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
     };
+    let settings = config::load(args.config.as_deref())?;
 
     let output_name = match &args.command {
         Command::CaptureOutput { output, .. }
@@ -89,6 +91,7 @@ fn main() -> Result<ExitCode> {
 
             tvert_editor::run(
                 image,
+                settings,
                 move |action, image| -> Result<(), tvert_workflow::Error> {
                     let offer = match action {
                         ExportAction::Copy | ExportAction::CopyAndSave => {

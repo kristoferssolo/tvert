@@ -28,8 +28,10 @@ lucide-icons = "1.53"
 num-traits = "0.2"
 png = "0.18"
 rustix = "1"
+serde = "1"
 strum = "0.28"
 thiserror = "2"
+toml = { version = "1.1", default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3" }
 wl-clipboard-rs = "0.9"

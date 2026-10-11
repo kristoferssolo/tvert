@@ -20,4 +20,13 @@ pub enum Error {
     /// The caller's export operation failed
     #[error("failed to export screenshot")]
     Export(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    /// An initial editor setting is outside its supported range
+    #[error("{name} must be between {min} and {max}, got {value}")]
+    InvalidSetting {
+        name: &'static str,
+        value: u16,
+        min: u16,
+        max: u16,
+    },
 }

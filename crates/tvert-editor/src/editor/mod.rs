@@ -6,14 +6,11 @@ mod view;
 pub use message::Message;
 
 use crate::{
-    Error,
+    Error, Settings,
     edit::Edit,
     export::ExportAction,
     render::{render_edits, render_image},
-    style::{
-        BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_SIGMA,
-        DEFAULT_STROKE_COLOR, DEFAULT_STROKE_WIDTH, STROKE_WIDTH_RANGE,
-    },
+    style::{BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, DEFAULT_STROKE_COLOR, STROKE_WIDTH_RANGE},
     tool::Tool,
 };
 use iced::{
@@ -46,15 +43,20 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new(preview: Handle, image_size: Size, export: ExportHandler) -> Self {
+    pub fn new(
+        preview: Handle,
+        image_size: Size,
+        settings: Settings,
+        export: ExportHandler,
+    ) -> Self {
         Self {
             original: preview.clone(),
             preview,
             image_size,
             tool: Tool::default(),
-            stroke_width: DEFAULT_STROKE_WIDTH,
-            block_size: DEFAULT_BLOCK_SIZE,
-            blur_sigma: DEFAULT_BLUR_SIGMA,
+            stroke_width: settings.stroke_width,
+            block_size: settings.pixelation_block_size,
+            blur_sigma: settings.blur_sigma,
             stroke_selection: DEFAULT_STROKE_COLOR.into(),
             color_palette_open: false,
             color_hex: color::format_hex(DEFAULT_STROKE_COLOR),
@@ -206,7 +208,11 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{annotation::AnnotationDraft, viewport::Viewport};
+    use crate::{
+        annotation::AnnotationDraft,
+        style::{DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_SIGMA, DEFAULT_STROKE_WIDTH},
+        viewport::Viewport,
+    };
     use claims::{assert_ok, assert_some};
     use iced::{Color, Point, Rectangle};
     use rstest::rstest;
@@ -215,6 +221,7 @@ mod tests {
         Editor::new(
             Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
             Size::new(1.0, 1.0),
+            Settings::default(),
             Rc::new(|_, _| Ok(())),
         )
     }
@@ -420,7 +427,12 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let original = Handle::from_rgba(32, 16, pixels.clone());
-        let mut editor = Editor::new(original, Size::new(32.0, 16.0), Rc::new(|_, _| Ok(())));
+        let mut editor = Editor::new(
+            original,
+            Size::new(32.0, 16.0),
+            Settings::default(),
+            Rc::new(|_, _| Ok(())),
+        );
         let region = Rectangle::new(Point::ORIGIN, Size::new(16.0, 16.0));
 
         let _ = editor.update(add_figure(tool, region));

@@ -7,6 +7,10 @@ use std::path::PathBuf;
 pub struct Args {
     #[command(subcommand)]
     pub command: Command,
+
+    /// Read configuration from this TOML file
+    #[arg(long, global = true, value_name = "FILE")]
+    pub config: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]

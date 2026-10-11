@@ -28,7 +28,8 @@ pub fn view(
     selected: Tool,
     selected_size: u16,
     stroke_selection: Selection,
-    color_draft: Option<Selection>,
+    color_palette_open: bool,
+    color_hex: &str,
     can_undo: bool,
     can_redo: bool,
 ) -> Element<'static, Message> {
@@ -60,7 +61,7 @@ pub fn view(
         .push(separator())
         .extend(
             (!matches!(selected, Tool::Pixelate | Tool::Blur))
-                .then(|| color::view(stroke_selection, color_draft)),
+                .then(|| color::view(stroke_selection, color_palette_open, color_hex)),
         )
         .extend(match selected {
             Tool::Pixelate => Some(size::view(

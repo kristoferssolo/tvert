@@ -1,3 +1,4 @@
+pub mod color;
 mod message;
 pub mod shortcuts;
 mod view;
@@ -35,7 +36,8 @@ pub struct Editor {
     block_size: u16,
     blur_sigma: u16,
     stroke_selection: Selection,
-    color_draft: Option<Selection>,
+    color_palette_open: bool,
+    color_hex: String,
     export: ExportHandler,
     error: Option<Error>,
     edits: Vec<Edit>,
@@ -54,7 +56,8 @@ impl Editor {
             block_size: DEFAULT_BLOCK_SIZE,
             blur_sigma: DEFAULT_BLUR_SIGMA,
             stroke_selection: DEFAULT_STROKE_COLOR.into(),
-            color_draft: None,
+            color_palette_open: false,
+            color_hex: color::format_hex(DEFAULT_STROKE_COLOR),
             export,
             error: None,
             edits: Vec::new(),
@@ -73,12 +76,11 @@ impl Editor {
             }
             Message::SelectTool(tool) => {
                 self.tool = tool;
-                self.color_draft = None;
+                self.close_color_palette();
                 return Task::none();
             }
             Message::SelectStrokeColor(stroke_color) => {
-                self.stroke_selection = stroke_color.into();
-                self.color_draft = None;
+                self.select_stroke_color(stroke_color);
                 return Task::none();
             }
             Message::SelectStrokeWidth(stroke_width) => {
@@ -96,23 +98,20 @@ impl Editor {
                 return Task::none();
             }
             Message::ToggleColorPalette => {
-                self.color_draft = self.color_draft.is_none().then_some(self.stroke_selection);
+                self.color_palette_open = !self.color_palette_open;
+                self.color_hex = color::format_hex(self.stroke_selection.into());
                 return Task::none();
             }
             Message::CloseColorPalette => {
-                self.color_draft = None;
+                self.close_color_palette();
                 return Task::none();
             }
-            Message::PreviewStrokeColor(selection) => {
-                if let Some(draft) = &mut self.color_draft {
-                    *draft = selection;
-                }
+            Message::SelectStrokeSelection(selection) => {
+                self.select_stroke_selection(selection);
                 return Task::none();
             }
-            Message::ApplyStrokeColor => {
-                if let Some(selection) = self.color_draft.take() {
-                    self.stroke_selection = selection;
-                }
+            Message::EditColorHex(value) => {
+                self.edit_color_hex(value);
                 return Task::none();
             }
             Message::Undo => self.undo(),
@@ -450,31 +449,5 @@ mod tests {
 
         let _ = editor.update(Message::Redo);
         assert_eq!(assert_ok!(editor.render_image()).rgba(), processed.rgba());
-    }
-
-    #[test]
-    fn custom_color_is_applied_or_discarded_and_retains_hue_when_reopened() {
-        let mut editor = editor();
-        let original = editor.stroke_selection;
-        let candidate = original.with_hue(210.0).with_lightness(0.0);
-
-        let _ = editor.update(Message::ToggleColorPalette);
-        let _ = editor.update(Message::PreviewStrokeColor(candidate));
-        assert_eq!(editor.stroke_selection, original);
-        assert_eq!(editor.color_draft, Some(candidate));
-
-        let _ = editor.update(Message::CloseColorPalette);
-        assert_eq!(editor.stroke_selection, original);
-        assert!(editor.color_draft.is_none());
-
-        let _ = editor.update(Message::ToggleColorPalette);
-        assert_eq!(editor.color_draft, Some(original));
-        let _ = editor.update(Message::PreviewStrokeColor(candidate));
-        let _ = editor.update(Message::ApplyStrokeColor);
-        assert_eq!(editor.stroke_selection, candidate);
-        assert!(editor.color_draft.is_none());
-
-        let _ = editor.update(Message::ToggleColorPalette);
-        assert_eq!(editor.color_draft, Some(candidate));
     }
 }

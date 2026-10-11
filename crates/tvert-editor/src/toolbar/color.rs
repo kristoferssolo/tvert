@@ -1,5 +1,6 @@
+use crate::editor::color::parse_hex;
 use crate::{editor::Message, style::DEFAULT_STROKE_COLOR, toolbar::ICON_FONT};
-use iced::widget::{button, column, container, row, space, text};
+use iced::widget::{button, column, container, row, space, text, text_input};
 use iced::{Border, Color, Element, Fill, Theme, alignment::Vertical, widget::Row};
 use iced_aw::{DropDown, drop_down};
 use iced_color_triangle::{Selection, color_triangle};
@@ -14,8 +15,8 @@ const COLORS: &[Color] = &[
     Color::BLACK,
 ];
 
-pub(super) fn view(selected: Selection, draft: Option<Selection>) -> Element<'static, Message> {
-    let selected = Color::from(selected);
+pub(super) fn view(selection: Selection, open: bool, hex: &str) -> Element<'static, Message> {
+    let selected = Color::from(selection);
     let trigger = button(
         row![
             color_swatch(selected),
@@ -32,28 +33,19 @@ pub(super) fn view(selected: Selection, draft: Option<Selection>) -> Element<'st
     .on_press(Message::ToggleColorPalette)
     .style(button::text);
 
-    let palette = draft.map_or_else(|| space().into(), |selection| picker(selected, selection));
-
-    DropDown::new(trigger, palette, draft.is_some())
+    DropDown::new(trigger, picker(selection, hex), open)
         .width(264)
         .alignment(drop_down::Alignment::Bottom)
         .on_dismiss(Message::CloseColorPalette)
         .into()
 }
 
-fn picker(selected: Color, selection: Selection) -> Element<'static, Message> {
+fn picker(selection: Selection, hex: &str) -> Element<'static, Message> {
     container(
         column![
-            presets(selected),
-            color_triangle(selection, Message::PreviewStrokeColor),
-            preview(selection),
-            row![
-                space().width(Fill),
-                button("Cancel")
-                    .on_press(Message::CloseColorPalette)
-                    .style(button::text),
-                button("Apply").on_press(Message::ApplyStrokeColor)
-            ],
+            presets(selection.into()),
+            color_triangle(selection, Message::SelectStrokeSelection),
+            hex_input(selection, hex),
         ]
         .spacing(8)
         .width(240),
@@ -83,16 +75,25 @@ fn presets(selected: Color) -> Element<'static, Message> {
     .into()
 }
 
-fn preview(selection: Selection) -> Element<'static, Message> {
-    let color = Color::from(selection);
-    let [red, green, blue, _] = color.into_rgba8();
-    row![
-        color_swatch(color),
-        text(format!("#{red:02X}{green:02X}{blue:02X}"))
-    ]
-    .spacing(8)
-    .align_y(Vertical::Center)
-    .into()
+fn hex_input(selection: Selection, hex: &str) -> Element<'static, Message> {
+    let valid = parse_hex(hex).is_some();
+    let input = text_input("#RRGGBB", hex)
+        .on_input(Message::EditColorHex)
+        .on_paste(Message::EditColorHex)
+        .padding(8)
+        .width(Fill)
+        .style(move |theme: &Theme, status| {
+            let mut style = text_input::default(theme, status);
+            if !valid {
+                style.border.color = theme.palette().danger;
+            }
+            style
+        });
+
+    row![color_swatch(selection.into()), input]
+        .spacing(8)
+        .align_y(Vertical::Center)
+        .into()
 }
 
 fn color_swatch(color: Color) -> Element<'static, Message> {

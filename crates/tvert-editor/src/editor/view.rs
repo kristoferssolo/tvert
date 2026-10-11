@@ -17,7 +17,8 @@ impl Editor {
                 self.tool,
                 self.selected_size(),
                 self.stroke_selection,
-                self.color_draft,
+                self.color_palette_open,
+                &self.color_hex,
                 !self.edits.is_empty(),
                 !self.undone_edits.is_empty()
             ),
@@ -50,7 +51,7 @@ impl Editor {
         let mut preview = stack![picture, annotations].width(Fill).height(Fill);
 
         // Dismissing the palette must not start a drag on the image
-        if self.color_draft.is_some() {
+        if self.color_palette_open {
             preview = preview.push(opaque(space().width(Fill).height(Fill)));
         }
 

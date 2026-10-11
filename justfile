@@ -1,6 +1,4 @@
 export RUST_LOG := env("RUST_LOG", "tvert=debug,tvert_wayland=debug")
-export RUST_BACKTRACE := env("RUST_BACKTRACE", "1")
-export RUST_SPANTRACE := env("RUST_SPANTRACE", "1")
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 

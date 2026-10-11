@@ -1,9 +1,10 @@
 mod args;
 mod config;
+mod error;
 
 use crate::args::{Args, Command};
 use clap::Parser;
-use color_eyre::{Result, eyre::eyre};
+use miette::{IntoDiagnostic, miette};
 use std::{cell::RefCell, process::ExitCode, rc::Rc};
 use tracing::debug;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
@@ -11,13 +12,11 @@ use tvert_editor::ExportAction;
 use tvert_wayland::Wayland;
 use tvert_workflow::{capture_output_to_png, prepare_png_copy, save_png};
 
-fn main() -> Result<ExitCode> {
-    color_eyre::install()?;
-
+fn main() -> miette::Result<ExitCode> {
     let args = match Args::try_parse() {
         Ok(args) => args,
         Err(error) => {
-            error.print()?;
+            error.print().into_diagnostic()?;
 
             if error.use_stderr() {
                 return Ok(ExitCode::from(2));
@@ -38,9 +37,10 @@ fn main() -> Result<ExitCode> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .finish()
-        .try_init()?;
+        .try_init()
+        .into_diagnostic()?;
 
-    let mut wayland = Wayland::connect()?;
+    let mut wayland = Wayland::connect().into_diagnostic()?;
 
     for global in wayland.globals() {
         println!("{global}");
@@ -56,30 +56,30 @@ fn main() -> Result<ExitCode> {
         .outputs()
         .find(|output| output.name == output_name.as_ref())
         .map(|output| output.id)
-        .ok_or_else(|| eyre!("output not found: {output_name}"))?;
+        .ok_or_else(|| miette!("output not found: {output_name}"))?;
 
     debug!(?output_id, ?output_name, "selected output");
 
     match args.command {
         Command::CaptureOutput { path, .. } => {
-            capture_output_to_png(&mut wayland, output_id, &path)?;
+            capture_output_to_png(&mut wayland, output_id, &path).into_diagnostic()?;
             println!("Saved {}", path.display());
         }
         Command::CaptureRegion { path, .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
 
-            let Some(image) = wayland.select_region(output_id)? else {
+            let Some(image) = wayland.select_region(output_id).into_diagnostic()? else {
                 println!("Selection cancelled");
                 return Ok(ExitCode::SUCCESS);
             };
 
-            save_png(&path, &image)?;
+            save_png(&path, &image).into_diagnostic()?;
             println!("Saved {} to {}", image.size(), path.display());
         }
         Command::EditRegion { path, .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
 
-            let Some(image) = wayland.select_region(output_id)? else {
+            let Some(image) = wayland.select_region(output_id).into_diagnostic()? else {
                 println!("Selection cancelled");
                 return Ok(ExitCode::SUCCESS);
             };
@@ -111,21 +111,22 @@ fn main() -> Result<ExitCode> {
 
                     Ok(())
                 },
-            )?;
+            )
+            .into_diagnostic()?;
 
             if let Some(offer) = clipboard.take() {
                 println!("Serving the copied image until the clipboard is replaced.");
-                offer.serve()?;
+                offer.serve().into_diagnostic()?;
             }
         }
         Command::ProbeOverlay { .. } => {
-            let configure = wayland.prepare_overlay(output_id)?;
+            let configure = wayland.prepare_overlay(output_id).into_diagnostic()?;
             println!("Overlay configure: {configure} surface-local units");
         }
         Command::SelectRegion { .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
 
-            match wayland.select_region(output_id)? {
+            match wayland.select_region(output_id).into_diagnostic()? {
                 Some(image) => println!("Selected {}", image.size()),
                 None => println!("Selection cancelled"),
             }

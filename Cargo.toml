@@ -20,11 +20,11 @@ tvert-workflow = { path = "crates/tvert-workflow" }
 iced-color-triangle = { path = "crates/iced-color-triangle" }
 
 clap = { version = "4.6" }
-color-eyre = "0.6"
 iced = { version = "0.14", default-features = false }
 iced_aw = { version = "0.14", default-features = false }
 image = { version = "0.25", default-features = false }
 lucide-icons = "1.53"
+miette = { version = "7.6", default-features = false }
 num-traits = "0.2"
 png = "0.18"
 rustix = "1"

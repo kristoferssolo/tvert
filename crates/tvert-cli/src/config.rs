@@ -15,7 +15,7 @@ use tvert_editor::{Settings, Tool};
 
 type Result<T, E = ConfigError> = std::result::Result<T, E>;
 
-const DEFAULT_CONFIG: &str = include_str!("../../../configs/config.toml");
+pub const DEFAULT_CONFIG: &str = include_str!("../../../configs/config.toml");
 const DEFAULT_CONFIG_NAME: &str = "configs/config.toml (embedded)";
 
 #[derive(Debug, Deserialize)]

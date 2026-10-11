@@ -18,6 +18,9 @@ pub enum Command {
     /// Validate configuration without connecting to Wayland
     CheckConfig,
 
+    /// Print the embeded default configuration as TOML
+    PrintDefaultConfig,
+
     #[command(flatten)]
     Capture(CaptureCommand),
 }

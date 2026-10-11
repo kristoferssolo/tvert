@@ -29,14 +29,20 @@ fn main() -> miette::Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
     };
-    let settings = config::load(args.config.as_deref())?;
 
     match args.command {
         Command::CheckConfig => {
             println!("Configuration is valid");
             Ok(ExitCode::SUCCESS)
         }
-        Command::Capture(command) => run_capture(command, settings),
+        Command::PrintDefaultConfig => {
+            print!("{}", config::DEFAULT_CONFIG);
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Capture(command) => {
+            let settings = config::load(args.config.as_deref())?;
+            run_capture(command, settings)
+        }
     }
 }
 

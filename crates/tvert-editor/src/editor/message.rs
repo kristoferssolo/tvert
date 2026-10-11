@@ -1,16 +1,19 @@
 use crate::{annotation::AnnotationDraft, export::ExportAction, tool::Tool};
 use iced::Color;
+use iced_color_triangle::Selection;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
     AddEdit(AnnotationDraft),
     SelectTool(Tool),
-    SelectStrokeColor(Color),
     SelectStrokeWidth(u16),
     SelectBlockSize(u16),
     SelectBlurSigma(u16),
-    ToggleColorPallete,
-    CloseColorPallete,
+    ToggleColorPalette,
+    CloseColorPalette,
+    SelectStrokeColor(Color),
+    PreviewStrokeColor(Selection),
+    ApplyStrokeColor,
     Undo,
     Redo,
     Export(ExportAction),

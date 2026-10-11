@@ -3002,6 +3002,7 @@ version = "0.1.0"
 dependencies = [
  "claims",
  "iced",
+ "iced-color-triangle",
  "iced_aw",
  "lucide-icons",
  "num-traits",

@@ -13,7 +13,8 @@ use crate::{
     toolbar::button::{icon_button, separator},
 };
 use iced::widget::container;
-use iced::{Color, Element, Fill, Font, alignment::Vertical, widget::Row};
+use iced::{Element, Fill, Font, alignment::Vertical, widget::Row};
+use iced_color_triangle::Selection;
 use lucide_icons::Icon;
 use strum::VariantArray;
 
@@ -26,8 +27,8 @@ pub const MIN_WIDTH: f32 = 800.0;
 pub fn view(
     selected: Tool,
     selected_size: u16,
-    stroke_color: Color,
-    color_pallete_open: bool,
+    stroke_selection: Selection,
+    color_draft: Option<Selection>,
     can_undo: bool,
     can_redo: bool,
 ) -> Element<'static, Message> {
@@ -59,7 +60,7 @@ pub fn view(
         .push(separator())
         .extend(
             (!matches!(selected, Tool::Pixelate | Tool::Blur))
-                .then(|| color::view(stroke_color, color_pallete_open)),
+                .then(|| color::view(stroke_selection, color_draft)),
         )
         .extend(match selected {
             Tool::Pixelate => Some(size::view(

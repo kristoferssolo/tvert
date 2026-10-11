@@ -17,6 +17,8 @@ tvert-image = { path = "crates/tvert-image" }
 tvert-wayland = { path = "crates/tvert-wayland" }
 tvert-workflow = { path = "crates/tvert-workflow" }
 
+iced-color-triangle = { path = "crates/iced-color-triangle" }
+
 clap = { version = "4.6" }
 color-eyre = "0.6"
 iced = { version = "0.14", default-features = false }

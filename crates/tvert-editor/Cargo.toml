@@ -9,6 +9,8 @@ license.workspace = true
 [dependencies]
 tvert-image.workspace = true
 
+iced-color-triangle.workspace = true
+
 iced = { workspace = true, features = [
   "advanced",
   "canvas",

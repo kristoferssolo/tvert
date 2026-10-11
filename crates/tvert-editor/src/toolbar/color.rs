@@ -1,7 +1,8 @@
 use crate::{editor::Message, style::DEFAULT_STROKE_COLOR, toolbar::ICON_FONT};
-use iced::widget::{Column, button, container, row, space, text};
-use iced::{Border, Color, Element, Theme, alignment::Vertical, widget::Row};
+use iced::widget::{button, column, container, row, space, text};
+use iced::{Border, Color, Element, Fill, Theme, alignment::Vertical, widget::Row};
 use iced_aw::{DropDown, drop_down};
+use iced_color_triangle::{Selection, color_triangle};
 use lucide_icons::Icon;
 
 const COLORS: &[Color] = &[
@@ -13,7 +14,8 @@ const COLORS: &[Color] = &[
     Color::BLACK,
 ];
 
-pub(super) fn view(selected: Color, open: bool) -> Element<'static, Message> {
+pub(super) fn view(selected: Selection, draft: Option<Selection>) -> Element<'static, Message> {
+    let selected = Color::from(selected);
     let trigger = button(
         row![
             color_swatch(selected),
@@ -27,38 +29,70 @@ pub(super) fn view(selected: Color, open: bool) -> Element<'static, Message> {
     .width(60)
     .height(36)
     .padding(8)
-    .on_press(Message::ToggleColorPallete)
+    .on_press(Message::ToggleColorPalette)
     .style(button::text);
 
-    let rows = COLORS.chunks(3).map(|colors| {
-        Row::with_children(colors.iter().copied().map(|color| {
-            button(color_swatch(color))
-                .width(36)
-                .height(36)
-                .padding(8)
-                .on_press(Message::SelectStrokeColor(color))
-                .style(move |theme, status| {
-                    if color == selected {
-                        button::primary(theme, status)
-                    } else {
-                        button::background(theme, status)
-                    }
-                })
-                .into()
-        }))
-        .spacing(4)
-        .into()
-    });
+    let palette = draft.map_or_else(|| space().into(), |selection| picker(selected, selection));
 
-    let palette = container(Column::with_children(rows).spacing(4))
-        .padding(8)
-        .style(container::rounded_box);
-
-    DropDown::new(trigger, palette, open)
-        .width(132)
+    DropDown::new(trigger, palette, draft.is_some())
+        .width(264)
         .alignment(drop_down::Alignment::Bottom)
-        .on_dismiss(Message::CloseColorPallete)
+        .on_dismiss(Message::CloseColorPalette)
         .into()
+}
+
+fn picker(selected: Color, selection: Selection) -> Element<'static, Message> {
+    container(
+        column![
+            presets(selected),
+            color_triangle(selection, Message::PreviewStrokeColor),
+            preview(selection),
+            row![
+                space().width(Fill),
+                button("Cancel")
+                    .on_press(Message::CloseColorPalette)
+                    .style(button::text),
+                button("Apply").on_press(Message::ApplyStrokeColor)
+            ],
+        ]
+        .spacing(8)
+        .width(240),
+    )
+    .padding(12)
+    .style(container::rounded_box)
+    .into()
+}
+
+fn presets(selected: Color) -> Element<'static, Message> {
+    Row::with_children(COLORS.iter().copied().map(|color| {
+        button(color_swatch(color))
+            .width(36)
+            .height(36)
+            .padding(8)
+            .on_press(Message::SelectStrokeColor(color))
+            .style(move |theme, status| {
+                if color.into_rgba8() == selected.into_rgba8() {
+                    button::primary(theme, status)
+                } else {
+                    button::background(theme, status)
+                }
+            })
+            .into()
+    }))
+    .spacing(4)
+    .into()
+}
+
+fn preview(selection: Selection) -> Element<'static, Message> {
+    let color = Color::from(selection);
+    let [red, green, blue, _] = color.into_rgba8();
+    row![
+        color_swatch(color),
+        text(format!("#{red:02X}{green:02X}{blue:02X}"))
+    ]
+    .spacing(8)
+    .align_y(Vertical::Center)
+    .into()
 }
 
 fn color_swatch(color: Color) -> Element<'static, Message> {

@@ -3,7 +3,10 @@ use crate::{
     editor::{Editor, Message},
     toolbar,
 };
-use iced::widget::{canvas, column, container, image, opaque, space, stack, text};
+use iced::{
+    Color,
+    widget::{canvas, column, container, image, opaque, space, stack, text},
+};
 use iced::{ContentFit, Element, Fill};
 use std::error::Error as StdError;
 
@@ -13,8 +16,8 @@ impl Editor {
             toolbar::view(
                 self.tool,
                 self.selected_size(),
-                self.stroke_color,
-                self.color_pallete_open,
+                self.stroke_selection,
+                self.color_draft,
                 !self.edits.is_empty(),
                 !self.undone_edits.is_empty()
             ),
@@ -38,7 +41,7 @@ impl Editor {
             image_size: self.image_size,
             tool: self.tool,
             size: self.selected_size(),
-            stroke_color: self.stroke_color,
+            stroke_color: Color::from(self.stroke_selection),
             cache: &self.cache,
         })
         .width(Fill)
@@ -47,7 +50,7 @@ impl Editor {
         let mut preview = stack![picture, annotations].width(Fill).height(Fill);
 
         // Dismissing the palette must not start a drag on the image
-        if self.color_pallete_open {
+        if self.color_draft.is_some() {
             preview = preview.push(opaque(space().width(Fill).height(Fill)));
         }
 

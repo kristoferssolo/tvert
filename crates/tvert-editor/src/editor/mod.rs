@@ -16,9 +16,10 @@ use crate::{
     tool::Tool,
 };
 use iced::{
-    Color, Size, Task,
+    Size, Task,
     widget::{canvas::Cache, image::Handle},
 };
+use iced_color_triangle::Selection;
 use std::rc::Rc;
 use tvert_image::CapturedImage;
 
@@ -30,16 +31,16 @@ pub struct Editor {
     preview: Handle,
     image_size: Size,
     tool: Tool,
-    stroke_color: Color,
     stroke_width: u16,
     block_size: u16,
     blur_sigma: u16,
+    stroke_selection: Selection,
+    color_draft: Option<Selection>,
     export: ExportHandler,
     error: Option<Error>,
     edits: Vec<Edit>,
     undone_edits: Vec<Edit>,
     cache: Cache,
-    color_pallete_open: bool,
 }
 
 impl Editor {
@@ -49,16 +50,16 @@ impl Editor {
             preview,
             image_size,
             tool: Tool::default(),
-            stroke_color: DEFAULT_STROKE_COLOR,
             stroke_width: DEFAULT_STROKE_WIDTH,
             block_size: DEFAULT_BLOCK_SIZE,
             blur_sigma: DEFAULT_BLUR_SIGMA,
+            stroke_selection: DEFAULT_STROKE_COLOR.into(),
+            color_draft: None,
             export,
             error: None,
             edits: Vec::new(),
             undone_edits: Vec::new(),
             cache: Cache::new(),
-            color_pallete_open: false,
         }
     }
 
@@ -72,12 +73,12 @@ impl Editor {
             }
             Message::SelectTool(tool) => {
                 self.tool = tool;
-                self.color_pallete_open = false;
+                self.color_draft = None;
                 return Task::none();
             }
             Message::SelectStrokeColor(stroke_color) => {
-                self.stroke_color = stroke_color;
-                self.color_pallete_open = false;
+                self.stroke_selection = stroke_color.into();
+                self.color_draft = None;
                 return Task::none();
             }
             Message::SelectStrokeWidth(stroke_width) => {
@@ -94,12 +95,24 @@ impl Editor {
                 self.blur_sigma = sigma.clamp(*BLUR_SIGMA_RANGE.start(), *BLUR_SIGMA_RANGE.end());
                 return Task::none();
             }
-            Message::ToggleColorPallete => {
-                self.color_pallete_open = !self.color_pallete_open;
+            Message::ToggleColorPalette => {
+                self.color_draft = self.color_draft.is_none().then_some(self.stroke_selection);
                 return Task::none();
             }
-            Message::CloseColorPallete => {
-                self.color_pallete_open = false;
+            Message::CloseColorPalette => {
+                self.color_draft = None;
+                return Task::none();
+            }
+            Message::PreviewStrokeColor(selection) => {
+                if let Some(draft) = &mut self.color_draft {
+                    *draft = selection;
+                }
+                return Task::none();
+            }
+            Message::ApplyStrokeColor => {
+                if let Some(selection) = self.color_draft.take() {
+                    self.stroke_selection = selection;
+                }
                 return Task::none();
             }
             Message::Undo => self.undo(),
@@ -196,7 +209,8 @@ mod tests {
     use super::*;
     use crate::{annotation::AnnotationDraft, viewport::Viewport};
     use claims::{assert_ok, assert_some};
-    use iced::{Point, Rectangle};
+    use iced::{Color, Point, Rectangle};
+    use rstest::rstest;
 
     fn editor() -> Editor {
         Editor::new(
@@ -386,11 +400,14 @@ mod tests {
         assert_eq!(appearances, [(2, DEFAULT_STROKE_COLOR), (8, blue)]);
 
         assert_eq!(editor.stroke_width, 4);
-        assert_eq!(editor.stroke_color, green);
         assert!(editor.undone_edits.is_empty());
+        assert_eq!(
+            Color::from(editor.stroke_selection).into_rgba8(),
+            green.into_rgba8()
+        );
     }
 
-    #[rstest::rstest]
+    #[rstest]
     #[case(Tool::Pixelate)]
     #[case(Tool::Blur)]
     fn pixel_effect_history_restores_pixels_and_preserves_the_original(#[case] tool: Tool) {
@@ -433,5 +450,31 @@ mod tests {
 
         let _ = editor.update(Message::Redo);
         assert_eq!(assert_ok!(editor.render_image()).rgba(), processed.rgba());
+    }
+
+    #[test]
+    fn custom_color_is_applied_or_discarded_and_retains_hue_when_reopened() {
+        let mut editor = editor();
+        let original = editor.stroke_selection;
+        let candidate = original.with_hue(210.0).with_lightness(0.0);
+
+        let _ = editor.update(Message::ToggleColorPalette);
+        let _ = editor.update(Message::PreviewStrokeColor(candidate));
+        assert_eq!(editor.stroke_selection, original);
+        assert_eq!(editor.color_draft, Some(candidate));
+
+        let _ = editor.update(Message::CloseColorPalette);
+        assert_eq!(editor.stroke_selection, original);
+        assert!(editor.color_draft.is_none());
+
+        let _ = editor.update(Message::ToggleColorPalette);
+        assert_eq!(editor.color_draft, Some(original));
+        let _ = editor.update(Message::PreviewStrokeColor(candidate));
+        let _ = editor.update(Message::ApplyStrokeColor);
+        assert_eq!(editor.stroke_selection, candidate);
+        assert!(editor.color_draft.is_none());
+
+        let _ = editor.update(Message::ToggleColorPalette);
+        assert_eq!(editor.color_draft, Some(candidate));
     }
 }

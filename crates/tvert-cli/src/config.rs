@@ -1,5 +1,6 @@
 use crate::error::ConfigError;
-use serde::Deserialize;
+use iced::Color;
+use serde::{Deserialize, de};
 use std::{
     env, fs,
     io::ErrorKind,
@@ -25,6 +26,8 @@ struct Config {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EditorConfig {
+    #[serde(deserialize_with = "deserialize_color")]
+    stroke_color: Color,
     stroke_width: u16,
     pixelation_block_size: u16,
     blur_sigma: u16,
@@ -35,6 +38,7 @@ impl TryFrom<EditorConfig> for Settings {
 
     fn try_from(config: EditorConfig) -> Result<Self, Self::Error> {
         let settings = Self {
+            stroke_color: config.stroke_color,
             stroke_width: config.stroke_width,
             pixelation_block_size: config.pixelation_block_size,
             blur_sigma: config.blur_sigma,
@@ -55,6 +59,16 @@ pub fn load(explicit: Option<&Path>) -> Result<Settings> {
         return parse(DEFAULT_CONFIG_NAME, "");
     };
     load_path(&path, explicit.is_some())
+}
+
+fn deserialize_color<'de, D>(deserializer: D) -> Result<Color, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+
+    tvert_editor::color::parse_hex(&value)
+        .ok_or_else(|| de::Error::custom("expected a hex color in #RRGGBB or #RRGGBBAA format"))
 }
 
 fn default_path() -> Option<PathBuf> {
@@ -136,6 +150,8 @@ mod tests {
     use super::*;
     use claims::{assert_err, assert_ok, assert_ok_eq, assert_some, assert_some_eq};
     use miette::Diagnostic;
+    use rstest::rstest;
+    use tempfile::tempdir;
 
     #[test]
     fn partial_configuration_keeps_unspecified_defaults() {
@@ -151,26 +167,27 @@ mod tests {
         );
     }
 
-    #[test]
-    fn invalid_values_and_unknown_keys_are_rejected() {
-        for source in [
-            "[editor]\nstroke_width = 0",
-            "[editor]\npixelation_block_size = 65",
-            "[editor]\nblur_sigma = 0",
-            "[editor]\nstroke_width = 'wide'",
-            "[editor]\nstorke_width = 4",
-            "[unknown]\nvalue = 1",
-            "editor = false",
-            "[editor]\nstroke_width = [4]",
-            "[editor",
-        ] {
-            let _ = assert_err!(parse("test.toml", source));
-        }
+    #[rstest]
+    #[case("[editor]\nstroke_color = '#GG0000'")]
+    #[case("[editor]\nstroke_color = '#12'")]
+    #[case("[editor]\nstroke_color = 'ééé'")]
+    #[case("[editor]\nstroke_color = 12")]
+    #[case("[editor]\nstroke_width = 0")]
+    #[case("[editor]\npixelation_block_size = 65")]
+    #[case("[editor]\nblur_sigma = 0")]
+    #[case("[editor]\nstroke_width = 'wide'")]
+    #[case("[editor]\nstorke_width = 4")]
+    #[case("[unknown]\nvalue = 1")]
+    #[case("editor = false")]
+    #[case("[editor]\nstroke_width = [4]")]
+    #[case("[editor")]
+    fn invalid_values_and_unknown_keys_are_rejected(#[case] source: &'static str) {
+        let _ = assert_err!(parse("test.toml", source));
     }
 
     #[test]
     fn missing_default_file_is_optional_but_explicit_file_is_required() {
-        let directory = assert_ok!(tempfile::tempdir());
+        let directory = assert_ok!(tempdir());
         let path = directory.path().join("missing.toml");
         let defaults = assert_ok!(parse("test.toml", ""));
 
@@ -180,7 +197,7 @@ mod tests {
 
     #[test]
     fn user_file_overrides_embedded_defaults() {
-        let directory = assert_ok!(tempfile::tempdir());
+        let directory = assert_ok!(tempdir());
         let path = directory.path().join("config.toml");
         assert_ok!(fs::write(&path, "[editor]\nblur_sigma = 11"));
         let defaults = assert_ok!(parse("test.toml", ""));
@@ -194,25 +211,25 @@ mod tests {
         );
     }
 
-    #[test]
-    fn diagnostics_point_to_the_original_user_source_after_merging() {
-        for (source, expected) in [
-            ("# user settings\n[editor]\nblur_sigma = 3\n", "3"),
-            ("editor.blur_sigma = 3", "3"),
-            ("['editor']\n'blur_sigma' = 3", "3"),
-            ("[editor]\nstroke_width = 'wide'", "'wide'"),
-            ("[editor]\nstorke_width = 4", "storke_width"),
-            ("editor = false", "false"),
-        ] {
-            let error = assert_err!(parse("user.toml", source));
-            let label = assert_some!(assert_some!(error.labels()).next());
-            let end = assert_some!(label.offset().checked_add(label.len()));
-            assert_some_eq!(source.get(label.offset()..end), expected);
+    #[rstest]
+    #[case("# user settings\n[editor]\nblur_sigma = 3\n", "3")]
+    #[case("editor.blur_sigma = 3", "3")]
+    #[case("['editor']\n'blur_sigma' = 3", "3")]
+    #[case("[editor]\nstroke_width = 'wide'", "'wide'")]
+    #[case("[editor]\nstorke_width = 4", "storke_width")]
+    #[case("editor = false", "false")]
+    #[case("[editor]\nstroke_color = '#GG0000'", "'#GG0000'")]
+    fn diagnostics_point_to_the_original_user_source_after_merging(
+        #[case] source: &'static str,
+        #[case] expected: &'static str,
+    ) {
+        let error = assert_err!(parse("user.toml", source));
+        let label = assert_some!(assert_some!(error.labels()).next());
+        let end = assert_some!(label.offset().checked_add(label.len()));
+        assert_some_eq!(source.get(label.offset()..end), expected);
 
-            let snippet =
-                assert_ok!(assert_some!(error.source_code()).read_span(label.inner(), 0, 0));
-            assert_some_eq!(snippet.name(), "user.toml");
-        }
+        let snippet = assert_ok!(assert_some!(error.source_code()).read_span(label.inner(), 0, 0));
+        assert_some_eq!(snippet.name(), "user.toml");
     }
 
     #[test]
@@ -226,5 +243,18 @@ mod tests {
         let directory = assert_ok!(tempfile::tempdir());
         let missing = assert_err!(load_path(&directory.path().join("missing.toml"), true));
         assert!(assert_some!(std::error::Error::source(&missing)).is::<std::io::Error>());
+    }
+
+    #[rstest]
+    #[case("#40C860", [64, 200, 96, 255])]
+    #[case("40c86080", [64, 200, 96, 128])]
+    fn configured_color_overrides_the_default_and_preserves_alpha(
+        #[case] value: &'static str,
+        #[case] expected: [u8; 4],
+    ) {
+        let source = format!("[editor]\nstroke_color = '{value}'");
+        let settings = assert_ok!(parse("test.toml", &source));
+
+        assert_eq!(settings.stroke_color.into_rgba8(), expected);
     }
 }

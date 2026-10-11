@@ -1,5 +1,5 @@
-use crate::editor::color::parse_hex;
-use crate::{editor::Message, style::DEFAULT_STROKE_COLOR, toolbar::ICON_FONT};
+use crate::color::parse_hex;
+use crate::{editor::Message, style::RED, toolbar::ICON_FONT};
 use iced::widget::{button, column, container, row, space, text, text_input};
 use iced::{Border, Color, Element, Fill, Theme, alignment::Vertical, widget::Row};
 use iced_aw::{DropDown, drop_down};
@@ -7,7 +7,7 @@ use iced_color_triangle::{Selection, color_triangle};
 use lucide_icons::Icon;
 
 const COLORS: &[Color] = &[
-    DEFAULT_STROKE_COLOR,
+    RED,
     Color::from_rgb8(64, 128, 255),
     Color::from_rgb8(64, 200, 96),
     Color::from_rgb8(255, 208, 64),

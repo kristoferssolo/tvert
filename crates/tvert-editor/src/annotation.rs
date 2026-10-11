@@ -89,7 +89,7 @@ impl TryFrom<AnnotationDraft> for Annotation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::style::DEFAULT_STROKE_COLOR;
+    use crate::style::RED;
     use claims::assert_err;
     use rstest::rstest;
 
@@ -106,7 +106,7 @@ mod tests {
         let error = assert_err!(Annotation::try_from(AnnotationDraft {
             tool,
             size: 4,
-            stroke_color: DEFAULT_STROKE_COLOR,
+            stroke_color: RED,
             points: vec![start, end]
         }));
 

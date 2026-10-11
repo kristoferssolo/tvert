@@ -1,23 +1,9 @@
-use crate::editor::Editor;
+use crate::{
+    color::{format_hex, parse_hex},
+    editor::Editor,
+};
 use iced::Color;
 use iced_color_triangle::Selection;
-
-pub fn parse_hex(value: &str) -> Option<Color> {
-    let value = value.trim();
-    let hex = value.strip_prefix('#').unwrap_or(value);
-    if !matches!(hex.len(), 6 | 8) || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return None;
-    }
-    hex.parse().ok()
-}
-
-pub(super) fn format_hex(color: Color) -> String {
-    let [red, green, blue, alpha] = color.into_rgba8();
-    if alpha == u8::MAX {
-        return format!("#{red:02X}{green:02X}{blue:02X}");
-    }
-    format!("#{red:02X}{green:02X}{blue:02X}{alpha:02X}")
-}
 
 impl Editor {
     pub(super) fn select_stroke_color(&mut self, color: Color) {
@@ -49,7 +35,7 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Settings, editor::Message};
+    use crate::{Settings, editor::Message, style::RED};
     use iced::{Size, widget::image::Handle};
     use std::rc::Rc;
 
@@ -58,6 +44,7 @@ mod tests {
             Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
             Size::new(1.0, 1.0),
             Settings {
+                stroke_color: RED,
                 stroke_width: 4,
                 pixelation_block_size: 16,
                 blur_sigma: 4,

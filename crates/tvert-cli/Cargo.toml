@@ -16,6 +16,7 @@ tvert-wayland.workspace = true
 tvert-workflow.workspace = true
 
 clap = { workspace = true, features = ["derive"] }
+iced.workspace = true
 miette = { workspace = true, features = ["fancy", "derive"] }
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
@@ -25,6 +26,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 claims.workspace = true
+rstest.workspace = true
 tempfile.workspace = true
 
 [lints]

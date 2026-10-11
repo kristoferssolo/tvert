@@ -115,7 +115,7 @@ impl AnnotationCanvas<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::style::DEFAULT_STROKE_COLOR;
+    use crate::style::RED;
     use crate::tool::Tool;
     use claims::{assert_none, assert_some, assert_some_eq};
     use iced::keyboard::{self, Modifiers};
@@ -137,7 +137,7 @@ mod tests {
             image_size: Size::new(200.0, 100.0),
             tool,
             size: STROKE_WIDTH,
-            stroke_color: DEFAULT_STROKE_COLOR,
+            stroke_color: RED,
             cache,
         }
     }
@@ -192,7 +192,7 @@ mod tests {
         Message::AddEdit(AnnotationDraft {
             tool,
             size: STROKE_WIDTH,
-            stroke_color: DEFAULT_STROKE_COLOR,
+            stroke_color: RED,
             points,
         })
     }
@@ -310,8 +310,8 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Tool::Ellipse, 7, DEFAULT_STROKE_COLOR)]
-    #[case(Tool::Rectangle, 2, DEFAULT_STROKE_COLOR)]
+    #[case(Tool::Ellipse, 7, RED)]
+    #[case(Tool::Rectangle, 2, RED)]
     #[case(Tool::Rectangle, 7, Color::BLACK)]
     #[case(Tool::Pixelate, 13, Color::BLACK)]
     #[case(Tool::Blur, 11, Color::BLACK)]

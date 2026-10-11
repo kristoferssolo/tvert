@@ -2,10 +2,13 @@ use crate::{
     Error,
     style::{BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, STROKE_WIDTH_RANGE},
 };
+use iced::Color;
 
 /// Initial drawing settings for an editor session
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Settings {
+    /// Initial color for drawing strokes
+    pub stroke_color: Color,
     /// Stroke width in image pixels, from 1 to 32
     pub stroke_width: u16,
     /// Pixelation block size in image pixels, from 4 to 64

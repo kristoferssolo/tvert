@@ -7,10 +7,11 @@ pub use message::Message;
 
 use crate::{
     Error, Settings,
+    color::format_hex,
     edit::Edit,
     export::ExportAction,
     render::{render_edits, render_image},
-    style::{BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, DEFAULT_STROKE_COLOR, STROKE_WIDTH_RANGE},
+    style::{BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, STROKE_WIDTH_RANGE},
     tool::Tool,
 };
 use iced::{
@@ -59,9 +60,9 @@ impl Editor {
             stroke_width: settings.stroke_width,
             block_size: settings.pixelation_block_size,
             blur_sigma: settings.blur_sigma,
-            stroke_selection: DEFAULT_STROKE_COLOR.into(),
+            stroke_selection: settings.stroke_color.into(),
             color_palette_open: false,
-            color_hex: color::format_hex(DEFAULT_STROKE_COLOR),
+            color_hex: format_hex(settings.stroke_color),
             export,
             error: None,
             edits: Vec::new(),
@@ -103,7 +104,7 @@ impl Editor {
             }
             Message::ToggleColorPalette => {
                 self.color_palette_open = !self.color_palette_open;
-                self.color_hex = color::format_hex(self.stroke_selection.into());
+                self.color_hex = format_hex(self.stroke_selection.into());
                 return Task::none();
             }
             Message::CloseColorPalette => {
@@ -210,12 +211,13 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{annotation::AnnotationDraft, viewport::Viewport};
+    use crate::{annotation::AnnotationDraft, color::parse_hex, style::RED, viewport::Viewport};
     use claims::{assert_ok, assert_some};
     use iced::{Color, Point, Rectangle};
     use rstest::rstest;
 
     const SETTINGS: Settings = Settings {
+        stroke_color: RED,
         stroke_width: 4,
         pixelation_block_size: 16,
         blur_sigma: 8,
@@ -237,7 +239,7 @@ mod tests {
     fn add_figure(tool: Tool, bounds: Rectangle) -> Message {
         Message::AddEdit(AnnotationDraft {
             tool,
-            stroke_color: DEFAULT_STROKE_COLOR,
+            stroke_color: RED,
             size: match tool {
                 Tool::Pixelate => SETTINGS.pixelation_block_size,
                 Tool::Blur => SETTINGS.blur_sigma,
@@ -378,7 +380,7 @@ mod tests {
 
         let thin = Message::AddEdit(AnnotationDraft {
             tool: Tool::Line,
-            stroke_color: DEFAULT_STROKE_COLOR,
+            stroke_color: RED,
             size: 2,
             points: vec![Point::new(10.0, 10.0), Point::new(30.0, 10.0)],
         });
@@ -407,7 +409,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(appearances, [(2, DEFAULT_STROKE_COLOR), (8, blue)]);
+        assert_eq!(appearances, [(2, RED), (8, blue)]);
 
         assert_eq!(editor.stroke_width, 4);
         assert!(editor.undone_edits.is_empty());
@@ -465,5 +467,26 @@ mod tests {
 
         let _ = editor.update(Message::Redo);
         assert_eq!(assert_ok!(editor.render_image()).rgba(), processed.rgba());
+    }
+
+    #[test]
+    fn configured_color_initializes_the_picker_and_stays_the_session_default() {
+        let base = editor();
+        let settings = Settings {
+            stroke_color: assert_some!(parse_hex("#40C86080")),
+            ..base.initial_settings
+        };
+        let mut editor = Editor::new(base.original, base.image_size, settings, base.export);
+
+        assert_eq!(
+            Color::from(editor.stroke_selection).into_rgba8(),
+            [64, 200, 96, 128]
+        );
+        assert_eq!(editor.color_hex, "#40C86080");
+
+        let _ = editor.update(Message::SelectStrokeColor(Color::WHITE));
+
+        assert_eq!(editor.color_hex, "#FFFFFF");
+        assert_eq!(editor.initial_settings, settings);
     }
 }

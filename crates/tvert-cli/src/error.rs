@@ -28,7 +28,8 @@ pub enum ConfigError {
         #[source]
         cause: toml::de::Error,
     },
-    #[error("invalid value for ediotr.{setting} in {}", .source_code.name())]
+
+    #[error("invalid value for editor.{setting} in {}", .source_code.name())]
     #[diagnostic(
         code(tvert::config::value),
         help("set editor.{setting} to an integer between {min} and {max}")

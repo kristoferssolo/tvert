@@ -115,10 +115,8 @@ impl AnnotationCanvas<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        style::{DEFAULT_STROKE_COLOR, DEFAULT_STROKE_WIDTH},
-        tool::Tool,
-    };
+    use crate::style::DEFAULT_STROKE_COLOR;
+    use crate::tool::Tool;
     use claims::{assert_none, assert_some, assert_some_eq};
     use iced::keyboard::{self, Modifiers};
     use iced::{
@@ -132,11 +130,13 @@ mod tests {
     const START: Point = Point::new(120.0, 190.0);
     const END: Point = Point::new(320.0, 290.0);
 
+    const STROKE_WIDTH: u16 = 4;
+
     fn canvas(cache: &Cache, tool: Tool) -> AnnotationCanvas<'_> {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
             tool,
-            size: DEFAULT_STROKE_WIDTH,
+            size: STROKE_WIDTH,
             stroke_color: DEFAULT_STROKE_COLOR,
             cache,
         }
@@ -191,7 +191,7 @@ mod tests {
     fn expected_annotation(tool: Tool, points: Vec<Point>) -> Message {
         Message::AddEdit(AnnotationDraft {
             tool,
-            size: DEFAULT_STROKE_WIDTH,
+            size: STROKE_WIDTH,
             stroke_color: DEFAULT_STROKE_COLOR,
             points,
         })

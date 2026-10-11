@@ -29,6 +29,7 @@ pub struct Editor {
     preview: Handle,
     image_size: Size,
     tool: Tool,
+    initial_settings: Settings,
     stroke_width: u16,
     block_size: u16,
     blur_sigma: u16,
@@ -54,6 +55,7 @@ impl Editor {
             preview,
             image_size,
             tool: Tool::default(),
+            initial_settings: settings,
             stroke_width: settings.stroke_width,
             block_size: settings.pixelation_block_size,
             blur_sigma: settings.blur_sigma,
@@ -208,20 +210,22 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        annotation::AnnotationDraft,
-        style::{DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_SIGMA, DEFAULT_STROKE_WIDTH},
-        viewport::Viewport,
-    };
+    use crate::{annotation::AnnotationDraft, viewport::Viewport};
     use claims::{assert_ok, assert_some};
     use iced::{Color, Point, Rectangle};
     use rstest::rstest;
+
+    const SETTINGS: Settings = Settings {
+        stroke_width: 4,
+        pixelation_block_size: 16,
+        blur_sigma: 8,
+    };
 
     fn editor() -> Editor {
         Editor::new(
             Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
             Size::new(1.0, 1.0),
-            Settings::default(),
+            SETTINGS,
             Rc::new(|_, _| Ok(())),
         )
     }
@@ -235,9 +239,9 @@ mod tests {
             tool,
             stroke_color: DEFAULT_STROKE_COLOR,
             size: match tool {
-                Tool::Pixelate => DEFAULT_BLOCK_SIZE,
-                Tool::Blur => DEFAULT_BLUR_SIGMA,
-                _ => DEFAULT_STROKE_WIDTH,
+                Tool::Pixelate => SETTINGS.pixelation_block_size,
+                Tool::Blur => SETTINGS.blur_sigma,
+                _ => SETTINGS.stroke_width,
             },
             points: vec![
                 bounds.position(),
@@ -430,7 +434,7 @@ mod tests {
         let mut editor = Editor::new(
             original,
             Size::new(32.0, 16.0),
-            Settings::default(),
+            SETTINGS,
             Rc::new(|_, _| Ok(())),
         );
         let region = Rectangle::new(Point::ORIGIN, Size::new(16.0, 16.0));

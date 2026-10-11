@@ -1,9 +1,6 @@
 use crate::{
     Error,
-    style::{
-        BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_SIGMA,
-        DEFAULT_STROKE_WIDTH, STROKE_WIDTH_RANGE,
-    },
+    style::{BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, STROKE_WIDTH_RANGE},
 };
 
 /// Initial drawing settings for an editor session
@@ -44,15 +41,5 @@ impl Settings {
         }
 
         Ok(())
-    }
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            stroke_width: DEFAULT_STROKE_WIDTH,
-            pixelation_block_size: DEFAULT_BLOCK_SIZE,
-            blur_sigma: DEFAULT_BLUR_SIGMA,
-        }
     }
 }

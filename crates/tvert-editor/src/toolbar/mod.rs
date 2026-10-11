@@ -2,13 +2,11 @@ mod button;
 mod color;
 mod size;
 
+pub use size::for_tool as size_control;
+
 use crate::{
     ExportAction,
     editor::Message,
-    style::{
-        BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, DEFAULT_BLOCK_SIZE, DEFAULT_BLUR_SIGMA,
-        DEFAULT_STROKE_WIDTH, STROKE_WIDTH_RANGE,
-    },
     tool::Tool,
     toolbar::button::{icon_button, separator},
 };
@@ -26,7 +24,7 @@ pub const MIN_WIDTH: f32 = 800.0;
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
     selected: Tool,
-    selected_size: u16,
+    size_control: Option<Element<'static, Message>>,
     stroke_selection: Selection,
     color_palette_open: bool,
     color_hex: &str,
@@ -63,30 +61,7 @@ pub fn view(
             (!matches!(selected, Tool::Pixelate | Tool::Blur))
                 .then(|| color::view(stroke_selection, color_palette_open, color_hex)),
         )
-        .extend(match selected {
-            Tool::Pixelate => Some(size::view(
-                BLOCK_SIZE_RANGE,
-                selected_size,
-                DEFAULT_BLOCK_SIZE,
-                "Pixelation block size",
-                Message::SelectBlockSize,
-            )),
-            Tool::Blur => Some(size::view(
-                BLUR_SIGMA_RANGE,
-                selected_size,
-                DEFAULT_BLUR_SIGMA,
-                "Blur strength",
-                Message::SelectBlurSigma,
-            )),
-            Tool::Highlighter => None,
-            _ => Some(size::view(
-                STROKE_WIDTH_RANGE,
-                selected_size,
-                DEFAULT_STROKE_WIDTH,
-                "Stroke width",
-                Message::SelectStrokeWidth,
-            )),
-        })
+        .extend(size_control)
         .push(icon_button(
             Icon::Copy,
             "Copy (Ctrl+C)".into(),

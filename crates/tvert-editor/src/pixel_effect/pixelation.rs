@@ -39,7 +39,7 @@ impl TryFrom<&AnnotationDraft> for Pixelation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{annotation::AnnotationDraft, style::DEFAULT_BLOCK_SIZE, tool::Tool};
+    use crate::{annotation::AnnotationDraft, tool::Tool};
     use claims::assert_ok;
     use iced::{Color, Point};
     use rstest::rstest;
@@ -49,7 +49,7 @@ mod tests {
     fn includes_fractional_edge_pixels_and_clips_to_the_image() {
         let effect = assert_ok!(Pixelation::try_from(&AnnotationDraft {
             tool: Tool::Pixelate,
-            size: DEFAULT_BLOCK_SIZE,
+            size: 16,
             stroke_color: Color::BLACK,
             points: vec![Point::new(5.0, 2.0), Point::new(1.8, 0.2)],
         }));

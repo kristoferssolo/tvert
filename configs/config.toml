@@ -1,0 +1,4 @@
+[editor]
+stroke_width = 4
+pixelation_block_size = 16
+blur_sigma = 8

@@ -1,4 +1,7 @@
+use crate::Settings;
 use crate::editor::Message;
+use crate::style::{BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, STROKE_WIDTH_RANGE};
+use crate::tool::Tool;
 use iced::Element;
 use iced::{
     alignment::Vertical,
@@ -6,7 +9,32 @@ use iced::{
 };
 use std::ops::RangeInclusive;
 
-pub(super) fn view(
+pub fn for_tool(tool: Tool, value: u16, defaults: Settings) -> Option<Element<'static, Message>> {
+    let (range, default, label, on_change): (_, _, _, fn(u16) -> Message) = match tool {
+        Tool::Pixelate => (
+            BLOCK_SIZE_RANGE,
+            defaults.pixelation_block_size,
+            "Pixelation block size",
+            Message::SelectBlockSize,
+        ),
+        Tool::Blur => (
+            BLUR_SIGMA_RANGE,
+            defaults.blur_sigma,
+            "Blur strenght",
+            Message::SelectBlurSigma,
+        ),
+        Tool::Highlighter => return None,
+        _ => (
+            STROKE_WIDTH_RANGE,
+            defaults.stroke_width,
+            "Stroke width",
+            Message::SelectStrokeWidth,
+        ),
+    };
+    Some(view(range, value, default, label, on_change))
+}
+
+fn view(
     range: RangeInclusive<u16>,
     value: u16,
     default: u16,

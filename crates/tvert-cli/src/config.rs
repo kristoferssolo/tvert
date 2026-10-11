@@ -5,42 +5,48 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+use toml::Value;
 use tvert_editor::Settings;
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+const DEFAULT_CONFIG: &str = include_str!("../../../configs/config.toml");
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Config {
     editor: EditorConfig,
 }
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct EditorConfig {
-    stroke_width: Option<u16>,
-    pixelation_block_size: Option<u16>,
-    blur_sigma: Option<u16>,
+    stroke_width: u16,
+    pixelation_block_size: u16,
+    blur_sigma: u16,
 }
 
 impl TryFrom<EditorConfig> for Settings {
     type Error = tvert_editor::Error;
 
     fn try_from(config: EditorConfig) -> Result<Self, Self::Error> {
-        let defaults = Self::default();
         let settings = Self {
-            stroke_width: config.stroke_width.unwrap_or(defaults.stroke_width),
-            pixelation_block_size: config
-                .pixelation_block_size
-                .unwrap_or(defaults.pixelation_block_size),
-            blur_sigma: config.blur_sigma.unwrap_or(defaults.blur_sigma),
+            stroke_width: config.stroke_width,
+            pixelation_block_size: config.pixelation_block_size,
+            blur_sigma: config.blur_sigma,
         };
         settings.validate()?;
         Ok(settings)
     }
 }
 
+/// Loads editor settings from the embedded defaults and an optional user file.
+///
+/// # Errors
+///
+/// Returns an error for unreadable files, invalid TOML, unknown settings, or
+/// unsupported values. A missing explicitly requested file is also an error.
 pub fn load(explicit: Option<&Path>) -> Result<Settings> {
     let Some(path) = explicit.map(Path::to_path_buf).or_else(default_path) else {
-        return Ok(Settings::default());
+        return parse("");
     };
     load_path(&path, explicit.is_some())
 }
@@ -61,9 +67,7 @@ fn default_path() -> Option<PathBuf> {
 fn load_path(path: &Path, required: bool) -> Result<Settings> {
     let source = match fs::read_to_string(path) {
         Ok(source) => source,
-        Err(error) if error.kind() == ErrorKind::NotFound && !required => {
-            return Ok(Settings::default());
-        }
+        Err(error) if error.kind() == ErrorKind::NotFound && !required => return parse(""),
         Err(error) => {
             return Err(error)
                 .wrap_err_with(|| format!("failed to read configuration {}", path.display()));
@@ -73,8 +77,27 @@ fn load_path(path: &Path, required: bool) -> Result<Settings> {
 }
 
 fn parse(source: &str) -> Result<Settings> {
-    let config: Config = toml::from_str(source)?;
+    let mut defaults: Value =
+        toml::from_str(DEFAULT_CONFIG).wrap_err("invalid embedded configuration TOML")?;
+    let overrides = toml::from_str(source)?;
+    merge(&mut defaults, overrides);
+    let config: Config = defaults.try_into()?;
     Ok(config.editor.try_into()?)
+}
+
+fn merge(base: &mut Value, overrides: Value) {
+    match (base, overrides) {
+        (Value::Table(base), Value::Table(overrides)) => {
+            for (key, value) in overrides {
+                if let Some(existing) = base.get_mut(&key) {
+                    merge(existing, value);
+                } else {
+                    base.insert(key, value);
+                }
+            }
+        }
+        (base, overrides) => *base = overrides,
+    }
 }
 
 #[cfg(test)]
@@ -84,12 +107,13 @@ mod tests {
 
     #[test]
     fn partial_configuration_keeps_unspecified_defaults() {
+        let defaults = assert_ok!(parse(""));
         let settings = assert_ok!(parse("[editor]\nstroke_width = 7"));
         assert_eq!(
             settings,
             Settings {
                 stroke_width: 7,
-                ..Settings::default()
+                ..defaults
             }
         );
     }
@@ -102,6 +126,10 @@ mod tests {
             "[editor]\nblur_sigma = 0",
             "[editor]\nstroke_width = 'wide'",
             "[editor]\nstorke_width = 4",
+            "[unknown]\nvalue = 1",
+            "editor = false",
+            "[editor]\nstroke_width = [4]",
+            "[editor",
         ] {
             let _ = assert_err!(parse(source));
         }
@@ -111,7 +139,23 @@ mod tests {
     fn missing_default_file_is_optional_but_explicit_file_is_required() {
         let directory = assert_ok!(tempfile::tempdir());
         let path = directory.path().join("missing.toml");
-        assert_ok_eq!(load_path(&path, false), Settings::default());
+        let defaults = assert_ok!(parse(""));
+        assert_ok_eq!(load_path(&path, false), defaults);
         let _ = assert_err!(load_path(&path, true));
+    }
+
+    #[test]
+    fn user_file_overrides_embedded_defaults() {
+        let directory = assert_ok!(tempfile::tempdir());
+        let path = directory.path().join("config.toml");
+        assert_ok!(fs::write(&path, "[editor]\nblur_sigma = 11"));
+        let defaults = assert_ok!(parse(""));
+        assert_ok_eq!(
+            load(Some(&path)),
+            Settings {
+                blur_sigma: 11,
+                ..defaults
+            }
+        );
     }
 }

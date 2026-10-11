@@ -57,7 +57,11 @@ mod tests {
         Editor::new(
             Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
             Size::new(1.0, 1.0),
-            Settings::default(),
+            Settings {
+                stroke_width: 4,
+                pixelation_block_size: 16,
+                blur_sigma: 4,
+            },
             Rc::new(|_, _| Ok(())),
         )
     }

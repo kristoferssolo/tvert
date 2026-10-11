@@ -6,11 +6,12 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+use strum::VariantNames;
 use toml::{
     Deserializer, Spanned,
     de::{DeTable, DeValue},
 };
-use tvert_editor::Settings;
+use tvert_editor::{Settings, Tool};
 
 type Result<T, E = ConfigError> = std::result::Result<T, E>;
 
@@ -26,6 +27,8 @@ struct Config {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EditorConfig {
+    #[serde(deserialize_with = "deserialize_tool")]
+    tool: Tool,
     #[serde(deserialize_with = "deserialize_color")]
     stroke_color: Color,
     stroke_width: u16,
@@ -38,6 +41,7 @@ impl TryFrom<EditorConfig> for Settings {
 
     fn try_from(config: EditorConfig) -> Result<Self, Self::Error> {
         let settings = Self {
+            tool: config.tool,
             stroke_color: config.stroke_color,
             stroke_width: config.stroke_width,
             pixelation_block_size: config.pixelation_block_size,
@@ -69,6 +73,17 @@ where
 
     tvert_editor::color::parse_hex(&value)
         .ok_or_else(|| de::Error::custom("expected a hex color in #RRGGBB or #RRGGBBAA format"))
+}
+
+fn deserialize_tool<'de, D>(deserializer: D) -> Result<Tool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+
+    value
+        .parse()
+        .map_err(|_| de::Error::unknown_variant(&value, <Tool as VariantNames>::VARIANTS))
 }
 
 fn default_path() -> Option<PathBuf> {
@@ -156,11 +171,15 @@ mod tests {
     #[test]
     fn partial_configuration_keeps_unspecified_defaults() {
         let defaults = assert_ok!(parse("test.toml", ""));
-        let settings = assert_ok!(parse("test.toml", "[editor]\nstroke_width = 7"));
+        let settings = assert_ok!(parse(
+            "test.toml",
+            "[editor]\ntool = 'pEnCiL'\nstroke_width = 7",
+        ));
 
         assert_eq!(
             settings,
             Settings {
+                tool: Tool::Pencil,
                 stroke_width: 7,
                 ..defaults
             }
@@ -168,6 +187,8 @@ mod tests {
     }
 
     #[rstest]
+    #[case("[editor]\ntool = 'banana'")]
+    #[case("[editor]\ntool = 1")]
     #[case("[editor]\nstroke_color = '#GG0000'")]
     #[case("[editor]\nstroke_color = '#12'")]
     #[case("[editor]\nstroke_color = 'ééé'")]
@@ -213,12 +234,13 @@ mod tests {
 
     #[rstest]
     #[case("# user settings\n[editor]\nblur_sigma = 3\n", "3")]
+    #[case("[editor]\ntool = 'banana'", "'banana'")]
+    #[case("[editor]\nstroke_color = '#GG0000'", "'#GG0000'")]
     #[case("editor.blur_sigma = 3", "3")]
     #[case("['editor']\n'blur_sigma' = 3", "3")]
     #[case("[editor]\nstroke_width = 'wide'", "'wide'")]
     #[case("[editor]\nstorke_width = 4", "storke_width")]
     #[case("editor = false", "false")]
-    #[case("[editor]\nstroke_color = '#GG0000'", "'#GG0000'")]
     fn diagnostics_point_to_the_original_user_source_after_merging(
         #[case] source: &'static str,
         #[case] expected: &'static str,

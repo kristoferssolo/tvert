@@ -55,7 +55,7 @@ impl Editor {
             original: preview.clone(),
             preview,
             image_size,
-            tool: Tool::default(),
+            tool: settings.tool,
             initial_settings: settings,
             stroke_width: settings.stroke_width,
             block_size: settings.pixelation_block_size,
@@ -217,6 +217,7 @@ mod tests {
     use rstest::rstest;
 
     const SETTINGS: Settings = Settings {
+        tool: Tool::Arrow,
         stroke_color: RED,
         stroke_width: 4,
         pixelation_block_size: 16,
@@ -487,6 +488,31 @@ mod tests {
         let _ = editor.update(Message::SelectStrokeColor(Color::WHITE));
 
         assert_eq!(editor.color_hex, "#FFFFFF");
+        assert_eq!(editor.initial_settings, settings);
+    }
+
+    #[test]
+    fn configured_defaults_initialize_the_editor_and_survive_session_changes() {
+        let base = editor();
+        let settings = Settings {
+            tool: Tool::Pencil,
+            stroke_color: assert_some!(parse_hex("#40C86080")),
+            ..base.initial_settings
+        };
+        let mut editor = Editor::new(base.original, base.image_size, settings, base.export);
+
+        assert_eq!(
+            Color::from(editor.stroke_selection).into_rgba8(),
+            [64, 200, 96, 128]
+        );
+        assert_eq!(editor.color_hex, "#40C86080");
+        assert_eq!(editor.tool, Tool::Pencil);
+
+        let _ = editor.update(Message::SelectStrokeColor(Color::WHITE));
+        let _ = editor.update(Message::SelectTool(Tool::Ellipse));
+
+        assert_eq!(editor.color_hex, "#FFFFFF");
+        assert_eq!(editor.tool, Tool::Ellipse);
         assert_eq!(editor.initial_settings, settings);
     }
 }

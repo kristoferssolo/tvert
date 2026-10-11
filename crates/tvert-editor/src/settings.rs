@@ -1,5 +1,5 @@
 use crate::{
-    Error,
+    Error, Tool,
     style::{BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, STROKE_WIDTH_RANGE},
 };
 use iced::Color;
@@ -7,6 +7,8 @@ use iced::Color;
 /// Initial drawing settings for an editor session
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Settings {
+    /// Tool selected when the editor opens
+    pub tool: Tool,
     /// Initial color for drawing strokes
     pub stroke_color: Color,
     /// Stroke width in image pixels, from 1 to 32

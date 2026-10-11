@@ -6,15 +6,15 @@ use crate::{
     viewport::rectangle_between,
 };
 use iced::Point;
-use strum::{Display, VariantArray};
+use strum::{Display, EnumString, VariantArray, VariantNames};
 
 /// The edit created by the next drag
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Display, VariantArray)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumString, VariantArray, VariantNames)]
+#[strum(ascii_case_insensitive)]
 pub enum Tool {
     Rectangle,
     Ellipse,
     Line,
-    #[default]
     Arrow,
     Pencil,
     Highlighter,
@@ -23,7 +23,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub fn figure(self, points: Vec<Point>) -> Option<Box<dyn Figure>> {
+    pub(crate) fn figure(self, points: Vec<Point>) -> Option<Box<dyn Figure>> {
         let (&start, &end) = (points.first()?, points.last()?);
 
         if !points.iter().all(|p| p.x.is_finite() && p.y.is_finite()) {
@@ -77,7 +77,7 @@ mod tests {
     #[case(Point::new(f32::NAN, 10.0), Point::new(20.0, 20.0))]
     #[case(Point::new(10.0, 10.0), Point::new(f32::INFINITY, 20.0))]
     fn rejects_unusable_endpoints(#[case] start: Point, #[case] end: Point) {
-        for &tool in Tool::VARIANTS {
+        for &tool in <Tool as VariantArray>::VARIANTS {
             assert_none!(tool.figure(vec![start, end]));
         }
     }

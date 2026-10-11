@@ -1,4 +1,5 @@
 [editor]
+tool = "arrow"
 stroke_color = "#FF4040"
 stroke_width = 4
 pixelation_block_size = 16

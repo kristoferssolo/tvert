@@ -17,6 +17,7 @@ mod viewport;
 pub use error::Error;
 pub use export::ExportAction;
 pub use settings::Settings;
+pub use tool::Tool;
 
 use crate::{
     editor::{Editor, ExportHandler, shortcuts},

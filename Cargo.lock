@@ -3212,6 +3212,7 @@ dependencies = [
  "miette",
  "rstest",
  "serde",
+ "strum",
  "tempfile",
  "thiserror 2.0.21",
  "toml",

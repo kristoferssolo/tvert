@@ -35,7 +35,7 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Settings, editor::Message, style::RED};
+    use crate::{Settings, Tool, editor::Message, style::RED};
     use iced::{Size, widget::image::Handle};
     use std::rc::Rc;
 
@@ -44,6 +44,7 @@ mod tests {
             Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
             Size::new(1.0, 1.0),
             Settings {
+                tool: Tool::Arrow,
                 stroke_color: RED,
                 stroke_width: 4,
                 pixelation_block_size: 16,

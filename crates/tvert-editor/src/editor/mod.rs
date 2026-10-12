@@ -11,7 +11,7 @@ use crate::{
     edit::Edit,
     export::ExportAction,
     render::{render_edits, render_image},
-    style::{BLOCK_SIZE_RANGE, BLUR_SIGMA_RANGE, STROKE_WIDTH_RANGE},
+    size::Sizes,
     tool::Tool,
 };
 use iced::{
@@ -31,9 +31,7 @@ pub struct Editor {
     image_size: Size,
     tool: Tool,
     initial_settings: Settings,
-    stroke_width: u16,
-    block_size: u16,
-    blur_sigma: u16,
+    sizes: Sizes,
     stroke_selection: Selection,
     color_palette_open: bool,
     color_hex: String,
@@ -57,9 +55,7 @@ impl Editor {
             image_size,
             tool: settings.tool,
             initial_settings: settings,
-            stroke_width: settings.stroke_width,
-            block_size: settings.pixelation_block_size,
-            blur_sigma: settings.blur_sigma,
+            sizes: settings.into(),
             stroke_selection: settings.stroke_color.into(),
             color_palette_open: false,
             color_hex: format_hex(settings.stroke_color),
@@ -88,18 +84,8 @@ impl Editor {
                 self.select_stroke_color(stroke_color);
                 return Task::none();
             }
-            Message::SelectStrokeWidth(stroke_width) => {
-                self.stroke_width =
-                    stroke_width.clamp(*STROKE_WIDTH_RANGE.start(), *STROKE_WIDTH_RANGE.end());
-                return Task::none();
-            }
-            Message::SelectBlockSize(block_size) => {
-                self.block_size =
-                    block_size.clamp(*BLOCK_SIZE_RANGE.start(), *BLOCK_SIZE_RANGE.end());
-                return Task::none();
-            }
-            Message::SelectBlurSigma(sigma) => {
-                self.blur_sigma = sigma.clamp(*BLUR_SIGMA_RANGE.start(), *BLUR_SIGMA_RANGE.end());
+            Message::SelectSize(kind, size) => {
+                self.sizes.set(kind, size);
                 return Task::none();
             }
             Message::ToggleColorPalette => {
@@ -200,11 +186,7 @@ impl Editor {
     }
 
     const fn selected_size(&self) -> u16 {
-        match self.tool {
-            Tool::Pixelate => self.block_size,
-            Tool::Blur => self.blur_sigma,
-            _ => self.stroke_width,
-        }
+        self.sizes.get(self.tool.size_kind())
     }
 }
 
@@ -212,7 +194,7 @@ impl Editor {
 mod tests {
     use super::*;
     use crate::{
-        ThemePreference, annotation::AnnotationDraft, color::parse_hex, style::RED,
+        ThemePreference, annotation::AnnotationDraft, color::parse_hex, size::SizeKind, style::RED,
         viewport::Viewport,
     };
     use claims::{assert_ok, assert_some};
@@ -245,11 +227,7 @@ mod tests {
         Message::AddEdit(AnnotationDraft {
             tool,
             stroke_color: RED,
-            size: match tool {
-                Tool::Pixelate => SETTINGS.pixelation_block_size,
-                Tool::Blur => SETTINGS.blur_sigma,
-                _ => SETTINGS.stroke_width,
-            },
+            size: Sizes::from(SETTINGS).get(tool.size_kind()),
             points: vec![
                 bounds.position(),
                 Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
@@ -397,11 +375,11 @@ mod tests {
         });
 
         let _ = editor.update(thin);
-        let _ = editor.update(Message::SelectStrokeWidth(8));
+        let _ = editor.update(Message::SelectSize(SizeKind::StrokeWidth, 8));
         let _ = editor.update(Message::SelectStrokeColor(blue));
         let _ = editor.update(thick);
         let _ = editor.update(Message::Undo);
-        let _ = editor.update(Message::SelectStrokeWidth(4));
+        let _ = editor.update(Message::SelectSize(SizeKind::StrokeWidth, 4));
         let _ = editor.update(Message::SelectStrokeColor(green));
         let _ = editor.update(Message::Redo);
 
@@ -416,7 +394,7 @@ mod tests {
 
         assert_eq!(appearances, [(2, RED), (8, blue)]);
 
-        assert_eq!(editor.stroke_width, 4);
+        assert_eq!(editor.sizes.get(SizeKind::StrokeWidth), 4);
         assert!(editor.undone_edits.is_empty());
         assert_eq!(
             Color::from(editor.stroke_selection).into_rgba8(),

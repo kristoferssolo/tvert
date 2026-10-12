@@ -9,6 +9,7 @@ mod figure;
 mod pixel_effect;
 mod render;
 mod settings;
+mod size;
 mod style;
 mod theme;
 mod tool;

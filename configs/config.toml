@@ -1,3 +1,6 @@
+[save]
+directory = "~/Pictures/"
+
 [editor]
 theme = "dark"
 tool = "arrow"

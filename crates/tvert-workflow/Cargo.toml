@@ -10,8 +10,14 @@ license.workspace = true
 tvert-image.workspace = true
 tvert-wayland.workspace = true
 
+jiff.workspace = true
 thiserror.workspace = true
 wl-clipboard-rs.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+claims.workspace = true
+rstest.workspace = true
+tempfile.workspace = true

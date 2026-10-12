@@ -52,3 +52,25 @@ fn check_config_validates_the_requested_file_withtout_wayland() {
     assert!(valid.status.success());
     assert_eq!(valid.stderr.as_slice(), b"");
 }
+
+#[test]
+fn check_config_does_not_create_the_save_directory() {
+    let directory = assert_ok!(tempdir());
+    let path = directory.path().join("config.toml");
+    let screenshots = directory.path().join("screenshots");
+
+    assert_ok!(fs::write(
+        &path,
+        format!(
+            r#"
+            [save]
+            directory = "{}"
+            "#,
+            screenshots.display()
+        )
+    ));
+    let output = check_config(&path);
+
+    assert!(output.status.success());
+    assert!(!screenshots.exists());
+}

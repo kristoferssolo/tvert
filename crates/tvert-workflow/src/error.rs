@@ -15,6 +15,18 @@ pub enum Error {
         source: io::Error,
     },
 
+    /// Creating the default save directory failed
+    #[error("failed to create save directory {path:?}")]
+    CreateDirectory {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    /// Every generated filename in the save directory is already taken
+    #[error("no available PNG filename in {directory:?}")]
+    FilenamesExhausted { directory: PathBuf },
+
     /// Encoding or writing PNG data failed
     #[error("failed to encode PNG for {path:?}")]
     EncodePng {

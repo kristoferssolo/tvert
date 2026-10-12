@@ -4,6 +4,7 @@ mod error;
 
 use crate::{
     args::{Args, CaptureCommand, Command},
+    config::AppConfig,
     error::ConfigError,
 };
 use clap::Parser;
@@ -11,9 +12,9 @@ use miette::{Diagnostic, IntoDiagnostic, MietteHandlerOpts, ReportHandler, miett
 use std::{cell::RefCell, error::Error as StdError, process::ExitCode, rc::Rc};
 use tracing::debug;
 use tracing_subscriber::{EnvFilter, util::SubscriberInitExt};
-use tvert_editor::{ExportAction, Settings};
+use tvert_editor::ExportAction;
 use tvert_wayland::Wayland;
-use tvert_workflow::{capture_output_to_png, prepare_png_copy, save_png};
+use tvert_workflow::{Destination, capture_output_to_png, prepare_png_copy, save_png};
 
 fn main() -> miette::Result<ExitCode> {
     miette::set_hook(Box::new(reported_handler))?;
@@ -41,13 +42,13 @@ fn main() -> miette::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Command::Capture(command) => {
-            let settings = config::load(args.config.as_deref())?;
-            run_capture(command, settings)
+            let config = config::load(args.config.as_deref())?;
+            run_capture(command, config)
         }
     }
 }
 
-fn run_capture(command: CaptureCommand, settings: Settings) -> miette::Result<ExitCode> {
+fn run_capture(command: CaptureCommand, config: AppConfig) -> miette::Result<ExitCode> {
     let output_name = match &command {
         CaptureCommand::CaptureOutput { output, .. }
         | CaptureCommand::CaptureRegion { output, .. }
@@ -84,8 +85,10 @@ fn run_capture(command: CaptureCommand, settings: Settings) -> miette::Result<Ex
 
     match command {
         CaptureCommand::CaptureOutput { path, .. } => {
-            capture_output_to_png(&mut wayland, output_id, &path).into_diagnostic()?;
-            println!("Saved {}", path.display());
+            let destination = Destination::new(path, config.save.directory);
+            let saved =
+                capture_output_to_png(&mut wayland, output_id, &destination).into_diagnostic()?;
+            println!("Saved {}", saved.display());
         }
         CaptureCommand::CaptureRegion { path, .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
@@ -95,8 +98,10 @@ fn run_capture(command: CaptureCommand, settings: Settings) -> miette::Result<Ex
                 return Ok(ExitCode::SUCCESS);
             };
 
-            save_png(&path, &image).into_diagnostic()?;
-            println!("Saved {} to {}", image.size(), path.display());
+            let destination = Destination::new(path, config.save.directory);
+            let saved =
+                capture_output_to_png(&mut wayland, output_id, &destination).into_diagnostic()?;
+            println!("Saved {} to {}", image.size(), saved.display());
         }
         CaptureCommand::EditRegion { path, .. } => {
             println!("Drag to select a region. Release to accept; right-click to cancel.");
@@ -108,12 +113,13 @@ fn run_capture(command: CaptureCommand, settings: Settings) -> miette::Result<Ex
 
             drop(wayland);
 
+            let destination = Destination::new(path, config.save.directory);
             let clipboard = Rc::new(RefCell::new(None));
             let editor_clipboard = clipboard.clone();
 
             tvert_editor::run(
                 image,
-                settings,
+                config.editor,
                 move |action, image| -> Result<(), tvert_workflow::Error> {
                     let offer = match action {
                         ExportAction::Copy | ExportAction::CopyAndSave => {
@@ -123,8 +129,8 @@ fn run_capture(command: CaptureCommand, settings: Settings) -> miette::Result<Ex
                     };
 
                     if matches!(action, ExportAction::Save | ExportAction::CopyAndSave) {
-                        save_png(&path, image)?;
-                        println!("Saved {} to {}", image.size(), path.display());
+                        let saved = save_png(&destination, image)?;
+                        println!("Saved {} to {}", image.size(), saved.display());
                     }
 
                     if let Some(offer) = offer {

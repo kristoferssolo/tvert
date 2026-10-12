@@ -19,10 +19,18 @@ type Result<T, E = ConfigError> = std::result::Result<T, E>;
 pub const DEFAULT_CONFIG: &str = include_str!("../../../configs/config.toml");
 const DEFAULT_CONFIG_NAME: &str = "configs/config.toml (embedded)";
 
+/// Preferences loaded from the embedded defaults and an optional user file
+#[derive(Debug, Clone, PartialEq)]
+pub struct AppConfig {
+    pub editor: Settings,
+    pub save: SaveSettings,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Config {
     editor: EditorConfig,
+    save: SaveSettings,
 }
 
 #[derive(Debug, Deserialize)]
@@ -37,6 +45,18 @@ struct EditorConfig {
     stroke_width: u16,
     pixelation_block_size: u16,
     blur_sigma: u16,
+}
+
+/// Preferences for saving screenshots
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SaveSettings {
+    /// Directory receiving timestamped PNGs when no destination file is given.
+    ///
+    /// A leading `~` is resolved from `HOME`. Relative paths are kept
+    /// relative to the working directory.
+    #[serde(deserialize_with = "deserialize_directory")]
+    pub directory: PathBuf,
 }
 
 impl TryFrom<EditorConfig> for Settings {
@@ -56,13 +76,15 @@ impl TryFrom<EditorConfig> for Settings {
     }
 }
 
-/// Loads editor settings from the embedded defaults and an optional user file.
+/// Loads preferences from the embedded defaults and an optional user file.
+///
+/// Does not create or modify any files.
 ///
 /// # Errors
 ///
 /// Returns an error for unreadable files, invalid TOML, unknown settings, or
 /// unsupported values. A missing explicitly requested file is also an error.
-pub fn load(explicit: Option<&Path>) -> Result<Settings> {
+pub fn load(explicit: Option<&Path>) -> Result<AppConfig> {
     let Some(path) = explicit.map(Path::to_path_buf).or_else(default_path) else {
         return parse(DEFAULT_CONFIG_NAME, "");
     };
@@ -91,20 +113,35 @@ where
         .map_err(|_| de::Error::unknown_variant(&value, T::VARIANTS))
 }
 
+fn deserialize_directory<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    if value.is_empty() {
+        return Err(de::Error::custom("expected a nonempty directory path"));
+    }
+
+    expand_home(Path::new(&value), home_dir().as_deref()).ok_or_else(|| {
+        de::Error::custom("expected HOME to be an absolute path when using leading ~")
+    })
+}
+
 fn default_path() -> Option<PathBuf> {
     let directory = env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
-        .or_else(|| {
-            env::var_os("HOME")
-                .map(PathBuf::from)
-                .filter(|path| path.is_absolute())
-                .map(|home| home.join(".config"))
-        })?;
+        .or_else(|| home_dir().map(|home| home.join(".config")))?;
     Some(directory.join("tvert/config.toml"))
 }
 
-fn load_path(path: &Path, required: bool) -> Result<Settings, ConfigError> {
+fn home_dir() -> Option<PathBuf> {
+    env::var_os("HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+}
+
+fn load_path(path: &Path, required: bool) -> Result<AppConfig, ConfigError> {
     let source = match fs::read_to_string(path) {
         Ok(source) => source,
         Err(error) if error.kind() == ErrorKind::NotFound && !required => {
@@ -120,7 +157,7 @@ fn load_path(path: &Path, required: bool) -> Result<Settings, ConfigError> {
     parse(&path.display().to_string(), &source)
 }
 
-fn parse(name: &str, source: &str) -> Result<Settings> {
+fn parse(name: &str, source: &str) -> Result<AppConfig> {
     let defaults = parse_document(DEFAULT_CONFIG_NAME, DEFAULT_CONFIG)?;
 
     // Validate defaults before mixing spans from two different sources
@@ -138,14 +175,19 @@ fn parse_document<'a>(name: &str, source: &'a str) -> Result<Spanned<DeTable<'a>
     DeTable::parse(source).map_err(|error| ConfigError::toml(name, source, error))
 }
 
-fn decode(document: &Spanned<DeTable<'_>>, name: &str, source: &str) -> Result<Settings> {
+fn decode(document: &Spanned<DeTable<'_>>, name: &str, source: &str) -> Result<AppConfig> {
     let config: Config = serde_path_to_error::deserialize(Deserializer::from(document.clone()))
         .map_err(|error| ConfigError::deserialize(name, source, error))?;
 
-    config
+    let editor = config
         .editor
         .try_into()
-        .map_err(|error| ConfigError::setting(name, source, document.get_ref(), error))
+        .map_err(|error| ConfigError::setting(name, source, document.get_ref(), error))?;
+
+    Ok(AppConfig {
+        editor,
+        save: config.save,
+    })
 }
 
 fn fill_defaults<'a>(config: &mut DeTable<'a>, defaults: DeTable<'a>) {
@@ -165,6 +207,16 @@ fn fill_defaults<'a>(config: &mut DeTable<'a>, defaults: DeTable<'a>) {
     }
 }
 
+/// Resolves a leading `~` component from `home` and keeps other paths unchanged.
+///
+/// Returns `None` when the path needs `home` but none is available.
+fn expand_home(path: &Path, home: Option<&Path>) -> Option<PathBuf> {
+    let Ok(rest) = path.strip_prefix("~") else {
+        return Some(path.to_path_buf());
+    };
+    home.map(|home| home.join(rest))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,19 +228,56 @@ mod tests {
     #[test]
     fn partial_configuration_keeps_unspecified_defaults() {
         let defaults = assert_ok!(parse("test.toml", ""));
-        let settings = assert_ok!(parse(
+        let config = assert_ok!(parse(
             "test.toml",
             "[editor]\ntheme = 'LiGhT'\ntool = 'pEnCiL'\nstroke_width = 7",
         ));
 
         assert_eq!(
-            settings,
-            Settings {
-                theme: ThemePreference::Light,
-                tool: Tool::Pencil,
-                stroke_width: 7,
+            config,
+            AppConfig {
+                editor: Settings {
+                    theme: ThemePreference::Light,
+                    tool: Tool::Pencil,
+                    stroke_width: 7,
+                    ..defaults.editor
+                },
                 ..defaults
             }
+        );
+    }
+
+    #[test]
+    fn partial_save_configuration_keeps_editor_defaults() {
+        let defaults = assert_ok!(parse("test.toml", ""));
+        let config = assert_ok!(parse("test.toml", "[save]\ndirectory = 'shots'"));
+
+        assert_eq!(
+            config,
+            AppConfig {
+                save: SaveSettings {
+                    directory: PathBuf::from("shots"),
+                },
+                ..defaults
+            }
+        );
+    }
+
+    #[rstest]
+    #[case("~/Pictures", Some("/home/user"), Some("/home/user/Pictures"))]
+    #[case("~/Pictures", None, None)]
+    #[case("/srv/screenshots", None, Some("/srv/screenshots"))]
+    #[case("screenshots", None, Some("screenshots"))]
+    #[case("$HOME/screenshots", Some("/home/user"), Some("$HOME/screenshots"))]
+    #[case("~other/screenshots", Some("/home/user"), Some("~other/screenshots"))]
+    fn only_a_leading_tilde_is_resolved_from_home(
+        #[case] path: &str,
+        #[case] home: Option<&str>,
+        #[case] expected: Option<&str>,
+    ) {
+        assert_eq!(
+            expand_home(Path::new(path), home.map(Path::new)),
+            expected.map(PathBuf::from)
         );
     }
 
@@ -222,8 +311,11 @@ mod tests {
 
         assert_ok_eq!(
             load(Some(&path)),
-            Settings {
-                blur_sigma: 11,
+            AppConfig {
+                editor: Settings {
+                    blur_sigma: 11,
+                    ..defaults.editor
+                },
                 ..defaults
             }
         );
@@ -238,6 +330,9 @@ mod tests {
     #[case("[editor]\nstroke_width = 'wide'", "'wide'")]
     #[case("[editor]\nstorke_width = 4", "storke_width")]
     #[case("editor = false", "false")]
+    #[case("[save]\ndirectory = ''", "''")]
+    #[case("[save]\ndirectory = 1", "1")]
+    #[case("[save]\ndirectroy = 'shots'", "directroy")]
     fn diagnostics_point_to_the_original_user_source_after_merging(
         #[case] source: &'static str,
         #[case] expected: &'static str,
@@ -272,9 +367,9 @@ mod tests {
         #[case] expected: [u8; 4],
     ) {
         let source = format!("[editor]\nstroke_color = '{value}'");
-        let settings = assert_ok!(parse("test.toml", &source));
+        let config = assert_ok!(parse("test.toml", &source));
 
-        assert_eq!(settings.stroke_color.into_rgba8(), expected);
+        assert_eq!(config.editor.stroke_color.into_rgba8(), expected);
     }
 
     #[test]

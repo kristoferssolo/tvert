@@ -33,9 +33,13 @@ pub enum CaptureCommand {
         #[arg(value_name = "OUTPUT")]
         output: String,
 
-        /// Destination PNG file. Must not already exist
+        /// PNG file to create instead of a timestamped file in save.directory
+        ///
+        /// An explicit file must not already exist, and its directory is not
+        /// created. When omitted, Tvert creates save.directory if needed and
+        /// appends a numeric suffix if the generated name is taken.
         #[arg(value_name = "FILE")]
-        path: PathBuf,
+        path: Option<PathBuf>,
     },
     /// Capture a region and save it as a PNG. Right-click to cancel
     CaptureRegion {
@@ -43,9 +47,13 @@ pub enum CaptureCommand {
         #[arg(value_name = "OUTPUT")]
         output: String,
 
-        /// Destination PNG file. Must not already exist
+        /// PNG file to create instead of a timestamped file in save.directory
+        ///
+        /// An explicit file must not already exist, and its directory is not
+        /// created. When omitted, Tvert creates save.directory if needed and
+        /// appends a numeric suffix if the generated name is taken.
         #[arg(value_name = "FILE")]
-        path: PathBuf,
+        path: Option<PathBuf>,
     },
     /// Check overlay configuration without displaying it.
     ProbeOverlay {
@@ -64,8 +72,12 @@ pub enum CaptureCommand {
         #[arg(value_name = "OUTPUT")]
         output: String,
 
-        /// Destination PNG file. Must not already exist
+        /// PNG file to create instead of a timestamped file in save.directory
+        ///
+        /// An explicit file must not already exist, and its directory is not
+        /// created. When omitted, Tvert creates save.directory if needed and
+        /// appends a numeric suffix if the generated name is taken.
         #[arg(value_name = "FILE")]
-        path: PathBuf,
+        path: Option<PathBuf>,
     },
 }

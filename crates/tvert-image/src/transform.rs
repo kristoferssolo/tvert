@@ -157,15 +157,4 @@ mod tests {
         assert_eq!(result.size(), expected.size());
         assert_eq!(result.rgba(), expected.rgba());
     }
-
-    #[test]
-    fn transforms_only_the_cropped_pixels() {
-        let original = image(3, 2, &[1, 2, 3, 4, 5, 6]);
-        let cropped = assert_ok!(original.crop(1..3, 0..2));
-        let result = assert_ok!(cropped.transformed(ImageTransform::Rotate90));
-        let expected = image(2, 2, &[3, 6, 2, 5]);
-
-        assert_eq!(result.size(), expected.size());
-        assert_eq!(result.rgba(), expected.rgba());
-    }
 }

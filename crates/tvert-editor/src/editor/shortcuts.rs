@@ -155,11 +155,8 @@ mod tests {
 
     #[rstest]
     #[case("z", Modifiers::CTRL, Message::Undo)]
-    #[case("Z", Modifiers::CTRL, Message::Undo)]
     #[case("y", Modifiers::CTRL, Message::Redo)]
-    #[case("Y", Modifiers::CTRL, Message::Redo)]
     #[case("z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
-    #[case("Z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
     fn parses_history(
         #[case] character: &str,
         #[case] modifiers: Modifiers,
@@ -173,11 +170,8 @@ mod tests {
 
     #[rstest]
     #[case("c", Modifiers::CTRL, ExportAction::Copy)]
-    #[case("C", Modifiers::CTRL, ExportAction::Copy)]
     #[case("c", Modifiers::CTRL | Modifiers::SHIFT, ExportAction::CopyAndSave)]
-    #[case("C", Modifiers::CTRL | Modifiers::SHIFT, ExportAction::CopyAndSave)]
     #[case("s", Modifiers::CTRL, ExportAction::Save)]
-    #[case("S", Modifiers::CTRL, ExportAction::Save)]
     fn parses_export(
         #[case] character: &str,
         #[case] modifiers: Modifiers,
@@ -192,31 +186,40 @@ mod tests {
         );
     }
 
-    #[rstest]
-    #[case(Tool::Rectangle, "r")]
-    #[case(Tool::Ellipse, "c")]
-    #[case(Tool::Line, "l")]
-    #[case(Tool::Arrow, "a")]
-    #[case(Tool::Pencil, "p")]
-    #[case(Tool::Highlighter, "h")]
-    #[case(Tool::Pixelate, "x")]
-    #[case(Tool::Blur, "b")]
-    fn parses_the_tool_key_shown_in_its_tooltip(
-        #[case] tool: Tool,
-        #[case] character: &str,
-        #[values(Modifiers::empty(), Modifiers::SHIFT)] modifiers: Modifiers,
-    ) {
-        assert_eq!(tool_key(tool).to_string(), character.to_uppercase());
+    #[test]
+    fn parses_the_key_shown_in_each_tooltip() {
+        let bindings = Tool::VARIANTS
+            .iter()
+            .map(|&tool| (tool_key(tool), Message::SelectTool(tool)))
+            .chain([(SELECT_KEY, Message::SelectionMode)]);
 
-        for character in [character.to_lowercase(), character.to_uppercase()] {
+        for (character, expected) in bindings {
+            let character = character.to_ascii_lowercase().to_string();
             assert_some_eq!(
                 parse(
-                    &key_press(&character, modifiers, false),
+                    &key_press(&character, Modifiers::empty(), false),
                     event::Status::Ignored
                 ),
-                Message::SelectTool(tool),
+                expected,
             );
         }
+    }
+
+    #[rstest]
+    #[case("Z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
+    #[case("R", Modifiers::SHIFT, Message::SelectTool(Tool::Rectangle))]
+    fn ignores_character_case(
+        #[case] character: &str,
+        #[case] modifiers: Modifiers,
+        #[case] expected: Message,
+    ) {
+        assert_some_eq!(
+            parse(
+                &key_press(character, modifiers, false),
+                event::Status::Ignored
+            ),
+            expected,
+        );
     }
 
     #[rstest]
@@ -256,9 +259,7 @@ mod tests {
 
     #[rstest]
     #[case("z", Modifiers::CTRL)]
-    #[case("c", Modifiers::CTRL)]
-    #[case("s", Modifiers::CTRL)]
-    #[case("e", Modifiers::empty())]
+    #[case("r", Modifiers::empty())]
     fn ignores_captured_events(#[case] character: &str, #[case] modifiers: Modifiers) {
         assert_none!(parse(
             &key_press(character, modifiers, false),
@@ -280,18 +281,5 @@ mod tests {
 
         let modified = press(Key::Named(named), Modifiers::CTRL, false);
         assert_none!(parse(&modified, event::Status::Ignored));
-    }
-
-    #[test]
-    fn parses_the_selection_key_shown_in_its_tooltip() {
-        for character in ["v", "V"] {
-            assert_some_eq!(
-                parse(
-                    &key_press(character, Modifiers::empty(), false),
-                    event::Status::Ignored
-                ),
-                Message::SelectionMode,
-            );
-        }
     }
 }

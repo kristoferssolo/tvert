@@ -173,39 +173,6 @@ mod tests {
         assert_eq!(image.rgba(), expected, "y_inverted={y_inverted}");
     }
 
-    #[rstest]
-    #[case(0, 1)]
-    #[case(1, 0)]
-    fn rejects_zero_dimensions(#[case] width: u32, #[case] height: u32) {
-        let error = assert_err!(read_fixture(
-            &[],
-            ShmRequirements {
-                format: WEnum::Value(Format::Xrgb8888),
-                width,
-                height,
-                stride: 4,
-            },
-            false,
-        ));
-        assert_matches!(error, Error::InvalidShmLayout);
-    }
-
-    #[test]
-    fn rejects_stride_smaller_than_a_row() {
-        let error = assert_err!(read_fixture(
-            &[],
-            ShmRequirements {
-                format: WEnum::Value(Format::Xrgb8888),
-                width: 2,
-                height: 1,
-                stride: 4,
-            },
-            false,
-        ));
-
-        assert_matches!(error, Error::InvalidShmLayout);
-    }
-
     #[test]
     fn reports_truncated_backing_storage() {
         let result = assert_err!(read_fixture(

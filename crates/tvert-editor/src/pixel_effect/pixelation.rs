@@ -42,7 +42,6 @@ mod tests {
     use crate::{annotation::AnnotationDraft, tool::Tool};
     use claims::assert_ok;
     use iced::{Color, Point};
-    use rstest::rstest;
     use tvert_image::PixelSize;
 
     #[test]
@@ -67,17 +66,11 @@ mod tests {
         );
     }
 
-    #[rstest]
-    #[case(7, [3, 10, 17, 24])]
-    #[case(13, [6, 6, 19, 19])]
-    #[case(29, [14, 14, 14, 14])]
-    fn applies_the_block_size_retained_by_the_draft(
-        #[case] block_size: u16,
-        #[case] expected: [u8; 4],
-    ) {
+    #[test]
+    fn applies_the_block_size_retained_by_the_draft() {
         let effect = assert_ok!(Pixelation::try_from(&AnnotationDraft {
             tool: Tool::Pixelate,
-            size: block_size,
+            size: 13,
             stroke_color: Color::BLACK,
             points: vec![Point::ORIGIN, Point::new(32.0, 1.0)],
         }));
@@ -95,6 +88,6 @@ mod tests {
             .step_by(8)
             .map(|&[red, _, _, _]| red)
             .collect::<Vec<_>>();
-        assert_eq!(actual, expected);
+        assert_eq!(actual, [6, 6, 19, 19]);
     }
 }

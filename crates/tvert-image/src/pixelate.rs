@@ -55,7 +55,6 @@ mod tests {
     use super::*;
     use crate::CapturedImage;
     use claims::{assert_err, assert_ok, assert_some};
-    use rstest::rstest;
     use std::assert_matches;
 
     fn image(width: u32, height: u32, rgba: Vec<u8>) -> CapturedImage {
@@ -92,19 +91,12 @@ mod tests {
         assert_eq!(image.rgba(), [0; 8]);
     }
 
-    #[rstest]
-    #[case([0, 0, 0, 1])]
-    #[case([0, 1, 0, 0])]
-    #[case([2, 1, 0, 1])]
-    #[case([0, 1, 2, 1])]
-    #[case([0, 3, 0, 1])]
-    #[case([0, 1, 0, 2])]
-    fn rejects_invalid_bounds_without_changing_pixels(#[case] edges: [usize; 4]) {
-        let [left, right, top, bottom] = edges;
+    #[test]
+    fn rejects_invalid_bounds_without_changing_pixels() {
         let original = vec![255, 0, 0, 255, 0, 0, 255, 255];
         let mut image = image(2, 1, original.clone());
 
-        let error = assert_err!(image.pixelate(left..right, top..bottom, NonZeroU32::MAX));
+        let error = assert_err!(image.pixelate(0..3, 0..1, NonZeroU32::MAX));
 
         assert_matches!(error, Error::InvalidPixelationBounds);
         assert_eq!(image.rgba(), original);

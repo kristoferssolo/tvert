@@ -210,10 +210,13 @@ mod tests {
     }
 
     #[rstest]
+    #[case(0, 1, 4)]
+    #[case(1, 0, 4)]
+    #[case(2, 1, 4)]
     #[case(1, 1, 6)]
     #[case(536_870_912, 1, 2_147_483_648)]
     #[case(1, 536_870_912, 4)]
-    fn rejects_invalid_stride_or_oversized_pool(
+    fn rejects_invalid_dimensions_stride_or_pool_size(
         #[case] width: u32,
         #[case] height: u32,
         #[case] stride: u32,

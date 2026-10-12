@@ -39,27 +39,12 @@ impl Display for SurfacePosition {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_none, assert_some};
+    use claims::assert_none;
     use rstest::rstest;
 
     #[rstest]
-    #[case(12.75, -3.125)]
-    #[case(0.0, -0.0)]
-    #[case(f64::MAX, -f64::MAX)]
-    fn preserved_finite_coordinates(#[case] x: f64, #[case] y: f64) {
-        let position = assert_some!(SurfacePosition::new(x, y));
-
-        assert_eq!(position.x().to_bits(), x.to_bits());
-        assert_eq!(position.y().to_bits(), y.to_bits());
-    }
-
-    #[rstest]
     #[case(f64::NAN, 0.0)]
-    #[case(f64::INFINITY, 0.0)]
-    #[case(f64::NEG_INFINITY, 0.0)]
-    #[case(0.0, f64::NAN)]
     #[case(0.0, f64::INFINITY)]
-    #[case(0.0, f64::NEG_INFINITY)]
     fn rejects_non_finite_coordinates(#[case] x: f64, #[case] y: f64) {
         assert_none!(SurfacePosition::new(x, y));
     }

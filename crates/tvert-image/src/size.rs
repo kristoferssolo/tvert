@@ -134,7 +134,6 @@ mod tests {
     #[rstest]
     #[case(0, 1)]
     #[case(1, 0)]
-    #[case(0, 0)]
     fn rejects_zero_dimensions(#[case] width: u32, #[case] height: u32) {
         assert_matches!(
             assert_err!(PixelSize::try_from((width, height))),

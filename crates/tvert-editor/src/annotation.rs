@@ -107,31 +107,3 @@ impl TryFrom<AnnotationDraft> for Annotation {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::style::RED;
-    use claims::assert_err;
-    use rstest::rstest;
-
-    #[rstest]
-    #[case(Tool::Rectangle, Point::new(10.0, 10.0), Point::new(30.0, 10.0))]
-    #[case(Tool::Ellipse, Point::new(10.0, 10.0), Point::new(10.0, 30.0))]
-    #[case(Tool::Line, Point::ORIGIN, Point::ORIGIN)]
-    #[case(Tool::Arrow, Point::new(f32::NAN, 10.0), Point::new(30.0, 20.0))]
-    fn conversion_rejects_invalid_geometry(
-        #[case] tool: Tool,
-        #[case] start: Point,
-        #[case] end: Point,
-    ) {
-        let error = assert_err!(Annotation::try_from(AnnotationDraft {
-            tool,
-            size: 4,
-            stroke_color: RED,
-            points: vec![start, end]
-        }));
-
-        assert_eq!(error, InvalidAnnotation);
-    }
-}

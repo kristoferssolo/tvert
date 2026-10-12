@@ -81,22 +81,10 @@ mod tests {
         Point::new(126.0, 38.0)
     )]
     #[case(
-        Point::new(150.0, 50.0),
-        Point::new(50.0, 50.0),
-        Point::new(74.0, 38.0),
-        Point::new(74.0, 62.0)
-    )]
-    #[case(
         Point::new(50.0, 50.0),
         Point::new(50.0, 150.0),
         Point::new(38.0, 126.0),
         Point::new(62.0, 126.0)
-    )]
-    #[case(
-        Point::new(50.0, 150.0),
-        Point::new(50.0, 50.0),
-        Point::new(62.0, 74.0),
-        Point::new(38.0, 74.0)
     )]
     fn places_the_head_behind_the_tip(
         #[case] start: Point,

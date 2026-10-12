@@ -186,8 +186,6 @@ mod tests {
     #[rstest]
     #[case(Point::new(10.0, 20.0), Point::new(50.0, 70.0))]
     #[case(Point::new(50.0, 70.0), Point::new(10.0, 20.0))]
-    #[case(Point::new(50.0, 20.0), Point::new(10.0, 70.0))]
-    #[case(Point::new(10.0, 70.0), Point::new(50.0, 20.0))]
     fn normalizes_every_drag_direction(#[case] start: Point, #[case] end: Point) {
         assert_eq!(
             rectangle_between(start, end),

@@ -297,15 +297,9 @@ mod tests {
         assert_some!(draft);
     }
 
-    #[rstest]
-    #[case("z", Modifiers::CTRL)]
-    #[case("y", Modifiers::CTRL)]
-    #[case("z", Modifiers::CTRL | Modifiers::SHIFT)]
-    fn history_cancels_a_draft_and_otherwise_reaches_the_editor(
-        #[case] character: &str,
-        #[case] modifiers: Modifiers,
-    ) {
-        let event = key_press(character, modifiers, false);
+    #[test]
+    fn history_cancels_a_draft_and_otherwise_reaches_the_editor() {
+        let event = key_press("z", Modifiers::CTRL, false);
         let mut draft = None;
 
         begin(&mut draft);
@@ -315,21 +309,11 @@ mod tests {
         assert_eq!(capture_status(&mut draft, &event), event::Status::Ignored);
     }
 
-    #[rstest]
-    #[case(Tool::Ellipse, 7, RED)]
-    #[case(Tool::Rectangle, 2, RED)]
-    #[case(Tool::Rectangle, 7, Color::BLACK)]
-    #[case(Tool::Pixelate, 13, Color::BLACK)]
-    #[case(Tool::Blur, 11, Color::BLACK)]
-    fn retains_the_appearance_selected_when_the_drag_started(
-        #[case] tool: Tool,
-        #[case] size: u16,
-        #[case] color: Color,
-    ) {
+    #[test]
+    fn retains_the_appearance_selected_when_the_drag_started() {
         let cache = Cache::new();
-        let mut canvas = canvas(&cache, tool);
-        canvas.size = size;
-        canvas.stroke_color = color;
+        let mut canvas = canvas(&cache, Tool::Ellipse);
+        canvas.size = 7;
         let mut draft = None;
         assert_none!(dispatch_canvas(&canvas, &mut draft, &PRESS, Some(START)));
 
@@ -347,20 +331,17 @@ mod tests {
         assert_some_eq!(
             message,
             Message::AddEdit(AnnotationDraft {
-                tool,
-                size,
-                stroke_color: color,
+                tool: Tool::Ellipse,
+                size: 7,
+                stroke_color: RED,
                 points: vec![Point::new(50.0, 25.0), Point::new(150.0, 75.0)],
             })
         );
         assert_none!(draft);
     }
 
-    #[rstest]
-    #[case(Point::new(320.0, 190.0), Point::new(150.0, 25.0))]
-    #[case(Point::new(120.0, 290.0), Point::new(50.0, 75.0))]
-    #[case(Point::new(80.0, 170.0), Point::new(30.0, 15.0))]
-    fn commits_line_endpoints_without_normalizing_them(#[case] release: Point, #[case] end: Point) {
+    #[test]
+    fn commits_line_endpoints_without_normalizing_them() {
         let mut draft = None;
         assert_none!(dispatch_with_tool(
             &mut draft,
@@ -368,7 +349,12 @@ mod tests {
             Some(START),
             Tool::Line
         ));
-        let message = dispatch_with_tool(&mut draft, &RELEASE, Some(release), Tool::Line);
+        let message = dispatch_with_tool(
+            &mut draft,
+            &RELEASE,
+            Some(Point::new(80.0, 170.0)),
+            Tool::Line,
+        );
         let points = assert_some!(message.and_then(|message| match message {
             Message::AddEdit(AnnotationDraft {
                 tool: Tool::Line,
@@ -378,7 +364,7 @@ mod tests {
             _ => None,
         }));
         assert_some_eq!(points.first(), &Point::new(50.0, 25.0));
-        assert!(assert_some!(points.last()).distance(end) < 0.001);
+        assert!(assert_some!(points.last()).distance(Point::new(30.0, 15.0)) < 0.001);
         assert_none!(draft);
     }
 

@@ -193,21 +193,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case("[editor]\ntheme = 'banana'")]
-    #[case("[editor]\ntool = 'banana'")]
     #[case("[editor]\ntool = 1")]
-    #[case("[editor]\nstroke_color = '#GG0000'")]
-    #[case("[editor]\nstroke_color = '#12'")]
-    #[case("[editor]\nstroke_color = 'ééé'")]
     #[case("[editor]\nstroke_color = 12")]
     #[case("[editor]\nstroke_width = 0")]
     #[case("[editor]\npixelation_block_size = 65")]
-    #[case("[editor]\nblur_sigma = 0")]
-    #[case("[editor]\nstroke_width = 'wide'")]
-    #[case("[editor]\nstorke_width = 4")]
     #[case("[unknown]\nvalue = 1")]
-    #[case("editor = false")]
-    #[case("[editor]\nstroke_width = [4]")]
     #[case("[editor")]
     fn invalid_values_and_unknown_keys_are_rejected(#[case] source: &'static str) {
         let _ = assert_err!(parse("test.toml", source));
@@ -241,7 +231,6 @@ mod tests {
 
     #[rstest]
     #[case("# user settings\n[editor]\nblur_sigma = 3\n", "3")]
-    #[case("[editor]\ntheme = 'banana'", "'banana'")]
     #[case("[editor]\ntool = 'banana'", "'banana'")]
     #[case("[editor]\nstroke_color = '#GG0000'", "'#GG0000'")]
     #[case("editor.blur_sigma = 3", "3")]

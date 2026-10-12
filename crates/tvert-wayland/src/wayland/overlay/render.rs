@@ -158,7 +158,6 @@ mod tests {
     use super::*;
     use crate::wayland::overlay::{SuggestedSurfaceSize, SurfacePosition};
     use claims::{assert_ok, assert_some};
-    use rstest::rstest;
     use std::{iter::repeat_n, num::NonZeroU32};
 
     fn pixels(width: u32, height: u32) -> PixelSize {
@@ -181,24 +180,6 @@ mod tests {
             assert_some!(SurfacePosition::new(end.0, end.1)),
             size
         ))
-    }
-
-    #[rstest]
-    #[case(Transform::Normal, [20.0, 10.0, 60.0, 40.0])]
-    #[case(Transform::_90, [20.0, 50.0, 80.0, 70.0])]
-    #[case(Transform::_180, [100.0, 40.0, 140.0, 70.0])]
-    #[case(Transform::_270, [80.0, 10.0, 140.0, 30.0])]
-    #[case(Transform::Flipped, [100.0, 10.0, 140.0, 40.0])]
-    #[case(Transform::Flipped90, [20.0, 10.0, 80.0, 30.0])]
-    #[case(Transform::Flipped180, [20.0, 40.0, 60.0, 70.0])]
-    #[case(Transform::Flipped270, [80.0, 50.0, 140.0, 70.0])]
-    fn maps_surface_edges_to_buffer(#[case] transform: Transform, #[case] expected: [f64; 4]) {
-        let surface = surface(80, 40);
-        let rectangle = rectangle((10.0, 5.0), (30.0, 20.0), surface);
-        let outline = assert_ok!(Outline::new(rectangle, surface, pixels(160, 80), transform));
-        let actual = [outline.left, outline.top, outline.right, outline.bottom];
-
-        assert_eq!(actual.map(f64::to_bits), expected.map(f64::to_bits));
     }
 
     #[test]

@@ -40,6 +40,18 @@ command = [
 need_stdout = true
 analyzer = "nextest"
 
+[jobs.doc]
+command = [
+  "cargo",
+  "doc",
+  "--workspace",
+  "--all-features",
+  "--document-private-items",
+  "--no-deps",
+]
+env.RUSTDOCFLAGS = "-D warnings"
+need_stdout = false
+
 # You can run your application and have the result displayed in bacon,
 # if it makes sense for this crate.
 [jobs.run]
@@ -93,3 +105,4 @@ allow_warnings = true
 [keybindings]
 # alt-m = "job:my-job"
 c = "job:clippy"
+d = "job:doc"

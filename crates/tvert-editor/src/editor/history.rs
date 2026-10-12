@@ -1,3 +1,5 @@
+use std::mem;
+
 use crate::{edit::Edit, editor::Editor, mode::Mode, render::render_edits};
 use iced::widget::image::Handle;
 
@@ -9,6 +11,7 @@ use iced::widget::image::Handle;
 pub enum Change {
     Insert(usize, Edit),
     Remove(usize),
+    Replace(usize, Edit),
 }
 
 impl Change {
@@ -21,6 +24,10 @@ impl Change {
             Self::Remove(index) if index < edits.len() => {
                 Ok(Self::Insert(index, edits.remove(index)))
             }
+            Self::Replace(index, edit) => match edits.get_mut(index) {
+                Some(current) => Ok(Self::Replace(index, mem::replace(current, edit))),
+                None => Err(Self::Replace(index, edit)),
+            },
             change => Err(change),
         }
     }
@@ -58,23 +65,18 @@ impl Editor {
         }
     }
 
-    /// Applies a new change and discards the redo branch
-    fn record(&mut self, change: Change) {
-        if let Ok(inverse) = self.apply(change) {
-            self.undo_stack.push(inverse);
-            self.redo_stack.clear();
-        }
-    }
-
     /// Applies `change`, re-renders every edit in order, and returns the inverse.
     ///
     /// Returns `change` and leaves the edits unchanged if it does not fit them
     /// or the preview cannot render. Clears the selection on success, since
     /// indices may have shifted.
-    fn apply(&mut self, change: Change) -> Result<Change, Change> {
+    pub(super) fn apply(&mut self, change: Change) -> Result<Change, Change> {
+        let replaced = matches!(change, Change::Replace(..));
         let inverse = change.apply(&mut self.edits)?;
         if self.refresh_preview() {
-            self.select_edit(None);
+            if !replaced {
+                self.select_edit(None);
+            }
             return Ok(inverse);
         }
         Err(inverse
@@ -82,7 +84,7 @@ impl Editor {
             .unwrap_or_else(|inverse| inverse))
     }
 
-    fn refresh_preview(&mut self) -> bool {
+    pub(super) fn refresh_preview(&mut self) -> bool {
         match render_edits(&self.original, &self.edits) {
             Ok(image) => {
                 let (width, height) = image.size().into();
@@ -94,6 +96,14 @@ impl Editor {
                 self.error = Some(error);
                 false
             }
+        }
+    }
+
+    /// Applies a new change and discards the redo branch
+    fn record(&mut self, change: Change) {
+        if let Ok(inverse) = self.apply(change) {
+            self.undo_stack.push(inverse);
+            self.redo_stack.clear();
         }
     }
 }

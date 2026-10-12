@@ -2,8 +2,8 @@ mod input;
 mod select;
 
 use crate::{
-    annotation::AnnotationDraft, edit::Edit, editor::Message, mode::Mode, tool::Tool,
-    viewport::Viewport,
+    annotation::AnnotationDraft, annotation_canvas::select::MoveGesture, edit::Edit,
+    editor::Message, mode::Mode, tool::Tool, viewport::Viewport,
 };
 use iced::{
     Color, Rectangle, Renderer, Size, Theme,
@@ -11,7 +11,16 @@ use iced::{
     widget::canvas::{Cache, Program},
 };
 
-type DraftState = Option<AnnotationDraft>;
+/// A primary-button gesture in progress on the canvas
+#[derive(Debug)]
+pub enum Gesture {
+    /// Drawing a new edit with the appearance selected when it began
+    Draw(AnnotationDraft),
+    /// Pressing or dragging an existing edit
+    Move(MoveGesture),
+}
+
+type GestureState = Option<Gesture>;
 
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
@@ -24,7 +33,7 @@ pub struct AnnotationCanvas<'a> {
 }
 
 impl Program<Message> for AnnotationCanvas<'_> {
-    type State = DraftState;
+    type State = GestureState;
 
     fn update(
         &self,
@@ -51,7 +60,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         let geometry = self
             .cache
             .draw_with_bounds(renderer, viewport.bounds, |frame| {
-                if let Some(draft) = state
+                if let Some(Gesture::Draw(draft)) = state
                     && let Ok(edit) = Edit::try_from(draft.clone())
                 {
                     edit.draw_draft(frame, viewport);

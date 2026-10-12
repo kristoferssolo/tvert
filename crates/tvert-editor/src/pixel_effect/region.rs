@@ -2,10 +2,10 @@ use crate::{
     Error,
     annotation::{AnnotationDraft, InvalidAnnotation},
     guide, hit,
-    viewport::{Viewport, rectangle_between},
+    viewport::{Viewport, rectangle_between, translate_rectangle},
 };
 use iced::{
-    Color, Point, Rectangle,
+    Color, Point, Rectangle, Size, Vector,
     widget::canvas::{Frame, Path},
 };
 use num_traits::ToPrimitive;
@@ -48,10 +48,29 @@ impl EffectRegion {
         viewport.canvas_rectangle(self.bounds)
     }
 
+    pub const fn translated(&self, offset: Vector) -> Self {
+        Self {
+            bounds: translate_rectangle(self.bounds, offset),
+        }
+    }
+
+    /// Limits `offset` so the moved region stays within an image of `size`
+    pub fn constrain_offset(&self, offset: Vector, size: Size) -> Vector {
+        Vector::new(
+            shift(offset.x, self.bounds.x, self.bounds.width, size.width),
+            shift(offset.y, self.bounds.y, self.bounds.height, size.height),
+        )
+    }
+
     fn outline(&self, viewport: Viewport) -> Path {
         let bounds = self.canvas_bounds(viewport);
         Path::rectangle(bounds.position(), bounds.size())
     }
+}
+
+/// Limits a one-axis `offset` to keep `start..start + length` within `0..extent`
+fn shift(offset: f32, start: f32, length: f32, extent: f32) -> f32 {
+    offset.min(extent - length - start).max(-start)
 }
 
 fn pixel_edge(value: f64, extent: u32) -> Result<usize, Error> {

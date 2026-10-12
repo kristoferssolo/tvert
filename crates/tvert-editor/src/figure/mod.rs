@@ -13,13 +13,19 @@ pub use pencil::PencilFigure;
 pub use rectangle::RectangleFigure;
 
 use crate::viewport::Viewport;
-use iced::widget::canvas::{Fill, Frame, Path, Stroke};
+use iced::{
+    Vector,
+    widget::canvas::{Fill, Frame, Path, Stroke},
+};
 use std::fmt::Debug;
 
 /// A drawable annotation stored in captured-image pixel coordinates
 pub trait Figure: Debug {
     /// Builds the figure path for the current image viewport
     fn path(&self, viewport: Viewport) -> Path;
+
+    /// Returns a copy moved by `offset` captured-image pixels
+    fn translated(&self, offset: Vector) -> Box<dyn Figure>;
 
     /// Whether the figure paints its interior instead of stroking its path.
     ///

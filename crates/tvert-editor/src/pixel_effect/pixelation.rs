@@ -23,6 +23,13 @@ impl PixelEffect for Pixelation {
         image.pixelate(x, y, self.block_size)?;
         Ok(())
     }
+
+    fn translated(&self, offset: iced::Vector) -> Box<dyn PixelEffect> {
+        Box::new(Self {
+            region: self.region.translated(offset),
+            ..*self
+        })
+    }
 }
 
 impl TryFrom<&AnnotationDraft> for Pixelation {

@@ -20,6 +20,13 @@ impl PixelEffect for Blur {
         image.blur(x, y, self.sigma)?;
         Ok(())
     }
+
+    fn translated(&self, offset: iced::Vector) -> Box<dyn PixelEffect> {
+        Box::new(Self {
+            region: self.region.translated(offset),
+            ..*self
+        })
+    }
 }
 
 impl TryFrom<&AnnotationDraft> for Blur {

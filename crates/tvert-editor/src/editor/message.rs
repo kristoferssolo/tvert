@@ -1,5 +1,5 @@
 use crate::{annotation::AnnotationDraft, export::ExportAction, size::SizeKind, tool::Tool};
-use iced::Color;
+use iced::{Color, Vector};
 use iced_color_triangle::Selection;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -9,6 +9,7 @@ pub enum Message {
     SelectionMode,
     SelectEdit(Option<usize>),
     DeleteSelected,
+    Move(MoveMessage),
     Size(SizeMessage),
     ToggleColorPalette,
     CloseColorPalette,
@@ -28,4 +29,16 @@ pub enum SizeMessage {
     Edit(SizeKind, String),
     /// Enter in the size field, which discards any unapplied text
     Submit,
+}
+
+/// Dragging the selected edit by offsets in captured-image pixels
+/// from where the gesture began
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MoveMessage {
+    /// Previews the edit at the offset
+    Drag(Vector),
+    /// Records the edit at the offset as one history entry
+    Finish(Vector),
+    /// Restores the edit to where the gesture began
+    Cancel,
 }

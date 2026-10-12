@@ -1,16 +1,24 @@
 pub mod color;
 mod history;
 mod message;
+mod movement;
 mod selection;
 pub mod shortcuts;
 mod size;
 mod view;
 
-pub use message::{Message, SizeMessage};
+pub use message::{Message, MoveMessage, SizeMessage};
 
 use crate::{
-    Error, Settings, color::format_hex, edit::Edit, editor::history::Change, export::ExportAction,
-    mode::Mode, render::render_image, size::Sizes, tool::Tool,
+    Error, Settings,
+    color::format_hex,
+    edit::Edit,
+    editor::{history::Change, movement::Movement},
+    export::ExportAction,
+    mode::Mode,
+    render::render_image,
+    size::Sizes,
+    tool::Tool,
 };
 use iced::{
     Size, Task,
@@ -40,6 +48,7 @@ pub struct Editor {
     edits: Vec<Edit>,
     undo_stack: Vec<Change>,
     redo_stack: Vec<Change>,
+    movement: Option<Movement>,
     cache: Cache,
 }
 
@@ -67,11 +76,15 @@ impl Editor {
             edits: Vec::new(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
+            movement: None,
             cache: Cache::new(),
         }
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if !matches!(message, Message::Move(_)) {
+            self.cancel_move();
+        }
         match message {
             Message::AddEdit(draft) => {
                 let Ok(edit) = Edit::try_from(draft) else {
@@ -83,6 +96,7 @@ impl Editor {
             Message::SelectionMode => self.enter_selection_mode(),
             Message::SelectEdit(index) => self.select_edit(index),
             Message::DeleteSelected => self.delete_selected(),
+            Message::Move(message) => self.update_move(message),
             Message::SelectStrokeColor(stroke_color) => {
                 self.select_stroke_color(stroke_color);
                 return Task::none();

@@ -103,6 +103,20 @@ pub fn rectangle_between(start: Point, end: Point) -> Option<Rectangle> {
         .then(|| Rectangle::new(Point::new(left, top), Size::new(width, height)))
 }
 
+/// Moves a `point` by `offset`, both in the same coordinate space
+pub const fn translate(point: Point, offset: Vector) -> Point {
+    Point::new(point.x + offset.x, point.y + offset.y)
+}
+
+/// Moves a `rectangle` by `offset` without resizing it
+pub const fn translate_rectangle(rectangle: Rectangle, offset: Vector) -> Rectangle {
+    Rectangle {
+        x: rectangle.x + offset.x,
+        y: rectangle.y + offset.y,
+        ..rectangle
+    }
+}
+
 fn snap(origin: f32, scale: f32) -> f32 {
     (origin / scale).trunc() * scale
 }

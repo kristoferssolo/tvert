@@ -7,7 +7,7 @@ pub use pixelation::Pixelation;
 pub use region::EffectRegion;
 
 use crate::{Error, viewport::Viewport};
-use iced::widget::canvas::Frame;
+use iced::{Vector, widget::canvas::Frame};
 use std::fmt::Debug;
 use tvert_image::CapturedImage;
 
@@ -22,6 +22,9 @@ pub trait PixelEffect: Debug {
     ///
     /// Returns an error if mapping the region or processing its pixels fails.
     fn apply(&self, image: &mut CapturedImage) -> Result<(), Error>;
+
+    /// Returns a copy whose region is moved by `offset` captured-image pixels
+    fn translated(&self, offset: Vector) -> Box<dyn PixelEffect>;
 
     /// Draws the temporary region outline without applying the effect
     fn draw_selection(&self, frame: &mut Frame, viewport: Viewport) {

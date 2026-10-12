@@ -1,6 +1,6 @@
 use crate::{figure::Figure, hit, tool::Tool, viewport::Viewport};
 use iced::{
-    Color, Point, Rectangle,
+    Color, Point, Rectangle, Vector,
     widget::canvas::{Frame, Stroke},
 };
 
@@ -83,6 +83,14 @@ impl Annotation {
             return Some(bounds);
         }
         Some(bounds.expand(self.canvas_width(viewport) / 2.0))
+    }
+
+    /// Returns a copy moved by `offset` image pixels with the same appearance
+    pub fn translated(&self, offset: Vector) -> Self {
+        Self {
+            figure: self.figure.translated(offset),
+            ..*self
+        }
     }
 
     fn canvas_width(&self, viewport: Viewport) -> f32 {

@@ -1,7 +1,7 @@
 use crate::{
     annotation::AnnotationDraft,
-    annotation_canvas::{AnnotationCanvas, DraftState},
-    editor::{Message, shortcuts},
+    annotation_canvas::{AnnotationCanvas, Gesture, GestureState},
+    editor::{Message, MoveMessage, shortcuts},
     mode::Mode,
     viewport::Viewport,
 };
@@ -16,7 +16,7 @@ use iced::{
 impl AnnotationCanvas<'_> {
     pub(super) fn handle_event(
         &self,
-        state: &mut DraftState,
+        state: &mut GestureState,
         event: &Event,
         bounds: Rectangle,
         cursor: Cursor,
@@ -32,21 +32,36 @@ impl AnnotationCanvas<'_> {
             Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => match self.mode {
                 Mode::Draw => {
                     let start = viewport.image_position(position?)?;
-                    *state = Some(self.new_draft(start));
+                    *state = Some(Gesture::Draw(self.new_draft(start)));
                     Some(self.redraw())
                 }
-                Mode::Select(_) => Some(self.select_at(viewport, cursor.position_in(bounds)?)),
+                Mode::Select(_) => {
+                    Some(self.select_at(state, viewport, cursor.position_in(bounds)?))
+                }
             },
             Event::Mouse(MouseEvent::CursorMoved { position }) => {
-                self.record_motion(state, *position, bounds, viewport)
-            }
-            Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
-                let mut draft = state.take()?;
-                if let Some(point) = position.and_then(|p| viewport.clamped_image_position(p)) {
-                    draft.record(point);
+                let local = Cursor::Available(*position).position_from(bounds.position())?;
+                match state.as_mut()? {
+                    Gesture::Draw(draft) => self.record_motion(draft, local, viewport),
+                    Gesture::Move(gesture) => gesture.drag(local, viewport),
                 }
-
-                Some(self.finish_draft(draft))
+            }
+            Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => match state.take()? {
+                Gesture::Draw(mut draft) => {
+                    if let Some(point) =
+                        position.and_then(|point| viewport.clamped_image_position(point))
+                    {
+                        draft.record(point);
+                    }
+                    Some(self.finish_draft(draft))
+                }
+                Gesture::Move(gesture) => Some(gesture.release(position, viewport)),
+            },
+            Event::Window(WindowEvent::RedrawRequested(_)) => {
+                let Some(Gesture::Move(gesture)) = state else {
+                    return None;
+                };
+                gesture.present()
             }
             _ => None,
         }
@@ -69,7 +84,7 @@ impl AnnotationCanvas<'_> {
         Action::publish(Message::AddEdit(draft)).and_capture()
     }
 
-    fn handle_cancel(&self, state: &mut DraftState, event: &Event) -> Option<Action<Message>> {
+    fn handle_cancel(&self, state: &mut GestureState, event: &Event) -> Option<Action<Message>> {
         let captured = shortcuts::history(event).is_some()
             || matches!(
                 event,
@@ -82,13 +97,16 @@ impl AnnotationCanvas<'_> {
         let forwarded = shortcuts::tool(event).is_some()
             || matches!(event, Event::Window(WindowEvent::Unfocused));
 
-        if state.is_none() || !(captured || forwarded) {
+        if !(captured || forwarded) {
             return None;
         }
 
-        *state = None;
+        let gesture = state.take()?;
         self.cache.clear();
-        let action = Action::request_redraw();
+        let action = match gesture {
+            Gesture::Draw(_) => Action::request_redraw(),
+            Gesture::Move(_) => Action::publish(Message::Move(MoveMessage::Cancel)),
+        };
         Some(if captured {
             action.and_capture()
         } else {
@@ -98,14 +116,11 @@ impl AnnotationCanvas<'_> {
 
     fn record_motion(
         &self,
-        state: &mut DraftState,
-        position: Point,
-        bounds: Rectangle,
+        draft: &mut AnnotationDraft,
+        point: Point,
         viewport: Viewport,
     ) -> Option<Action<Message>> {
-        let draft = state.as_mut()?;
-        let local = Cursor::Available(position).position_from(bounds.position())?;
-        draft.record(viewport.clamped_image_position(local)?);
+        draft.record(viewport.clamped_image_position(point)?);
         Some(self.redraw())
     }
 }
@@ -146,7 +161,7 @@ mod tests {
 
     fn dispatch_canvas(
         canvas: &AnnotationCanvas<'_>,
-        draft: &mut DraftState,
+        draft: &mut GestureState,
         event: &Event,
         position: Option<Point>,
     ) -> Option<Message> {
@@ -160,18 +175,22 @@ mod tests {
             .and_then(|action| action.into_inner().0)
     }
 
-    fn capture_status(draft: &mut DraftState, event: &Event) -> event::Status {
+    fn capture_status(draft: &mut GestureState, event: &Event) -> event::Status {
         canvas(&Cache::new(), Tool::Rectangle)
             .update(draft, event, BOUNDS, Cursor::Unavailable)
             .map_or(event::Status::Ignored, |action| action.into_inner().2)
     }
 
-    fn dispatch(draft: &mut DraftState, event: &Event, position: Option<Point>) -> Option<Message> {
+    fn dispatch(
+        draft: &mut GestureState,
+        event: &Event,
+        position: Option<Point>,
+    ) -> Option<Message> {
         dispatch_with_tool(draft, event, position, Tool::Rectangle)
     }
 
     fn dispatch_with_tool(
-        draft: &mut DraftState,
+        draft: &mut GestureState,
         event: &Event,
         position: Option<Point>,
         tool: Tool,
@@ -179,7 +198,7 @@ mod tests {
         dispatch_canvas(&canvas(&Cache::new(), tool), draft, event, position)
     }
 
-    fn begin(draft: &mut DraftState) {
+    fn begin(draft: &mut GestureState) {
         assert_none!(dispatch(draft, &PRESS, Some(START)));
         assert_some!(draft);
     }
@@ -418,8 +437,12 @@ mod tests {
                 Tool::Pencil
             ));
         }
+        let Some(Gesture::Draw(draft)) = draft else {
+            panic!("expected a draft");
+        };
+
         assert_eq!(
-            assert_some!(draft).points,
+            draft.points,
             vec![
                 Point::new(50.0, 25.0),
                 Point::new(100.0, 25.0),

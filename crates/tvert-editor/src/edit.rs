@@ -4,7 +4,7 @@ use crate::{
     tool::Tool,
     viewport::Viewport,
 };
-use iced::{Point, Rectangle, widget::canvas::Frame};
+use iced::{Point, Rectangle, Size, Vector, widget::canvas::Frame};
 
 /// An ordered drawing or pixel effect in the editor's history
 #[derive(Debug)]
@@ -43,6 +43,24 @@ impl Edit {
         match self {
             Self::Annotation(annotation) => annotation.canvas_bounds(viewport),
             Self::PixelEffect(effect) => Some(effect.region().canvas_bounds(viewport)),
+        }
+    }
+
+    /// Returns a copy moved by `offset` captured-image pixels
+    pub fn translated(&self, offset: Vector) -> Self {
+        match self {
+            Self::Annotation(annotation) => Self::Annotation(annotation.translated(offset)),
+            Self::PixelEffect(effect) => Self::PixelEffect(effect.translated(offset)),
+        }
+    }
+
+    /// Limits `offset` so a pixel effect stays within an image of `size`.
+    ///
+    /// Annotations move freely, since drawing clips them to the image.
+    pub fn constrain_offset(&self, offset: Vector, size: Size) -> Vector {
+        match self {
+            Self::Annotation(_) => offset,
+            Self::PixelEffect(effect) => effect.region().constrain_offset(offset, size),
         }
     }
 }

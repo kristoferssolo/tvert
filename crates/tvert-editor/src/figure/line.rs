@@ -1,4 +1,4 @@
-use crate::figure::Figure;
+use crate::{figure::Figure, viewport::translate};
 use iced::{Point, widget::canvas::Path};
 
 /// A line segment whose endpoints are captured-image pixel coordinates
@@ -20,5 +20,12 @@ impl Figure for LineFigure {
             viewport.canvas_position(self.start),
             viewport.canvas_position(self.end),
         )
+    }
+
+    fn translated(&self, offset: iced::Vector) -> Box<dyn Figure> {
+        Box::new(Self::new(
+            translate(self.start, offset),
+            translate(self.end, offset),
+        ))
     }
 }

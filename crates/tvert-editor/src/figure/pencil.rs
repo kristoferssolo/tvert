@@ -1,4 +1,7 @@
-use crate::{figure::Figure, viewport::Viewport};
+use crate::{
+    figure::Figure,
+    viewport::{Viewport, translate},
+};
 use iced::{
     Point,
     widget::canvas::{LineCap, LineJoin, Path, path::Builder},
@@ -58,6 +61,15 @@ impl Figure for PencilFigure {
                 .with_line_cap(LineCap::Round)
                 .with_line_join(LineJoin::Round),
         );
+    }
+
+    fn translated(&self, offset: iced::Vector) -> Box<dyn Figure> {
+        Box::new(Self::new(
+            self.points
+                .iter()
+                .map(|&point| translate(point, offset))
+                .collect(),
+        ))
     }
 }
 

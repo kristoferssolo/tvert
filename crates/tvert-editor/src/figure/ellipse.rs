@@ -1,4 +1,7 @@
-use crate::{figure::Figure, viewport::Viewport};
+use crate::{
+    figure::Figure,
+    viewport::{Viewport, translate_rectangle},
+};
 use iced::{
     Radians, Rectangle, Vector,
     widget::canvas::{Path, path::arc::Elliptical},
@@ -37,5 +40,9 @@ impl Figure for EllipseFigure {
             });
             builder.close();
         })
+    }
+
+    fn translated(&self, offset: Vector) -> Box<dyn Figure> {
+        Box::new(Self::new(translate_rectangle(self.bounds, offset)))
     }
 }

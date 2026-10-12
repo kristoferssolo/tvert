@@ -1,4 +1,4 @@
-use crate::figure::Figure;
+use crate::{figure::Figure, viewport::translate};
 use iced::{Point, Vector, widget::canvas::Path};
 
 /// An arrow pointing from its start to its end in captured-image pixels
@@ -62,6 +62,13 @@ impl Figure for ArrowFigure {
             builder.line_to(end);
             builder.line_to(second_wing);
         })
+    }
+
+    fn translated(&self, offset: Vector) -> Box<dyn Figure> {
+        Box::new(Self::new(
+            translate(self.start, offset),
+            translate(self.end, offset),
+        ))
     }
 }
 

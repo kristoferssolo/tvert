@@ -1,4 +1,4 @@
-use iced::{ContentFit, Point, Rectangle, Size};
+use iced::{ContentFit, Point, Rectangle, Size, Vector};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Viewport {
@@ -7,12 +7,12 @@ pub struct Viewport {
 }
 
 impl Viewport {
-    pub fn new(image_size: Size, canvas_size: Size) -> Option<Self> {
+    pub fn new(image_size: Size, canvas: Rectangle) -> Option<Self> {
         if ![
             image_size.width,
             image_size.height,
-            canvas_size.width,
-            canvas_size.height,
+            canvas.width,
+            canvas.height,
         ]
         .into_iter()
         .all(|value| value.is_finite() && value > 0.0)
@@ -20,7 +20,7 @@ impl Viewport {
             return None;
         }
 
-        let fitted = ContentFit::Contain.fit(image_size, canvas_size);
+        let fitted = ContentFit::Contain.fit(image_size, canvas.size());
         if ![fitted.width, fitted.height]
             .into_iter()
             .all(|value| value.is_finite() && value > 0.0)
@@ -28,11 +28,20 @@ impl Viewport {
             return None;
         }
 
+        let scale = Vector::new(
+            fitted.width / image_size.width,
+            fitted.height / image_size.height,
+        );
+        let centered = Point::new(
+            canvas.x + (canvas.width - fitted.width) / 2.0,
+            canvas.y + (canvas.height - fitted.height) / 2.0,
+        );
+
         Some(Self {
             bounds: Rectangle::new(
                 Point::new(
-                    (canvas_size.width - fitted.width) / 2.0,
-                    (canvas_size.height - fitted.height) / 2.0,
+                    snap(centered.x, scale.x) - canvas.x,
+                    snap(centered.y, scale.y) - canvas.y,
                 ),
                 fitted,
             ),
@@ -94,6 +103,10 @@ pub fn rectangle_between(start: Point, end: Point) -> Option<Rectangle> {
         .then(|| Rectangle::new(Point::new(left, top), Size::new(width, height)))
 }
 
+fn snap(origin: f32, scale: f32) -> f32 {
+    (origin / scale).trunc() * scale
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,7 +124,10 @@ mod tests {
         Rectangle::new(Point::new(0.0, 125.0), Size::new(100.0, 50.0))
     )]
     fn fits_the_image_without_distorting_it(#[case] canvas: Size, #[case] expected: Rectangle) {
-        let viewport = assert_some!(Viewport::new(Size::new(200.0, 100.0), canvas));
+        let viewport = assert_some!(Viewport::new(
+            Size::new(200.0, 100.0),
+            Rectangle::with_size(canvas)
+        ));
         assert_eq!(viewport.bounds, expected);
     }
 
@@ -119,7 +135,7 @@ mod tests {
     fn excludes_letterboxing_and_clamps_drag_endpoints() {
         let viewport = assert_some!(Viewport::new(
             Size::new(200.0, 100.0),
-            Size::new(400.0, 400.0),
+            Rectangle::with_size(Size::new(400.0, 400.0))
         ));
 
         assert_none!(viewport.image_position(Point::new(100.0, 50.0)));
@@ -137,8 +153,14 @@ mod tests {
     #[case(Size::new(f32::NAN, 20.0))]
     #[case(Size::INFINITE)]
     fn rejects_unusable_dimensions(#[case] invalid: Size) {
-        assert_none!(Viewport::new(invalid, Size::new(400.0, 400.0)));
-        assert_none!(Viewport::new(Size::new(200.0, 100.0), invalid));
+        assert_none!(Viewport::new(
+            invalid,
+            Rectangle::with_size(Size::new(400.0, 400.0))
+        ));
+        assert_none!(Viewport::new(
+            Size::new(200.0, 100.0),
+            Rectangle::with_size(invalid)
+        ));
     }
 
     #[test]
@@ -146,7 +168,10 @@ mod tests {
         let rectangle = Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0));
 
         for canvas in [Size::new(400.0, 400.0), Size::new(600.0, 300.0)] {
-            let viewport = assert_some!(Viewport::new(Size::new(200.0, 100.0), canvas));
+            let viewport = assert_some!(Viewport::new(
+                Size::new(200.0, 100.0),
+                Rectangle::with_size(canvas)
+            ));
             let displayed = viewport.canvas_rectangle(rectangle);
             let start = assert_some!(viewport.image_position(displayed.position()));
             let end = assert_some!(viewport.image_position(Point::new(

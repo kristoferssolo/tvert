@@ -1,6 +1,6 @@
 use crate::{Error, annotation::Annotation, edit::Edit, viewport::Viewport};
 use iced::{
-    Color, Font, Pixels, Renderer, Size,
+    Color, Font, Pixels, Rectangle, Renderer, Size,
     advanced::{
         graphics::geometry::{Frame, Renderer as _},
         renderer::Headless as _,
@@ -65,7 +65,8 @@ fn draw_annotations<'a>(
     let size = image.size();
     let (width, height) = size.into();
     let image_size = Size::from((width, height));
-    let viewport = Viewport::new(image_size, image_size).ok_or(Error::InvalidViewport)?;
+    let viewport = Viewport::new(image_size, Rectangle::with_size(image_size))
+        .ok_or(Error::InvalidViewport)?;
     let mut rendered = Renderer::new(Font::default(), Pixels(16.0));
     let mut frame = Frame::new(&rendered, image_size);
 

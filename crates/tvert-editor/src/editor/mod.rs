@@ -237,7 +237,7 @@ mod tests {
     fn assert_figures(figures: &[Edit], expected: &[(Tool, Rectangle)]) {
         let viewport = assert_some!(Viewport::new(
             Size::new(100.0, 100.0),
-            Size::new(100.0, 100.0),
+            Rectangle::with_size(Size::new(100.0, 100.0))
         ));
 
         let actual = figures

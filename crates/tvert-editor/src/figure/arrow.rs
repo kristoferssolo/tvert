@@ -70,7 +70,7 @@ mod tests {
     use super::*;
     use crate::viewport::Viewport;
     use claims::{assert_none, assert_some};
-    use iced::Size;
+    use iced::{Rectangle, Size};
     use rstest::rstest;
 
     #[rstest]
@@ -124,7 +124,7 @@ mod tests {
     fn maps_the_shaft_and_head_without_reversing_the_arrow() {
         let viewport = assert_some!(Viewport::new(
             Size::new(200.0, 100.0),
-            Size::new(400.0, 400.0),
+            Rectangle::with_size(Size::new(400.0, 400.0))
         ));
         let arrow = ArrowFigure::new(Point::new(150.0, 25.0), Point::new(50.0, 25.0));
 

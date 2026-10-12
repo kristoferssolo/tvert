@@ -24,7 +24,7 @@ impl AnnotationCanvas<'_> {
             return Some(action);
         }
 
-        let viewport = Viewport::new(self.image_size, bounds.size())?;
+        let viewport = Viewport::new(self.image_size, bounds)?;
         let position = cursor.position_from(bounds.position());
 
         match event {

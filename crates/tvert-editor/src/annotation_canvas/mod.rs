@@ -40,7 +40,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         bounds: Rectangle,
         _cursor: Cursor,
     ) -> Vec<iced::widget::canvas::Geometry<Renderer>> {
-        let Some(viewport) = Viewport::new(self.image_size, bounds.size()) else {
+        let Some(viewport) = Viewport::new(self.image_size, bounds) else {
             return Vec::new();
         };
 
@@ -63,7 +63,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> mouse::Interaction {
-        let over_image = Viewport::new(self.image_size, bounds.size())
+        let over_image = Viewport::new(self.image_size, bounds)
             .and_then(|viewport| viewport.image_position(cursor.position_from(bounds.position())?))
             .is_some();
 

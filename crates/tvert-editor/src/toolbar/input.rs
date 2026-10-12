@@ -216,6 +216,11 @@ mod tests {
         let shortcuts = [
             key_press(Key::Character("z".into()), key::Code::KeyZ, Modifiers::CTRL),
             key_press(Key::Character("s".into()), key::Code::KeyS, Modifiers::CTRL),
+            key_press(
+                Key::Character("b".into()),
+                key::Code::KeyB,
+                Modifiers::empty(),
+            ),
         ];
 
         for shortcut in &shortcuts {

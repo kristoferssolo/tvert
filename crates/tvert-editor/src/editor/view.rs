@@ -76,3 +76,72 @@ fn error_message(error: &dyn StdError) -> String {
 
     message
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Settings, ThemePreference, Tool, style::RED};
+    use iced::advanced::{Layout, Shell, clipboard, layout, widget::Tree};
+    use iced::mouse::{Button, Cursor, Event as MouseEvent};
+    use iced::{Event, Font, Pixels, Point, Renderer, Size, widget::image::Handle};
+    use std::rc::Rc;
+
+    fn editor(color_palette_open: bool) -> Editor {
+        let mut editor = Editor::new(
+            Handle::from_rgba(2, 2, vec![0; 16]),
+            Size::new(2.0, 2.0),
+            Settings {
+                theme: ThemePreference::Dark,
+                tool: Tool::Rectangle,
+                stroke_color: RED,
+                stroke_width: 4,
+                pixelation_block_size: 16,
+                blur_sigma: 8,
+            },
+            Rc::new(|_, _| Ok(())),
+        );
+        editor.color_palette_open = color_palette_open;
+        editor
+    }
+
+    fn drag_across_preview(editor: &Editor) -> Vec<Message> {
+        let renderer = Renderer::new(Font::DEFAULT, Pixels(14.0));
+        let mut preview = editor.image_preview();
+        let mut tree = Tree::new(preview.as_widget());
+        let limits = layout::Limits::new(Size::ZERO, Size::new(100.0, 100.0));
+        let node = preview
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &limits);
+        let layout = Layout::new(&node);
+        let (start, end) = (Point::new(25.0, 25.0), Point::new(75.0, 75.0));
+        let mut messages = Vec::new();
+
+        for (event, position) in [
+            (Event::Mouse(MouseEvent::ButtonPressed(Button::Left)), start),
+            (Event::Mouse(MouseEvent::CursorMoved { position: end }), end),
+            (Event::Mouse(MouseEvent::ButtonReleased(Button::Left)), end),
+        ] {
+            preview.as_widget_mut().update(
+                &mut tree,
+                &event,
+                layout,
+                Cursor::Available(position),
+                &renderer,
+                &mut clipboard::Null,
+                &mut Shell::new(&mut messages),
+                &layout.bounds(),
+            );
+        }
+
+        messages
+    }
+
+    #[test]
+    fn the_click_that_dismisses_the_palette_does_not_draw() {
+        assert!(matches!(
+            drag_across_preview(&editor(false)).as_slice(),
+            [Message::AddEdit(_)]
+        ));
+        assert_eq!(drag_across_preview(&editor(true)), []);
+    }
+}

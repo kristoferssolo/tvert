@@ -7,7 +7,7 @@ pub use size::for_tool as size_control;
 
 use crate::{
     ExportAction,
-    editor::Message,
+    editor::{Message, shortcuts::tool_key},
     tool::Tool,
     toolbar::button::{icon_button, separator},
 };
@@ -35,7 +35,7 @@ pub fn view(
     let tools = Tool::VARIANTS.iter().map(|&tool| {
         icon_button(
             tool_icon(tool),
-            tool.to_string(),
+            format!("{tool} ({})", tool_key(tool)),
             Some(Message::SelectTool(tool)),
             tool == selected,
         )

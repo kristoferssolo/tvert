@@ -1,23 +1,49 @@
-use crate::{ExportAction, editor::message::Message};
+use crate::{ExportAction, Tool, editor::message::Message};
 use iced::{
     Event, event,
-    keyboard::{Event as KeyboardEvent, Key},
+    keyboard::{Event as KeyboardEvent, Key, Modifiers},
 };
+use strum::VariantArray;
 
-/// Parses editor shortcuts only when widgets have not captured the event
 pub fn parse(event: &Event, status: event::Status) -> Option<Message> {
     if status != event::Status::Ignored {
         return None;
     }
-    history(event).or_else(|| export(event))
+    history(event)
+        .or_else(|| export(event))
+        .or_else(|| tool(event))
 }
 
-/// Parses a history shortcut without changing the active draft
 pub fn history(event: &Event) -> Option<Message> {
     match control_key(event)? {
         ('z', false) => Some(Message::Undo),
         ('z', true) | ('y', false) => Some(Message::Redo),
         _ => None,
+    }
+}
+
+pub fn tool(event: &Event) -> Option<Message> {
+    let (character, modfiers) = character_key(event)?;
+    if modfiers.control() || modfiers.alt() || modfiers.logo() {
+        return None;
+    }
+    Tool::VARIANTS
+        .iter()
+        .copied()
+        .find(|&tool| tool_key(tool).eq_ignore_ascii_case(&character))
+        .map(Message::SelectTool)
+}
+
+pub const fn tool_key(tool: Tool) -> char {
+    match tool {
+        Tool::Rectangle => 'R',
+        Tool::Ellipse => 'C',
+        Tool::Line => 'L',
+        Tool::Arrow => 'A',
+        Tool::Pencil => 'P',
+        Tool::Highlighter => 'H',
+        Tool::Pixelate => 'X',
+        Tool::Blur => 'B',
     }
 }
 
@@ -56,23 +82,46 @@ fn control_key(event: &Event) -> Option<(char, bool)> {
     Some((character.to_ascii_lowercase(), modifiers.shift()))
 }
 
+fn character_key(event: &Event) -> Option<(char, Modifiers)> {
+    let Event::Keyboard(KeyboardEvent::KeyPressed {
+        key: Key::Character(character),
+        modifiers,
+        repeat: false,
+        ..
+    }) = event
+    else {
+        return None;
+    };
+
+    let mut characters = character.chars();
+    let character = characters.next()?;
+    if characters.next().is_some() {
+        return None;
+    }
+    Some((character, *modifiers))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::assert_none;
-    use iced::keyboard::{self, Modifiers, key};
+    use claims::{assert_none, assert_some_eq};
+    use iced::keyboard::{self, key};
     use rstest::rstest;
 
-    fn key_press(character: &str, modifiers: Modifiers, repeat: bool) -> Event {
+    fn press(key: Key, modifiers: Modifiers, repeat: bool) -> Event {
         Event::Keyboard(KeyboardEvent::KeyPressed {
-            key: Key::Character(character.into()),
-            modified_key: Key::Character(character.into()),
+            key: key.clone(),
+            modified_key: key,
             physical_key: key::Physical::Code(key::Code::KeyZ),
             location: keyboard::Location::Standard,
             modifiers,
             text: None,
             repeat,
         })
+    }
+
+    fn key_press(character: &str, modifiers: Modifiers, repeat: bool) -> Event {
+        press(Key::Character(character.into()), modifiers, repeat)
     }
 
     #[rstest]
@@ -115,6 +164,45 @@ mod tests {
     }
 
     #[rstest]
+    #[case(Tool::Rectangle, "r")]
+    #[case(Tool::Ellipse, "c")]
+    #[case(Tool::Line, "l")]
+    #[case(Tool::Arrow, "a")]
+    #[case(Tool::Pencil, "p")]
+    #[case(Tool::Highlighter, "h")]
+    #[case(Tool::Pixelate, "x")]
+    #[case(Tool::Blur, "b")]
+    fn parses_the_tool_key_shown_in_its_tooltip(
+        #[case] tool: Tool,
+        #[case] character: &str,
+        #[values(Modifiers::empty(), Modifiers::SHIFT)] modifiers: Modifiers,
+    ) {
+        assert_eq!(tool_key(tool).to_string(), character.to_uppercase());
+
+        for character in [character.to_lowercase(), character.to_uppercase()] {
+            assert_some_eq!(
+                parse(
+                    &key_press(&character, modifiers, false),
+                    event::Status::Ignored
+                ),
+                Message::SelectTool(tool),
+            );
+        }
+    }
+
+    #[rstest]
+    #[case(Modifiers::CTRL, false)]
+    #[case(Modifiers::ALT, false)]
+    #[case(Modifiers::LOGO, false)]
+    #[case(Modifiers::empty(), true)]
+    fn ignores_modified_and_repeated_tool_keys(#[case] modifiers: Modifiers, #[case] repeat: bool) {
+        for &variant in Tool::VARIANTS {
+            let event = key_press(&tool_key(variant).to_string(), modifiers, repeat);
+            assert_none!(tool(&event));
+        }
+    }
+
+    #[rstest]
     #[case(Modifiers::empty(), false)]
     #[case(Modifiers::CTRL | Modifiers::ALT, false)]
     #[case(Modifiers::CTRL | Modifiers::LOGO, false)]
@@ -123,7 +211,7 @@ mod tests {
         for character in ["z", "y", "c", "s"] {
             let event = key_press(character, modifiers, repeat);
             assert_none!(history(&event));
-            assert_none!(parse(&event, event::Status::Ignored));
+            assert_none!(export(&event));
         }
     }
 
@@ -138,20 +226,19 @@ mod tests {
     }
 
     #[test]
-    fn ignores_captured_export_events() {
-        assert_none!(parse(
-            &key_press("c", Modifiers::CTRL, false),
-            event::Status::Captured,
-        ));
+    fn leaves_escape_to_widgets() {
+        let escape = press(Key::Named(key::Named::Escape), Modifiers::empty(), false);
+        assert_none!(parse(&escape, event::Status::Ignored));
     }
 
     #[rstest]
-    #[case("z")]
-    #[case("c")]
-    #[case("s")]
-    fn ignores_captured_events(#[case] character: &str) {
+    #[case("z", Modifiers::CTRL)]
+    #[case("c", Modifiers::CTRL)]
+    #[case("s", Modifiers::CTRL)]
+    #[case("e", Modifiers::empty())]
+    fn ignores_captured_events(#[case] character: &str, #[case] modifiers: Modifiers) {
         assert_none!(parse(
-            &key_press(character, Modifiers::CTRL, false),
+            &key_press(character, modifiers, false),
             event::Status::Captured,
         ));
     }

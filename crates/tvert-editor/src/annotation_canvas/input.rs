@@ -66,7 +66,7 @@ impl AnnotationCanvas<'_> {
     }
 
     fn handle_cancel(&self, state: &mut DraftState, event: &Event) -> Option<Action<Message>> {
-        let explicit = shortcuts::history(event).is_some()
+        let captured = shortcuts::history(event).is_some()
             || matches!(
                 event,
                 Event::Mouse(MouseEvent::ButtonPressed(Button::Right))
@@ -75,16 +75,17 @@ impl AnnotationCanvas<'_> {
                         ..
                     })
             );
-        let unfocused = matches!(event, Event::Window(WindowEvent::Unfocused));
+        let forwarded = shortcuts::tool(event).is_some()
+            || matches!(event, Event::Window(WindowEvent::Unfocused));
 
-        if state.is_none() || !(explicit || unfocused) {
+        if state.is_none() || !(captured || forwarded) {
             return None;
         }
 
         *state = None;
         self.cache.clear();
         let action = Action::request_redraw();
-        Some(if explicit {
+        Some(if captured {
             action.and_capture()
         } else {
             action
@@ -237,8 +238,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Event::Mouse(MouseEvent::ButtonPressed(Button::Right)))]
-    #[case(Event::Window(WindowEvent::Unfocused))]
+    #[case(
+        Event::Mouse(MouseEvent::ButtonPressed(Button::Right)),
+        event::Status::Captured
+    )]
     #[case(Event::Keyboard(KeyboardEvent::KeyPressed {
         key: Key::Named(key::Named::Escape),
         modified_key: Key::Named(key::Named::Escape),
@@ -247,11 +250,16 @@ mod tests {
         modifiers: Modifiers::empty(),
         text: None,
         repeat: false,
-    }))]
-    fn cancels_without_committing_on_a_later_release(#[case] cancel: Event) {
+    }), event::Status::Captured)]
+    #[case(Event::Window(WindowEvent::Unfocused), event::Status::Ignored)]
+    #[case(key_press("c", Modifiers::empty(), false), event::Status::Ignored)]
+    fn cancels_without_committing_on_a_later_release(
+        #[case] cancel: Event,
+        #[case] status: event::Status,
+    ) {
         let mut draft = None;
         begin(&mut draft);
-        assert_none!(dispatch(&mut draft, &cancel, None));
+        assert_eq!(capture_status(&mut draft, &cancel), status);
         assert_none!(&draft);
         assert_none!(dispatch(&mut draft, &RELEASE, Some(END)));
     }

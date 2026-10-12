@@ -13,6 +13,7 @@ use toml::{
     de::{DeTable, DeValue},
 };
 use tvert_editor::{Settings, ThemePreference, Tool};
+use tvert_workflow::PathPattern;
 
 type Result<T, E = ConfigError> = std::result::Result<T, E>;
 
@@ -51,12 +52,11 @@ struct EditorConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SaveSettings {
-    /// Directory receiving timestamped PNGs when no destination file is given.
+    /// strftime pattern for PNGs saved without an explicit destination file
     ///
-    /// A leading `~` is resolved from `HOME`. Relative paths are kept
-    /// relative to the working directory.
-    #[serde(deserialize_with = "deserialize_directory")]
-    pub directory: PathBuf,
+    /// A leading `~/` is resolved from `HOME`.
+    #[serde(deserialize_with = "deserialize_path_pattern")]
+    pub path: PathPattern,
 }
 
 impl TryFrom<EditorConfig> for Settings {
@@ -113,18 +113,12 @@ where
         .map_err(|_| de::Error::unknown_variant(&value, T::VARIANTS))
 }
 
-fn deserialize_directory<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
+fn deserialize_path_pattern<'de, D>(deserializer: D) -> Result<PathPattern, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     let value = String::deserialize(deserializer)?;
-    if value.is_empty() {
-        return Err(de::Error::custom("expected a nonempty directory path"));
-    }
-
-    expand_home(Path::new(&value), home_dir().as_deref()).ok_or_else(|| {
-        de::Error::custom("expected HOME to be an absolute path when using leading ~")
-    })
+    PathPattern::new(&value, home_dir().as_deref()).map_err(de::Error::custom)
 }
 
 fn default_path() -> Option<PathBuf> {
@@ -207,16 +201,6 @@ fn fill_defaults<'a>(config: &mut DeTable<'a>, defaults: DeTable<'a>) {
     }
 }
 
-/// Resolves a leading `~` component from `home` and keeps other paths unchanged.
-///
-/// Returns `None` when the path needs `home` but none is available.
-fn expand_home(path: &Path, home: Option<&Path>) -> Option<PathBuf> {
-    let Ok(rest) = path.strip_prefix("~") else {
-        return Some(path.to_path_buf());
-    };
-    home.map(|home| home.join(rest))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,34 +234,16 @@ mod tests {
     #[test]
     fn partial_save_configuration_keeps_editor_defaults() {
         let defaults = assert_ok!(parse("test.toml", ""));
-        let config = assert_ok!(parse("test.toml", "[save]\ndirectory = 'shots'"));
+        let config = assert_ok!(parse("test.toml", "[save]\npath = 'shots/%Y.png'"));
 
         assert_eq!(
             config,
             AppConfig {
                 save: SaveSettings {
-                    directory: PathBuf::from("shots"),
+                    path: assert_ok!(PathPattern::new("shots/%Y.png", None)),
                 },
                 ..defaults
             }
-        );
-    }
-
-    #[rstest]
-    #[case("~/Pictures", Some("/home/user"), Some("/home/user/Pictures"))]
-    #[case("~/Pictures", None, None)]
-    #[case("/srv/screenshots", None, Some("/srv/screenshots"))]
-    #[case("screenshots", None, Some("screenshots"))]
-    #[case("$HOME/screenshots", Some("/home/user"), Some("$HOME/screenshots"))]
-    #[case("~other/screenshots", Some("/home/user"), Some("~other/screenshots"))]
-    fn only_a_leading_tilde_is_resolved_from_home(
-        #[case] path: &str,
-        #[case] home: Option<&str>,
-        #[case] expected: Option<&str>,
-    ) {
-        assert_eq!(
-            expand_home(Path::new(path), home.map(Path::new)),
-            expected.map(PathBuf::from)
         );
     }
 
@@ -330,9 +296,10 @@ mod tests {
     #[case("[editor]\nstroke_width = 'wide'", "'wide'")]
     #[case("[editor]\nstorke_width = 4", "storke_width")]
     #[case("editor = false", "false")]
-    #[case("[save]\ndirectory = ''", "''")]
-    #[case("[save]\ndirectory = 1", "1")]
-    #[case("[save]\ndirectroy = 'shots'", "directroy")]
+    #[case("[save]\npath = ''", "''")]
+    #[case("[save]\npath = 1", "1")]
+    #[case("[save]\npath = 'shots/%J.png'", "'shots/%J.png'")]
+    #[case("[save]\ndirectory = 'shots'", "directory")]
     fn diagnostics_point_to_the_original_user_source_after_merging(
         #[case] source: &'static str,
         #[case] expected: &'static str,

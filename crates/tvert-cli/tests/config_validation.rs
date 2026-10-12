@@ -54,7 +54,7 @@ fn check_config_validates_the_requested_file_withtout_wayland() {
 }
 
 #[test]
-fn check_config_does_not_create_the_save_directory() {
+fn check_config_does_not_create_generated_directories() {
     let directory = assert_ok!(tempdir());
     let path = directory.path().join("config.toml");
     let screenshots = directory.path().join("screenshots");
@@ -64,7 +64,7 @@ fn check_config_does_not_create_the_save_directory() {
         format!(
             r#"
             [save]
-            directory = "{}"
+            path = "{}/%Y/%m/tvert-%Y-%m-%d.png"
             "#,
             screenshots.display()
         )

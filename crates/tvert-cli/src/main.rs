@@ -85,7 +85,7 @@ fn run_capture(command: CaptureCommand, config: AppConfig) -> miette::Result<Exi
 
     match command {
         CaptureCommand::CaptureOutput { path, .. } => {
-            let destination = Destination::new(path, config.save.directory);
+            let destination = Destination::new(path, config.save.path);
             let saved =
                 capture_output_to_png(&mut wayland, output_id, &destination).into_diagnostic()?;
             println!("Saved {}", saved.display());
@@ -98,7 +98,7 @@ fn run_capture(command: CaptureCommand, config: AppConfig) -> miette::Result<Exi
                 return Ok(ExitCode::SUCCESS);
             };
 
-            let destination = Destination::new(path, config.save.directory);
+            let destination = Destination::new(path, config.save.path);
             let saved =
                 capture_output_to_png(&mut wayland, output_id, &destination).into_diagnostic()?;
             println!("Saved {} to {}", image.size(), saved.display());
@@ -113,7 +113,7 @@ fn run_capture(command: CaptureCommand, config: AppConfig) -> miette::Result<Exi
 
             drop(wayland);
 
-            let destination = Destination::new(path, config.save.directory);
+            let destination = Destination::new(path, config.save.path);
             let clipboard = Rc::new(RefCell::new(None));
             let editor_clipboard = clipboard.clone();
 

@@ -1,5 +1,8 @@
 [save]
-directory = "~/Pictures/"
+# strftime pattern for saved PNGs. A leading ~/ is the home directory,
+# relative paths start in the working directory, and %% is a literal %.
+# Dated folders: "~/Pictures/Screenshots/%Y/%m/tvert-%Y-%m-%d_%H-%M-%S.png"
+path = "~/Pictures/tvert-%Y-%m-%d_%H-%M-%S.png"
 
 [editor]
 theme = "dark"

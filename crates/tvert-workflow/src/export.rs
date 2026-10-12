@@ -11,8 +11,8 @@ use tvert_image::{CapturedImage, write_png};
 ///
 /// # Errors
 ///
-/// Returns [`Error::CreateDirectory`] if creating the default directory fails,
-/// [`Error::CreateDestination`] if creating the file fails,
+/// Returns [`Error::Pattern`] if the expanded path pattern is not a PNG file,
+/// [`Error::CreateDirectory`] if creating its parent directories fails,
 /// [`Error::FilenamesExhausted`] if every generated filename is taken,
 /// [`Error::EncodePng`] if encoding or writing fails, or
 /// [`Error::FlushDestination`] if flushing buffered output fails.

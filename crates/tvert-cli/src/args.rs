@@ -33,11 +33,12 @@ pub enum CaptureCommand {
         #[arg(value_name = "OUTPUT")]
         output: String,
 
-        /// PNG file to create instead of a timestamped file in save.directory
+        /// PNG file to create instead of expanding save.path
         ///
         /// An explicit file must not already exist, and its directory is not
-        /// created. When omitted, Tvert creates save.directory if needed and
-        /// appends a numeric suffix if the generated name is taken.
+        /// created. When omitted, Tvert expands save.path, creates its
+        /// directories if needed, and appends a numeric suffix if the
+        /// generated name is taken.
         #[arg(value_name = "FILE")]
         path: Option<PathBuf>,
     },
@@ -47,11 +48,12 @@ pub enum CaptureCommand {
         #[arg(value_name = "OUTPUT")]
         output: String,
 
-        /// PNG file to create instead of a timestamped file in save.directory
+        /// PNG file to create instead of expanding save.path
         ///
         /// An explicit file must not already exist, and its directory is not
-        /// created. When omitted, Tvert creates save.directory if needed and
-        /// appends a numeric suffix if the generated name is taken.
+        /// created. When omitted, Tvert expands save.path, creates its
+        /// directories if needed, and appends a numeric suffix if the
+        /// generated name is taken.
         #[arg(value_name = "FILE")]
         path: Option<PathBuf>,
     },
@@ -72,11 +74,12 @@ pub enum CaptureCommand {
         #[arg(value_name = "OUTPUT")]
         output: String,
 
-        /// PNG file to create instead of a timestamped file in save.directory
+        /// PNG file to create instead of expanding save.path
         ///
         /// An explicit file must not already exist, and its directory is not
-        /// created. When omitted, Tvert creates save.directory if needed and
-        /// appends a numeric suffix if the generated name is taken.
+        /// created. When omitted, Tvert expands save.path, creates its
+        /// directories if needed, and appends a numeric suffix if the
+        /// generated name is taken.
         #[arg(value_name = "FILE")]
         path: Option<PathBuf>,
     },

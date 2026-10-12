@@ -15,7 +15,7 @@ pub enum Error {
         source: io::Error,
     },
 
-    /// Creating the default save directory failed
+    /// Creating a generated parent directory failed
     #[error("failed to create save directory {path:?}")]
     CreateDirectory {
         path: PathBuf,
@@ -23,9 +23,13 @@ pub enum Error {
         source: io::Error,
     },
 
-    /// Every generated filename in the save directory is already taken
-    #[error("no available PNG filename in {directory:?}")]
-    FilenamesExhausted { directory: PathBuf },
+    /// The generated filename and every numbered alternative are taken
+    #[error("no available PNG filename for {path:?}")]
+    FilenamesExhausted { path: PathBuf },
+
+    /// Expanding the save path pattern did not produce a PNG destination
+    #[error("invalid generated save path")]
+    Pattern(#[from] PatternError),
 
     /// Encoding or writing PNG data failed
     #[error("failed to encode PNG for {path:?}")]
@@ -50,4 +54,32 @@ pub enum Error {
     /// Clipboard setup or a paste transfer failed
     #[error("failed to access the Wayland clipboard")]
     Clipboard(#[from] wl_clipboard_rs::copy::Error),
+}
+
+/// A save path pattern that cannot prodce a PNG destination
+#[derive(Debug, thiserror::Error)]
+pub enum PatternError {
+    /// The pattern is empty
+    #[error("expected a nonempty path pattern")]
+    Empty,
+
+    /// The pattern contains a NUL character, which paths cannot hold
+    #[error("path patterns cannot contain NUL characters")]
+    Nul,
+
+    /// The pattern starts with `~/` but no home directory is available
+    #[error("a leading ~/ requires HOME to be an absolute path")]
+    MissingHome,
+
+    /// The pattern contains an invalid strftime directive
+    #[error(transparent)]
+    Format(#[from] jiff::Error),
+
+    /// The expanded path names a directory rather than a file
+    #[error("expanded path {path:?} does not end with a filename")]
+    MissingFilename { path: PathBuf },
+
+    /// The expanded filename lacks a `.png` extension
+    #[error("expanded path {path:?} is not a .png file")]
+    NotPng { path: PathBuf },
 }

@@ -1,13 +1,11 @@
+use crate::{Error, PathPattern};
+use jiff::Zoned;
 use std::{
     fs::{self, File},
     io::ErrorKind,
     iter,
     path::{Path, PathBuf},
 };
-
-use jiff::Zoned;
-
-use crate::Error;
 
 /// Numbered alternatives tried after a generated filename is taken
 const MAX_SUFFIX: u16 = 999;
@@ -20,26 +18,28 @@ const MAX_SUFFIX: u16 = 999;
 pub enum Destination {
     /// A file that must not already exist
     File(PathBuf),
-    /// A directory that receives a timestamped filename and is created if needed
-    Directory(PathBuf),
+    /// A pattern expanded when saving; its parent directories are created if needed
+    Pattern(PathPattern),
 }
 
 impl Destination {
-    /// Uses an explicit file when provided, otherwise the default directory.
-    pub fn new(file: Option<PathBuf>, directory: PathBuf) -> Self {
-        file.map_or(Self::Directory(directory), Self::File)
+    /// Uses an explicit file when provided, otherwise the path pattern
+    pub fn new(file: Option<PathBuf>, pattern: PathPattern) -> Self {
+        file.map_or(Self::Pattern(pattern), Self::File)
     }
 
     pub(crate) fn create(&self) -> Result<(PathBuf, File), Error> {
         match self {
             Self::File(path) => create_new(path).map(|file| (path.clone(), file)),
-            Self::Directory(directory) => {
-                fs::create_dir_all(directory).map_err(|source| Error::CreateDirectory {
-                    path: directory.clone(),
-                    source,
-                })?;
-                let stem = Zoned::now().strftime("tvert-%Y-%m-%d_%H-%M-%S").to_string();
-                create_unique(directory, &stem)
+            Self::Pattern(pattern) => {
+                let path = pattern.path_at(&Zoned::now())?;
+                if let Some(directory) = path.parent() {
+                    fs::create_dir_all(directory).map_err(|source| Error::CreateDirectory {
+                        path: directory.to_path_buf(),
+                        source,
+                    })?;
+                }
+                create_unique(path)
             }
         }
     }
@@ -52,21 +52,31 @@ fn create_new(path: &Path) -> Result<File, Error> {
     })
 }
 
-fn create_unique(directory: &Path, stem: &str) -> Result<(PathBuf, File), Error> {
-    let numbered = (1..=MAX_SUFFIX).map(|suffix| format!("{stem}-{suffix}.png"));
+/// Creates `path`, or the first free `stem-N.extension` beside it.
+fn create_unique(path: PathBuf) -> Result<(PathBuf, File), Error> {
+    let stem = path.file_stem().unwrap_or_default();
+    let extension = path.extension().unwrap_or_default();
+    let numbered = (1..=MAX_SUFFIX).map(|suffix| {
+        let mut name = stem.to_os_string();
+        name.push(format!("-{suffix}."));
+        name.push(extension);
+        path.with_file_name(name)
+    });
 
-    for name in iter::once(format!("{stem}.png")).chain(numbered) {
-        let path = directory.join(name);
-        match File::create_new(&path) {
-            Ok(file) => return Ok((path, file)),
+    for candidate in iter::once(path.clone()).chain(numbered) {
+        match File::create_new(&candidate) {
+            Ok(file) => return Ok((candidate, file)),
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
-            Err(source) => return Err(Error::CreateDestination { path, source }),
+            Err(source) => {
+                return Err(Error::CreateDestination {
+                    path: candidate,
+                    source,
+                });
+            }
         }
     }
 
-    Err(Error::FilenamesExhausted {
-        directory: directory.to_path_buf(),
-    })
+    Err(Error::FilenamesExhausted { path })
 }
 
 #[cfg(test)]
@@ -75,12 +85,20 @@ mod tests {
     use claims::{assert_matches, assert_ok, assert_ok_eq};
     use tempfile::tempdir;
 
+    fn pattern(root: &Path, rest: &str) -> PathPattern {
+        let pattern = format!("{}/{rest}", root.display());
+        assert_ok!(PathPattern::new(&pattern, None))
+    }
+
     #[test]
     fn explicit_file_takes_precedence_and_is_never_replaced() {
         let root = assert_ok!(tempdir());
         let file = root.path().join("explicit.png");
         let directory = root.path().join("screenshots");
-        let destination = Destination::new(Some(file.clone()), directory.clone());
+        let destination = Destination::new(
+            Some(file.clone()),
+            pattern(root.path(), "screenshots/%Y.png"),
+        );
 
         let (created, _) = assert_ok!(destination.create());
         assert_eq!(created, file);
@@ -94,26 +112,29 @@ mod tests {
     }
 
     #[test]
-    fn default_directory_is_created_only_when_saving() {
+    fn generated_directories_are_created_only_when_saving() {
         let root = assert_ok!(tempdir());
-        let directory = root.path().join("nested/screenshots");
-        let destination = Destination::new(None, directory.clone());
+        let directory = root.path().join("screenshots");
+        let destination = Destination::new(None, pattern(root.path(), "screenshots/%Y/%m/%s.png"));
         assert!(!directory.exists());
 
         let (created, _) = assert_ok!(destination.create());
-        assert_eq!(created.parent(), Some(directory.as_path()));
+        assert!(created.starts_with(&directory));
         assert_eq!(created.extension(), Some("png".as_ref()));
     }
 
     #[test]
-    fn generated_name_collisions_add_the_next_free_suffix() {
-        let directory = assert_ok!(tempdir());
-        let taken = directory.path().join("shot.png");
-        assert_ok!(fs::write(&taken, "kept"));
-        assert_ok!(fs::write(directory.path().join("shot-1.png"), "kept"));
+    fn generated_name_collisions_add_a_suffix_in_the_generated_directory() {
+        let root = assert_ok!(tempdir());
+        let directory = root.path().join("shots.v2");
+        let destination = Destination::new(None, pattern(root.path(), "shots.v2/shot.v1.PNG"));
 
-        let (created, _) = assert_ok!(create_unique(directory.path(), "shot"));
-        assert_eq!(created, directory.path().join("shot-2.png"));
-        assert_ok_eq!(fs::read_to_string(taken), "kept");
+        let (first, _) = assert_ok!(destination.create());
+        assert_ok!(fs::write(&first, "kept"));
+        assert_ok!(fs::write(directory.join("shot.v1-1.PNG"), "kept"));
+
+        let (created, _) = assert_ok!(destination.create());
+        assert_eq!(created, directory.join("shot.v1-2.PNG"));
+        assert_ok_eq!(fs::read_to_string(first), "kept");
     }
 }

@@ -1,11 +1,12 @@
 use crate::{
     Error,
     annotation::{AnnotationDraft, InvalidAnnotation},
+    guide, hit,
     viewport::{Viewport, rectangle_between},
 };
 use iced::{
-    Color, Rectangle,
-    widget::canvas::{Frame, LineDash, Path, Stroke},
+    Color, Point, Rectangle,
+    widget::canvas::{Frame, Path},
 };
 use num_traits::ToPrimitive;
 use std::ops::Range;
@@ -35,21 +36,21 @@ impl EffectRegion {
     }
 
     pub fn draw_selection(&self, frame: &mut Frame, viewport: Viewport) {
-        let bounds = viewport.canvas_rectangle(self.bounds);
-        let path = Path::rectangle(bounds.position(), bounds.size());
-        let stroke = Stroke::default().with_width(1.0);
+        guide::dashed(frame, &self.outline(viewport), Color::BLACK, Color::WHITE);
+    }
 
-        frame.stroke(&path, stroke.with_color(Color::BLACK));
-        frame.stroke(
-            &path,
-            Stroke {
-                line_dash: LineDash {
-                    segments: &[6.0, 6.0],
-                    offset: 0,
-                },
-                ..stroke.with_color(Color::WHITE)
-            },
-        );
+    /// Whether a canvas `point` falls within the region as displayed
+    pub fn is_hit(&self, viewport: Viewport, point: Point) -> bool {
+        hit::fill(&self.outline(viewport), point)
+    }
+
+    pub fn canvas_bounds(&self, viewport: Viewport) -> Rectangle {
+        viewport.canvas_rectangle(self.bounds)
+    }
+
+    fn outline(&self, viewport: Viewport) -> Path {
+        let bounds = self.canvas_bounds(viewport);
+        Path::rectangle(bounds.position(), bounds.size())
     }
 }
 

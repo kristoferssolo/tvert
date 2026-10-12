@@ -14,18 +14,18 @@ impl Editor {
     pub fn view(&self) -> Element<'_, Message> {
         let mut content = column![
             toolbar::view(
-                self.tool,
-                toolbar::size_control(
-                    self.tool,
+                self.drawing_tool(),
+                self.drawing_tool().and_then(|tool| toolbar::size_control(
+                    tool,
                     self.selected_size(),
                     self.size_input.as_deref(),
                     self.initial_settings
-                ),
+                )),
                 self.stroke_selection,
                 self.color_palette_open,
                 &self.color_hex,
-                !self.edits.is_empty(),
-                !self.undone_edits.is_empty()
+                !self.undo_stack.is_empty(),
+                !self.redo_stack.is_empty(),
             ),
             self.image_preview()
         ];
@@ -46,8 +46,10 @@ impl Editor {
         let annotations = canvas(AnnotationCanvas {
             image_size: self.image_size,
             tool: self.tool,
+            mode: self.mode,
             size: self.selected_size(),
             stroke_color: Color::from(self.stroke_selection),
+            edits: &self.edits,
             cache: &self.cache,
         })
         .width(Fill)

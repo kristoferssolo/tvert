@@ -1,9 +1,12 @@
 use crate::{ExportAction, Tool, editor::message::Message};
 use iced::{
     Event, event,
-    keyboard::{Event as KeyboardEvent, Key, Modifiers},
+    keyboard::{Event as KeyboardEvent, Key, Modifiers, key::Named},
 };
 use strum::VariantArray;
+
+/// Switches to selecting existing edits
+pub const SELECT_KEY: char = 'V';
 
 pub fn parse(event: &Event, status: event::Status) -> Option<Message> {
     if status != event::Status::Ignored {
@@ -12,6 +15,7 @@ pub fn parse(event: &Event, status: event::Status) -> Option<Message> {
     history(event)
         .or_else(|| export(event))
         .or_else(|| tool(event))
+        .or_else(|| selection(event))
 }
 
 pub fn history(event: &Event) -> Option<Message> {
@@ -26,6 +30,9 @@ pub fn tool(event: &Event) -> Option<Message> {
     let (character, modfiers) = character_key(event)?;
     if modfiers.control() || modfiers.alt() || modfiers.logo() {
         return None;
+    }
+    if SELECT_KEY.eq_ignore_ascii_case(&character) {
+        return Some(Message::SelectionMode);
     }
     Tool::VARIANTS
         .iter()
@@ -44,6 +51,28 @@ pub const fn tool_key(tool: Tool) -> char {
         Tool::Highlighter => 'H',
         Tool::Pixelate => 'X',
         Tool::Blur => 'B',
+    }
+}
+
+fn selection(event: &Event) -> Option<Message> {
+    let Event::Keyboard(KeyboardEvent::KeyPressed {
+        key: Key::Named(named),
+        modifiers,
+        repeat: false,
+        ..
+    }) = event
+    else {
+        return None;
+    };
+
+    if modifiers.control() || modifiers.alt() || modifiers.logo() {
+        return None;
+    }
+
+    match named {
+        Named::Delete | Named::Backspace => Some(Message::DeleteSelected),
+        Named::Escape => Some(Message::SelectEdit(None)),
+        _ => None,
     }
 }
 
@@ -225,12 +254,6 @@ mod tests {
         assert_none!(parse(&event, event::Status::Ignored));
     }
 
-    #[test]
-    fn leaves_escape_to_widgets() {
-        let escape = press(Key::Named(key::Named::Escape), Modifiers::empty(), false);
-        assert_none!(parse(&escape, event::Status::Ignored));
-    }
-
     #[rstest]
     #[case("z", Modifiers::CTRL)]
     #[case("c", Modifiers::CTRL)]
@@ -241,5 +264,34 @@ mod tests {
             &key_press(character, modifiers, false),
             event::Status::Captured,
         ));
+    }
+
+    #[rstest]
+    #[case(key::Named::Delete, Message::DeleteSelected)]
+    #[case(key::Named::Backspace, Message::DeleteSelected)]
+    #[case(key::Named::Escape, Message::SelectEdit(None))]
+    fn acts_on_the_selection_only_with_uncaptured_keys(
+        #[case] named: key::Named,
+        #[case] expected: Message,
+    ) {
+        let key = press(Key::Named(named), Modifiers::empty(), false);
+        assert_some_eq!(parse(&key, event::Status::Ignored), expected);
+        assert_none!(parse(&key, event::Status::Captured));
+
+        let modified = press(Key::Named(named), Modifiers::CTRL, false);
+        assert_none!(parse(&modified, event::Status::Ignored));
+    }
+
+    #[test]
+    fn parses_the_selection_key_shown_in_its_tooltip() {
+        for character in ["v", "V"] {
+            assert_some_eq!(
+                parse(
+                    &key_press(character, Modifiers::empty(), false),
+                    event::Status::Ignored
+                ),
+                Message::SelectionMode,
+            );
+        }
     }
 }

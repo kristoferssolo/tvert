@@ -6,6 +6,9 @@ use iced_color_triangle::Selection;
 pub enum Message {
     AddEdit(AnnotationDraft),
     SelectTool(Tool),
+    SelectionMode,
+    SelectEdit(Option<usize>),
+    DeleteSelected,
     Size(SizeMessage),
     ToggleColorPalette,
     CloseColorPalette,

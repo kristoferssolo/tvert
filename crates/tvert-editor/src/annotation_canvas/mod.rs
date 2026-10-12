@@ -1,7 +1,9 @@
 mod input;
+mod select;
 
 use crate::{
-    annotation::AnnotationDraft, edit::Edit, editor::Message, tool::Tool, viewport::Viewport,
+    annotation::AnnotationDraft, edit::Edit, editor::Message, mode::Mode, tool::Tool,
+    viewport::Viewport,
 };
 use iced::{
     Color, Rectangle, Renderer, Size, Theme,
@@ -14,8 +16,10 @@ type DraftState = Option<AnnotationDraft>;
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
     pub tool: Tool,
+    pub mode: Mode,
     pub size: u16,
     pub stroke_color: Color,
+    pub edits: &'a [Edit],
     pub cache: &'a Cache,
 }
 
@@ -36,7 +40,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         &self,
         state: &Self::State,
         renderer: &Renderer,
-        _theme: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         _cursor: Cursor,
     ) -> Vec<iced::widget::canvas::Geometry<Renderer>> {
@@ -52,6 +56,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 {
                     edit.draw_draft(frame, viewport);
                 }
+                self.draw_selection(frame, viewport, theme);
             });
 
         vec![geometry]
@@ -67,7 +72,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
             .and_then(|viewport| viewport.image_position(cursor.position_from(bounds.position())?))
             .is_some();
 
-        if over_image || state.is_some() {
+        if self.mode == Mode::Draw && (over_image || state.is_some()) {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::None

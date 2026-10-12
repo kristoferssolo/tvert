@@ -2,6 +2,7 @@ use crate::{
     annotation::AnnotationDraft,
     annotation_canvas::{AnnotationCanvas, DraftState},
     editor::{Message, shortcuts},
+    mode::Mode,
     viewport::Viewport,
 };
 use iced::{
@@ -28,11 +29,14 @@ impl AnnotationCanvas<'_> {
         let position = cursor.position_from(bounds.position());
 
         match event {
-            Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => {
-                let start = viewport.image_position(position?)?;
-                *state = Some(self.new_draft(start));
-                Some(self.redraw())
-            }
+            Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => match self.mode {
+                Mode::Draw => {
+                    let start = viewport.image_position(position?)?;
+                    *state = Some(self.new_draft(start));
+                    Some(self.redraw())
+                }
+                Mode::Select(_) => Some(self.select_at(viewport, cursor.position_in(bounds)?)),
+            },
             Event::Mouse(MouseEvent::CursorMoved { position }) => {
                 self.record_motion(state, *position, bounds, viewport)
             }
@@ -132,9 +136,11 @@ mod tests {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
             tool,
+            mode: Mode::Draw,
             size: STROKE_WIDTH,
             stroke_color: RED,
             cache,
+            edits: &[],
         }
     }
 

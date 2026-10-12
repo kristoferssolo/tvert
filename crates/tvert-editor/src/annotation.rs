@@ -1,6 +1,6 @@
-use crate::{figure::Figure, tool::Tool, viewport::Viewport};
+use crate::{figure::Figure, hit, tool::Tool, viewport::Viewport};
 use iced::{
-    Color, Point,
+    Color, Point, Rectangle,
     widget::canvas::{Frame, Stroke},
 };
 
@@ -65,6 +65,28 @@ impl Annotation {
             .with_width(viewport.canvas_length(f32::from(self.stroke_width)));
 
         self.figure.draw(frame, viewport, stroke);
+    }
+
+    /// Whether a canvas `point` touches the annotation as displayed
+    pub fn is_hit(&self, viewport: Viewport, point: Point) -> bool {
+        let path = self.figure.path(viewport);
+        if self.figure.filled() {
+            return hit::fill(&path, point);
+        }
+        hit::stroke(&path, point, self.canvas_width(viewport))
+    }
+
+    /// Returns the displayed extent in canvas coordinates, including the stroke
+    pub fn canvas_bounds(&self, viewport: Viewport) -> Option<Rectangle> {
+        let bounds = hit::extent(&self.figure.path(viewport))?;
+        if self.figure.filled() {
+            return Some(bounds);
+        }
+        Some(bounds.expand(self.canvas_width(viewport) / 2.0))
+    }
+
+    fn canvas_width(&self, viewport: Viewport) -> f32 {
+        viewport.canvas_length(f32::from(self.stroke_width))
     }
 }
 

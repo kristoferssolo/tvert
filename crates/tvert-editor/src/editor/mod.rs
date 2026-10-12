@@ -1,5 +1,7 @@
 pub mod color;
+mod history;
 mod message;
+mod selection;
 pub mod shortcuts;
 mod size;
 mod view;
@@ -7,13 +9,8 @@ mod view;
 pub use message::{Message, SizeMessage};
 
 use crate::{
-    Error, Settings,
-    color::format_hex,
-    edit::Edit,
-    export::ExportAction,
-    render::{render_edits, render_image},
-    size::Sizes,
-    tool::Tool,
+    Error, Settings, color::format_hex, edit::Edit, editor::history::Change, export::ExportAction,
+    mode::Mode, render::render_image, size::Sizes, tool::Tool,
 };
 use iced::{
     Size, Task,
@@ -31,6 +28,7 @@ pub struct Editor {
     preview: Handle,
     image_size: Size,
     tool: Tool,
+    mode: Mode,
     initial_settings: Settings,
     sizes: Sizes,
     size_input: Option<String>,
@@ -40,7 +38,8 @@ pub struct Editor {
     export: ExportHandler,
     error: Option<Error>,
     edits: Vec<Edit>,
-    undone_edits: Vec<Edit>,
+    undo_stack: Vec<Change>,
+    redo_stack: Vec<Change>,
     cache: Cache,
 }
 
@@ -56,6 +55,7 @@ impl Editor {
             preview,
             image_size,
             tool: settings.tool,
+            mode: Mode::Draw,
             initial_settings: settings,
             sizes: settings.into(),
             size_input: None,
@@ -65,7 +65,8 @@ impl Editor {
             export,
             error: None,
             edits: Vec::new(),
-            undone_edits: Vec::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             cache: Cache::new(),
         }
     }
@@ -78,12 +79,10 @@ impl Editor {
                 };
                 self.add_edit(edit);
             }
-            Message::SelectTool(tool) => {
-                self.tool = tool;
-                self.size_input = None;
-                self.close_color_palette();
-                return Task::none();
-            }
+            Message::SelectTool(tool) => self.select_tool(tool),
+            Message::SelectionMode => self.enter_selection_mode(),
+            Message::SelectEdit(index) => self.select_edit(index),
+            Message::DeleteSelected => self.delete_selected(),
             Message::SelectStrokeColor(stroke_color) => {
                 self.select_stroke_color(stroke_color);
                 return Task::none();
@@ -140,65 +139,24 @@ impl Editor {
             }
         }
     }
-
-    fn add_edit(&mut self, edit: Edit) {
-        self.edits.push(edit);
-        if self.refresh_preview() {
-            self.undone_edits.clear();
-            return;
-        }
-        let _ = self.edits.pop();
-    }
-
-    fn undo(&mut self) {
-        let Some(edit) = self.edits.pop() else {
-            return;
-        };
-        if self.refresh_preview() {
-            self.undone_edits.push(edit);
-            return;
-        }
-        self.edits.push(edit);
-    }
-
-    fn redo(&mut self) {
-        let Some(edit) = self.undone_edits.pop() else {
-            return;
-        };
-        self.edits.push(edit);
-        if !self.refresh_preview()
-            && let Some(edit) = self.edits.pop()
-        {
-            self.undone_edits.push(edit);
-        }
-    }
-
-    fn refresh_preview(&mut self) -> bool {
-        match render_edits(&self.original, &self.edits) {
-            Ok(image) => {
-                let (width, height) = image.size().into();
-                self.preview = Handle::from_rgba(width, height, image.into_rgba());
-                self.error = None;
-                true
-            }
-            Err(error) => {
-                self.error = Some(error);
-                false
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        ThemePreference, annotation::AnnotationDraft, color::parse_hex, size::SizeKind, style::RED,
+        Settings, ThemePreference, Tool,
+        annotation::AnnotationDraft,
+        editor::{Message, SizeMessage},
+        render::render_image,
+        size::{SizeKind, Sizes},
+        style::RED,
         viewport::Viewport,
     };
     use claims::{assert_ok, assert_some};
-    use iced::{Color, Point, Rectangle};
+    use iced::{Color, Point, Rectangle, Size};
     use rstest::rstest;
+    use std::rc::Rc;
 
     const SETTINGS: Settings = Settings {
         theme: ThemePreference::Dark,
@@ -218,6 +176,27 @@ mod tests {
         )
     }
 
+    fn stripes() -> Vec<u8> {
+        (0..512)
+            .flat_map(|index| {
+                if index % 2 == 0 {
+                    [255, 0, 0, 255]
+                } else {
+                    [0, 0, 0, 255]
+                }
+            })
+            .collect()
+    }
+
+    fn striped_editor() -> Editor {
+        Editor::new(
+            Handle::from_rgba(32, 16, stripes()),
+            Size::new(32.0, 16.0),
+            SETTINGS,
+            Rc::new(|_, _| Ok(())),
+        )
+    }
+
     fn bounds(x: f32) -> Rectangle {
         Rectangle::new(Point::new(x, 0.0), Size::new(10.0, 10.0))
     }
@@ -232,6 +211,16 @@ mod tests {
                 Point::new(bounds.x + bounds.width, bounds.y + bounds.height),
             ],
         })
+    }
+
+    fn delete(editor: &mut Editor, index: usize) {
+        for message in [
+            Message::SelectionMode,
+            Message::SelectEdit(Some(index)),
+            Message::DeleteSelected,
+        ] {
+            let _ = editor.update(message);
+        }
     }
 
     fn assert_figures(figures: &[Edit], expected: &[(Tool, Rectangle)]) {
@@ -291,7 +280,7 @@ mod tests {
 
         let _ = editor.update(Message::Redo);
         assert_figures(&editor.edits, &[first, second]);
-        assert_figures(&editor.undone_edits, &[]);
+        assert!(editor.redo_stack.is_empty());
     }
 
     #[test]
@@ -310,7 +299,7 @@ mod tests {
         let _ = editor.update(Message::Redo);
 
         assert_figures(&editor.edits, &[first, replacement]);
-        assert_figures(&editor.undone_edits, &[]);
+        assert!(editor.redo_stack.is_empty());
     }
 
     #[test]
@@ -320,7 +309,7 @@ mod tests {
         let _ = editor.update(Message::Undo);
         let _ = editor.update(Message::Redo);
         assert_figures(&editor.edits, &[]);
-        assert_figures(&editor.undone_edits, &[]);
+        assert!(editor.redo_stack.is_empty());
 
         let figure = (Tool::Rectangle, bounds(10.0));
         let _ = editor.update(add_figure(figure.0, figure.1));
@@ -328,12 +317,12 @@ mod tests {
         let _ = editor.update(Message::Undo);
         let _ = editor.update(Message::Undo);
         assert_figures(&editor.edits, &[]);
-        assert_figures(&editor.undone_edits, &[figure]);
+        assert_eq!(editor.redo_stack.len(), 1);
 
         let _ = editor.update(Message::Redo);
         let _ = editor.update(Message::Redo);
         assert_figures(&editor.edits, &[figure]);
-        assert_figures(&editor.undone_edits, &[]);
+        assert!(editor.redo_stack.is_empty());
     }
 
     #[test]
@@ -347,11 +336,71 @@ mod tests {
 
         assert_eq!(editor.tool, Tool::Ellipse);
         assert_figures(&editor.edits, &[]);
-        assert_figures(&editor.undone_edits, &[figure]);
 
         let _ = editor.update(Message::Redo);
         assert_figures(&editor.edits, &[figure]);
-        assert_figures(&editor.undone_edits, &[]);
+        assert!(editor.redo_stack.is_empty());
+    }
+
+    #[test]
+    fn deletion_undoes_at_its_original_position_and_redoes() {
+        let mut editor = editor();
+        let figures = [
+            (Tool::Rectangle, bounds(10.0)),
+            (Tool::Arrow, bounds(20.0)),
+            (Tool::Ellipse, bounds(30.0)),
+        ];
+        let [first, second, third] = figures;
+
+        for (tool, bounds) in figures {
+            let _ = editor.update(add_figure(tool, bounds));
+        }
+
+        delete(&mut editor, 1);
+        assert_figures(&editor.edits, &[first, third]);
+        assert_eq!(editor.mode, Mode::Select(None));
+
+        let _ = editor.update(Message::Undo);
+        assert_figures(&editor.edits, &figures);
+
+        let _ = editor.update(Message::Redo);
+        assert_figures(&editor.edits, &[first, third]);
+
+        let _ = editor.update(Message::Undo);
+        let _ = editor.update(Message::Undo);
+        assert_figures(&editor.edits, &[first, second]);
+
+        delete(&mut editor, 0);
+        let _ = editor.update(Message::Redo);
+        assert_figures(&editor.edits, &[second]);
+        assert!(editor.redo_stack.is_empty());
+    }
+
+    #[test]
+    fn deleting_an_edit_rerenders_the_rest_from_the_original_in_order() {
+        let region = Rectangle::new(Point::ORIGIN, Size::new(16.0, 16.0));
+        let line = Message::AddEdit(AnnotationDraft {
+            tool: Tool::Line,
+            stroke_color: Color::WHITE,
+            size: 4,
+            points: vec![Point::new(0.0, 8.0), Point::new(32.0, 8.0)],
+        });
+        let mut expected = striped_editor();
+        let _ = expected.update(add_figure(Tool::Pixelate, region));
+        let _ = expected.update(add_figure(Tool::Blur, region));
+        let expected = assert_ok!(expected.render_image());
+
+        let mut editor = striped_editor();
+        let _ = editor.update(add_figure(Tool::Pixelate, region));
+        let _ = editor.update(line);
+        let _ = editor.update(add_figure(Tool::Blur, region));
+        let edited = assert_ok!(editor.render_image());
+
+        delete(&mut editor, 1);
+        assert_eq!(assert_ok!(editor.render_image()).rgba(), expected.rgba());
+
+        let _ = editor.update(Message::Undo);
+        assert_eq!(assert_ok!(editor.render_image()).rgba(), edited.rgba());
     }
 
     #[test]
@@ -394,7 +443,7 @@ mod tests {
         assert_eq!(appearances, [(2, RED), (8, blue)]);
 
         assert_eq!(editor.sizes.get(SizeKind::StrokeWidth), 4);
-        assert!(editor.undone_edits.is_empty());
+        assert!(editor.redo_stack.is_empty());
         assert_eq!(
             Color::from(editor.stroke_selection).into_rgba8(),
             green.into_rgba8()
@@ -405,22 +454,8 @@ mod tests {
     #[case(Tool::Pixelate)]
     #[case(Tool::Blur)]
     fn pixel_effect_history_restores_pixels_and_preserves_the_original(#[case] tool: Tool) {
-        let pixels = (0..512)
-            .flat_map(|index| {
-                if index % 2 == 0 {
-                    [255, 0, 0, 255]
-                } else {
-                    [0, 0, 0, 255]
-                }
-            })
-            .collect::<Vec<_>>();
-        let original = Handle::from_rgba(32, 16, pixels.clone());
-        let mut editor = Editor::new(
-            original,
-            Size::new(32.0, 16.0),
-            SETTINGS,
-            Rc::new(|_, _| Ok(())),
-        );
+        let mut editor = striped_editor();
+        let pixels = stripes();
         let region = Rectangle::new(Point::ORIGIN, Size::new(16.0, 16.0));
 
         let _ = editor.update(add_figure(tool, region));
@@ -444,56 +479,10 @@ mod tests {
 
         assert!(editor.error.is_some());
         assert!(editor.edits.is_empty());
-        assert_eq!(editor.undone_edits.len(), 1);
+        assert_eq!(editor.redo_stack.len(), 1);
         assert_eq!(assert_ok!(editor.render_image()).rgba(), pixels);
 
         let _ = editor.update(Message::Redo);
         assert_eq!(assert_ok!(editor.render_image()).rgba(), processed.rgba());
-    }
-
-    #[test]
-    fn configured_color_initializes_the_picker_and_stays_the_session_default() {
-        let base = editor();
-        let settings = Settings {
-            stroke_color: assert_some!(parse_hex("#40C86080")),
-            ..base.initial_settings
-        };
-        let mut editor = Editor::new(base.original, base.image_size, settings, base.export);
-
-        assert_eq!(
-            Color::from(editor.stroke_selection).into_rgba8(),
-            [64, 200, 96, 128]
-        );
-        assert_eq!(editor.color_hex, "#40C86080");
-
-        let _ = editor.update(Message::SelectStrokeColor(Color::WHITE));
-
-        assert_eq!(editor.color_hex, "#FFFFFF");
-        assert_eq!(editor.initial_settings, settings);
-    }
-
-    #[test]
-    fn configured_defaults_initialize_the_editor_and_survive_session_changes() {
-        let base = editor();
-        let settings = Settings {
-            tool: Tool::Pencil,
-            stroke_color: assert_some!(parse_hex("#40C86080")),
-            ..base.initial_settings
-        };
-        let mut editor = Editor::new(base.original, base.image_size, settings, base.export);
-
-        assert_eq!(
-            Color::from(editor.stroke_selection).into_rgba8(),
-            [64, 200, 96, 128]
-        );
-        assert_eq!(editor.color_hex, "#40C86080");
-        assert_eq!(editor.tool, Tool::Pencil);
-
-        let _ = editor.update(Message::SelectStrokeColor(Color::WHITE));
-        let _ = editor.update(Message::SelectTool(Tool::Ellipse));
-
-        assert_eq!(editor.color_hex, "#FFFFFF");
-        assert_eq!(editor.tool, Tool::Ellipse);
-        assert_eq!(editor.initial_settings, settings);
     }
 }

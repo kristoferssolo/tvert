@@ -1,5 +1,5 @@
 use crate::figure::{Figure, RectangleFigure};
-use iced::{Rectangle, widget::canvas::Fill};
+use iced::Rectangle;
 
 #[derive(Debug)]
 pub struct HighlighterFigure {
@@ -19,18 +19,7 @@ impl Figure for HighlighterFigure {
         self.rectangle.path(viewport)
     }
 
-    fn draw(
-        &self,
-        frame: &mut iced::widget::canvas::Frame,
-        viewport: crate::viewport::Viewport,
-        stroke: iced::widget::canvas::Stroke<'_>,
-    ) {
-        frame.fill(
-            &self.path(viewport),
-            Fill {
-                style: stroke.style,
-                ..Default::default()
-            },
-        );
+    fn filled(&self) -> bool {
+        true
     }
 }

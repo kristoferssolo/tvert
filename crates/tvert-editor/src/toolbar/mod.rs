@@ -3,11 +3,16 @@ mod color;
 mod input;
 mod size;
 
+use std::iter;
+
 pub use size::for_tool as size_control;
 
 use crate::{
     ExportAction,
-    editor::{Message, shortcuts::tool_key},
+    editor::{
+        Message,
+        shortcuts::{SELECT_KEY, tool_key},
+    },
     tool::Tool,
     toolbar::button::{icon_button, separator},
 };
@@ -24,7 +29,7 @@ pub const MIN_WIDTH: f32 = 800.0;
 
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
-    selected: Tool,
+    selected: Option<Tool>,
     size_control: Option<Element<'static, Message>>,
     stroke_selection: Selection,
     color_palette_open: bool,
@@ -32,16 +37,22 @@ pub fn view(
     can_undo: bool,
     can_redo: bool,
 ) -> Element<'static, Message> {
+    let select = icon_button(
+        Icon::MousePointer2,
+        format!("Select ({SELECT_KEY})"),
+        Some(Message::SelectionMode),
+        selected.is_none(),
+    );
     let tools = Tool::VARIANTS.iter().map(|&tool| {
         icon_button(
             tool_icon(tool),
             format!("{tool} ({})", tool_key(tool)),
             Some(Message::SelectTool(tool)),
-            tool == selected,
+            Some(tool) == selected,
         )
     });
 
-    let controls = Row::with_children(tools)
+    let controls = Row::with_children(iter::once(select).chain(tools))
         .spacing(4)
         .align_y(Vertical::Center)
         .push(separator())
@@ -59,7 +70,8 @@ pub fn view(
         ))
         .push(separator())
         .extend(
-            (!matches!(selected, Tool::Pixelate | Tool::Blur))
+            selected
+                .is_some_and(|tool| !matches!(tool, Tool::Pixelate | Tool::Blur))
                 .then(|| color::view(stroke_selection, color_palette_open, color_hex)),
         )
         .extend(size_control)

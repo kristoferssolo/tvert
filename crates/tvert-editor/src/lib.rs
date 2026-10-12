@@ -68,7 +68,7 @@ where
     .title("Tvert")
     .theme(move |_: &Editor| Option::<Theme>::from(settings.theme))
     .font(lucide_icons::LUCIDE_FONT_BYTES)
-    .subscription(|_| event::listen_with(|event, status, _| shortcuts::export(&event, status)))
+    .subscription(|_| event::listen_with(|event, status, _| shortcuts::parse(&event, status)))
     .window(window::Settings {
         platform_specific: window::settings::PlatformSpecific {
             application_id: "tvert".into(),

@@ -1,5 +1,6 @@
 mod button;
 mod color;
+mod input;
 mod size;
 
 pub use size::for_tool as size_control;

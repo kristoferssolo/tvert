@@ -26,6 +26,11 @@ impl Editor {
         self.color_hex = value;
     }
 
+    pub(super) fn toggle_color_pallete(&mut self) {
+        self.color_palette_open = !self.color_palette_open;
+        self.color_hex = format_hex(self.stroke_selection.into());
+    }
+
     pub(super) fn close_color_palette(&mut self) {
         self.color_palette_open = false;
         self.color_hex = format_hex(self.stroke_selection.into());

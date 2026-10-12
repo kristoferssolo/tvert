@@ -1,4 +1,5 @@
 use crate::color::parse_hex;
+use crate::toolbar::input;
 use crate::{editor::Message, style::RED, toolbar::ICON_FONT};
 use iced::widget::{button, column, container, row, space, text, text_input};
 use iced::{Border, Color, Element, Fill, Theme, alignment::Vertical, widget::Row};
@@ -76,21 +77,14 @@ fn presets(selected: Color) -> Element<'static, Message> {
 }
 
 fn hex_input(selection: Selection, hex: &str) -> Element<'static, Message> {
-    let valid = parse_hex(hex).is_some();
     let input = text_input("#RRGGBB", hex)
         .on_input(Message::EditColorHex)
         .on_paste(Message::EditColorHex)
         .padding(8)
         .width(Fill)
-        .style(move |theme: &Theme, status| {
-            let mut style = text_input::default(theme, status);
-            if !valid {
-                style.border.color = theme.palette().danger;
-            }
-            style
-        });
+        .style(input::style(parse_hex(hex).is_some()));
 
-    row![color_swatch(selection.into()), input]
+    row![color_swatch(selection.into()), input::owns_keyboard(input)]
         .spacing(8)
         .align_y(Vertical::Center)
         .into()

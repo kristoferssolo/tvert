@@ -4,6 +4,14 @@ use iced::{
     keyboard::{Event as KeyboardEvent, Key},
 };
 
+/// Parses editor shortcuts only when widgets have not captured the event
+pub fn parse(event: &Event, status: event::Status) -> Option<Message> {
+    if status != event::Status::Ignored {
+        return None;
+    }
+    history(event).or_else(|| export(event))
+}
+
 /// Parses a history shortcut without changing the active draft
 pub fn history(event: &Event) -> Option<Message> {
     match control_key(event)? {
@@ -13,12 +21,7 @@ pub fn history(event: &Event) -> Option<Message> {
     }
 }
 
-/// Parses export shortcuts only when widgets have not captured the event
-pub fn export(event: &Event, status: event::Status) -> Option<Message> {
-    if status != event::Status::Ignored {
-        return None;
-    }
-
+fn export(event: &Event) -> Option<Message> {
     let action = match control_key(event)? {
         ('c', false) => ExportAction::Copy,
         ('c', true) => ExportAction::CopyAndSave,
@@ -103,7 +106,7 @@ mod tests {
         #[case] expected: ExportAction,
     ) {
         assert_eq!(
-            export(
+            parse(
                 &key_press(character, modifiers, false),
                 event::Status::Ignored,
             ),
@@ -120,7 +123,7 @@ mod tests {
         for character in ["z", "y", "c", "s"] {
             let event = key_press(character, modifiers, repeat);
             assert_none!(history(&event));
-            assert_none!(export(&event, event::Status::Ignored));
+            assert_none!(parse(&event, event::Status::Ignored));
         }
     }
 
@@ -131,13 +134,24 @@ mod tests {
     fn ignores_unbound_keys(#[case] character: &str, #[case] modifiers: Modifiers) {
         let event = key_press(character, modifiers, false);
         assert_none!(history(&event));
-        assert_none!(export(&event, event::Status::Ignored));
+        assert_none!(parse(&event, event::Status::Ignored));
     }
 
     #[test]
     fn ignores_captured_export_events() {
-        assert_none!(export(
+        assert_none!(parse(
             &key_press("c", Modifiers::CTRL, false),
+            event::Status::Captured,
+        ));
+    }
+
+    #[rstest]
+    #[case("z")]
+    #[case("c")]
+    #[case("s")]
+    fn ignores_captured_events(#[case] character: &str) {
+        assert_none!(parse(
+            &key_press(character, Modifiers::CTRL, false),
             event::Status::Captured,
         ));
     }

@@ -34,6 +34,15 @@ impl SizeKind {
             Self::BlurSigma => "Blur strength",
         }
     }
+
+    /// Parses and exact size, rejection values outside [`Self::range`]
+    pub fn parse(self, input: &str) -> Option<u16> {
+        input
+            .trim()
+            .parse()
+            .ok()
+            .filter(|size| self.range().contains(size))
+    }
 }
 
 impl Tool {
@@ -82,5 +91,33 @@ impl From<Settings> for Sizes {
             block_size: settings.pixelation_block_size,
             blur_sigma: settings.blur_sigma,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::{assert_none, assert_some_eq};
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(SizeKind::StrokeWidth, "1", 1)]
+    #[case(SizeKind::StrokeWidth, " 32 ", 32)]
+    #[case(SizeKind::BlockSize, "08", 8)]
+    fn parses_sizes_within_range(#[case] kind: SizeKind, #[case] input: &str, #[case] size: u16) {
+        assert_some_eq!(kind.parse(input), size);
+    }
+
+    #[rstest]
+    #[case(SizeKind::StrokeWidth, "")]
+    #[case(SizeKind::StrokeWidth, "-4")]
+    #[case(SizeKind::StrokeWidth, "4.5")]
+    #[case(SizeKind::StrokeWidth, "4px")]
+    #[case(SizeKind::StrokeWidth, "0")]
+    #[case(SizeKind::StrokeWidth, "33")]
+    #[case(SizeKind::BlurSigma, "3")]
+    #[case(SizeKind::BlurSigma, "65536")]
+    fn rejects_invalid_and_out_of_range_input(#[case] kind: SizeKind, #[case] input: &str) {
+        assert_none!(kind.parse(input));
     }
 }

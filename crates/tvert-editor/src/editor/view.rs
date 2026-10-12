@@ -15,7 +15,12 @@ impl Editor {
         let mut content = column![
             toolbar::view(
                 self.tool,
-                toolbar::size_control(self.tool, self.selected_size(), self.initial_settings),
+                toolbar::size_control(
+                    self.tool,
+                    self.selected_size(),
+                    self.size_input.as_deref(),
+                    self.initial_settings
+                ),
                 self.stroke_selection,
                 self.color_palette_open,
                 &self.color_hex,

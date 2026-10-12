@@ -1,9 +1,10 @@
 pub mod color;
 mod message;
 pub mod shortcuts;
+mod size;
 mod view;
 
-pub use message::Message;
+pub use message::{Message, SizeMessage};
 
 use crate::{
     Error, Settings,
@@ -32,6 +33,7 @@ pub struct Editor {
     tool: Tool,
     initial_settings: Settings,
     sizes: Sizes,
+    size_input: Option<String>,
     stroke_selection: Selection,
     color_palette_open: bool,
     color_hex: String,
@@ -56,6 +58,7 @@ impl Editor {
             tool: settings.tool,
             initial_settings: settings,
             sizes: settings.into(),
+            size_input: None,
             stroke_selection: settings.stroke_color.into(),
             color_palette_open: false,
             color_hex: format_hex(settings.stroke_color),
@@ -77,6 +80,7 @@ impl Editor {
             }
             Message::SelectTool(tool) => {
                 self.tool = tool;
+                self.size_input = None;
                 self.close_color_palette();
                 return Task::none();
             }
@@ -84,13 +88,12 @@ impl Editor {
                 self.select_stroke_color(stroke_color);
                 return Task::none();
             }
-            Message::SelectSize(kind, size) => {
-                self.sizes.set(kind, size);
+            Message::Size(message) => {
+                self.update_size(message);
                 return Task::none();
             }
             Message::ToggleColorPalette => {
-                self.color_palette_open = !self.color_palette_open;
-                self.color_hex = format_hex(self.stroke_selection.into());
+                self.toggle_color_pallete();
                 return Task::none();
             }
             Message::CloseColorPalette => {
@@ -183,10 +186,6 @@ impl Editor {
                 false
             }
         }
-    }
-
-    const fn selected_size(&self) -> u16 {
-        self.sizes.get(self.tool.size_kind())
     }
 }
 
@@ -375,11 +374,11 @@ mod tests {
         });
 
         let _ = editor.update(thin);
-        let _ = editor.update(Message::SelectSize(SizeKind::StrokeWidth, 8));
+        let _ = editor.update(Message::Size(SizeMessage::Select(SizeKind::StrokeWidth, 8)));
         let _ = editor.update(Message::SelectStrokeColor(blue));
         let _ = editor.update(thick);
         let _ = editor.update(Message::Undo);
-        let _ = editor.update(Message::SelectSize(SizeKind::StrokeWidth, 4));
+        let _ = editor.update(Message::Size(SizeMessage::Select(SizeKind::StrokeWidth, 4)));
         let _ = editor.update(Message::SelectStrokeColor(green));
         let _ = editor.update(Message::Redo);
 

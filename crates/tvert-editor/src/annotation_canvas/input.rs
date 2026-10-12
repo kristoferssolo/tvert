@@ -20,14 +20,6 @@ impl AnnotationCanvas<'_> {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> Option<Action<Message>> {
-        if let Some(message) = shortcuts::history(event) {
-            if state.take().is_some() {
-                self.cache.clear();
-                return Some(Action::request_redraw().and_capture());
-            }
-            return Some(Action::publish(message).and_capture());
-        }
-
         if let Some(action) = self.handle_cancel(state, event) {
             return Some(action);
         }
@@ -74,14 +66,15 @@ impl AnnotationCanvas<'_> {
     }
 
     fn handle_cancel(&self, state: &mut DraftState, event: &Event) -> Option<Action<Message>> {
-        let explicit = matches!(
-            event,
-            Event::Mouse(MouseEvent::ButtonPressed(Button::Right))
-                | Event::Keyboard(KeyboardEvent::KeyPressed {
-                    key: Key::Named(key::Named::Escape),
-                    ..
-                })
-        );
+        let explicit = shortcuts::history(event).is_some()
+            || matches!(
+                event,
+                Event::Mouse(MouseEvent::ButtonPressed(Button::Right))
+                    | Event::Keyboard(KeyboardEvent::KeyPressed {
+                        key: Key::Named(key::Named::Escape),
+                        ..
+                    })
+            );
         let unfocused = matches!(event, Event::Window(WindowEvent::Unfocused));
 
         if state.is_none() || !(explicit || unfocused) {
@@ -118,6 +111,7 @@ mod tests {
     use crate::style::RED;
     use crate::tool::Tool;
     use claims::{assert_none, assert_some, assert_some_eq};
+    use iced::event;
     use iced::keyboard::{self, Modifiers};
     use iced::{
         Color, Size,
@@ -129,6 +123,7 @@ mod tests {
     const RELEASE: Event = Event::Mouse(MouseEvent::ButtonReleased(Button::Left));
     const START: Point = Point::new(120.0, 190.0);
     const END: Point = Point::new(320.0, 290.0);
+    const BOUNDS: Rectangle = Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0));
 
     const STROKE_WIDTH: u16 = 4;
 
@@ -156,6 +151,12 @@ mod tests {
                 position.map_or(Cursor::Unavailable, Cursor::Available),
             )
             .and_then(|action| action.into_inner().0)
+    }
+
+    fn capture_status(draft: &mut DraftState, event: &Event) -> event::Status {
+        canvas(&Cache::new(), Tool::Rectangle)
+            .update(draft, event, BOUNDS, Cursor::Unavailable)
+            .map_or(event::Status::Ignored, |action| action.into_inner().2)
     }
 
     fn dispatch(draft: &mut DraftState, event: &Event, position: Option<Point>) -> Option<Message> {
@@ -271,15 +272,6 @@ mod tests {
     }
 
     #[test]
-    fn publishes_history_shortcuts_without_a_cursor() {
-        let mut draft = None;
-        assert_some_eq!(
-            dispatch(&mut draft, &key_press("z", Modifiers::CTRL, false), None),
-            Message::Undo
-        );
-    }
-
-    #[test]
     fn leaves_export_shortcuts_for_the_subscription() {
         let mut draft = None;
         begin(&mut draft);
@@ -292,21 +284,21 @@ mod tests {
     }
 
     #[rstest]
-    #[case("z", Modifiers::CTRL, Message::Undo)]
-    #[case("y", Modifiers::CTRL, Message::Redo)]
-    #[case("z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
-    fn cancels_the_draft_before_applying_history(
+    #[case("z", Modifiers::CTRL)]
+    #[case("y", Modifiers::CTRL)]
+    #[case("z", Modifiers::CTRL | Modifiers::SHIFT)]
+    fn history_cancels_a_draft_and_otherwise_reaches_the_editor(
         #[case] character: &str,
         #[case] modifiers: Modifiers,
-        #[case] expected: Message,
     ) {
-        let mut draft = None;
-        begin(&mut draft);
         let event = key_press(character, modifiers, false);
-        assert_none!(dispatch(&mut draft, &event, None));
+        let mut draft = None;
+
+        begin(&mut draft);
+        assert_eq!(capture_status(&mut draft, &event), event::Status::Captured);
         assert_none!(&draft);
         assert_none!(dispatch(&mut draft, &RELEASE, Some(END)));
-        assert_some_eq!(dispatch(&mut draft, &event, None), expected);
+        assert_eq!(capture_status(&mut draft, &event), event::Status::Ignored);
     }
 
     #[rstest]

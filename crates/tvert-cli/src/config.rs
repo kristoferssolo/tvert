@@ -5,13 +5,14 @@ use std::{
     env, fs,
     io::ErrorKind,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 use strum::VariantNames;
 use toml::{
     Deserializer, Spanned,
     de::{DeTable, DeValue},
 };
-use tvert_editor::{Settings, Tool};
+use tvert_editor::{Settings, ThemePreference, Tool};
 
 type Result<T, E = ConfigError> = std::result::Result<T, E>;
 
@@ -27,7 +28,9 @@ struct Config {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct EditorConfig {
-    #[serde(deserialize_with = "deserialize_tool")]
+    #[serde(deserialize_with = "deserialize_enum")]
+    theme: ThemePreference,
+    #[serde(deserialize_with = "deserialize_enum")]
     tool: Tool,
     #[serde(deserialize_with = "deserialize_color")]
     stroke_color: Color,
@@ -41,6 +44,7 @@ impl TryFrom<EditorConfig> for Settings {
 
     fn try_from(config: EditorConfig) -> Result<Self, Self::Error> {
         let settings = Self {
+            theme: config.theme,
             tool: config.tool,
             stroke_color: config.stroke_color,
             stroke_width: config.stroke_width,
@@ -75,15 +79,16 @@ where
         .ok_or_else(|| de::Error::custom("expected a hex color in #RRGGBB or #RRGGBBAA format"))
 }
 
-fn deserialize_tool<'de, D>(deserializer: D) -> Result<Tool, D::Error>
+fn deserialize_enum<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: serde::Deserializer<'de>,
+    T: FromStr + VariantNames,
 {
     let value = String::deserialize(deserializer)?;
 
     value
         .parse()
-        .map_err(|_| de::Error::unknown_variant(&value, <Tool as VariantNames>::VARIANTS))
+        .map_err(|_| de::Error::unknown_variant(&value, T::VARIANTS))
 }
 
 fn default_path() -> Option<PathBuf> {
@@ -173,12 +178,13 @@ mod tests {
         let defaults = assert_ok!(parse("test.toml", ""));
         let settings = assert_ok!(parse(
             "test.toml",
-            "[editor]\ntool = 'pEnCiL'\nstroke_width = 7",
+            "[editor]\ntheme = 'LiGhT'\ntool = 'pEnCiL'\nstroke_width = 7",
         ));
 
         assert_eq!(
             settings,
             Settings {
+                theme: ThemePreference::Light,
                 tool: Tool::Pencil,
                 stroke_width: 7,
                 ..defaults
@@ -187,6 +193,7 @@ mod tests {
     }
 
     #[rstest]
+    #[case("[editor]\ntheme = 'banana'")]
     #[case("[editor]\ntool = 'banana'")]
     #[case("[editor]\ntool = 1")]
     #[case("[editor]\nstroke_color = '#GG0000'")]
@@ -234,6 +241,7 @@ mod tests {
 
     #[rstest]
     #[case("# user settings\n[editor]\nblur_sigma = 3\n", "3")]
+    #[case("[editor]\ntheme = 'banana'", "'banana'")]
     #[case("[editor]\ntool = 'banana'", "'banana'")]
     #[case("[editor]\nstroke_color = '#GG0000'", "'#GG0000'")]
     #[case("editor.blur_sigma = 3", "3")]

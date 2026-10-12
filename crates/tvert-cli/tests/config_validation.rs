@@ -24,7 +24,13 @@ fn check_config_validates_the_requested_file_withtout_wayland() {
     let directory = assert_ok!(tempdir());
     let path = directory.path().join("config.toml");
 
-    assert_ok!(fs::write(&path, "[editor]\ntool = 'arrows'\n"));
+    assert_ok!(fs::write(
+        &path,
+        r#"
+        [editor]
+        tool = "arrows"
+        "#
+    ));
     let invalid = check_config(&path);
 
     assert_eq!(invalid.status.code(), Some(1));
@@ -33,7 +39,14 @@ fn check_config_validates_the_requested_file_withtout_wayland() {
     let diagnostic = assert_ok!(String::from_utf8(invalid.stderr));
     assert!(diagnostic.contains("unknown variant `arrows`"));
 
-    assert_ok!(fs::write(&path, "[editor]\nstroke_width = 7\n"));
+    assert_ok!(fs::write(
+        &path,
+        r#"
+            [editor]
+            theme = "system"
+            stroke_width = 7
+        "#
+    ));
     let valid = check_config(&path);
 
     assert!(valid.status.success());

@@ -10,6 +10,7 @@ mod pixel_effect;
 mod render;
 mod settings;
 mod style;
+mod theme;
 mod tool;
 mod toolbar;
 mod viewport;
@@ -17,6 +18,7 @@ mod viewport;
 pub use error::Error;
 pub use export::ExportAction;
 pub use settings::Settings;
+pub use theme::ThemePreference;
 pub use tool::Tool;
 
 use crate::{
@@ -63,7 +65,7 @@ where
         Editor::view,
     )
     .title("Tvert")
-    .theme(Theme::Dark)
+    .theme(move |_: &Editor| Option::<Theme>::from(settings.theme))
     .font(lucide_icons::LUCIDE_FONT_BYTES)
     .subscription(|_| event::listen_with(|event, status, _| shortcuts::export(&event, status)))
     .window(window::Settings {

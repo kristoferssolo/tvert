@@ -211,12 +211,16 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{annotation::AnnotationDraft, color::parse_hex, style::RED, viewport::Viewport};
+    use crate::{
+        ThemePreference, annotation::AnnotationDraft, color::parse_hex, style::RED,
+        viewport::Viewport,
+    };
     use claims::{assert_ok, assert_some};
     use iced::{Color, Point, Rectangle};
     use rstest::rstest;
 
     const SETTINGS: Settings = Settings {
+        theme: ThemePreference::Dark,
         tool: Tool::Arrow,
         stroke_color: RED,
         stroke_width: 4,

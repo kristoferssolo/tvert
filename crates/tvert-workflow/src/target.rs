@@ -23,9 +23,10 @@ pub enum OutputSelection {
 }
 
 impl OutputSelection {
-    /// Finds the output to capture among `outputs`.
+    /// Resolves a selection that requires exactly one output.
     ///
-    /// Never falls back to an arbitrary output when several match `All`.
+    /// Combined capture handles `All` separately; this method never chooses an
+    /// arbitrary output when several are available.
     ///
     /// # Errors
     ///

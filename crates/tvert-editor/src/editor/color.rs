@@ -26,7 +26,7 @@ impl Editor {
         self.color_hex = value;
     }
 
-    pub(super) fn toggle_color_pallete(&mut self) {
+    pub(super) fn toggle_color_palette(&mut self) {
         self.color_palette_open = !self.color_palette_open;
         self.color_hex = format_hex(self.stroke_selection.into());
     }

@@ -113,7 +113,7 @@ impl Editor {
                 return Task::none();
             }
             Message::ToggleColorPalette => {
-                self.toggle_color_pallete();
+                self.toggle_color_palette();
                 return Task::none();
             }
             Message::CloseColorPalette => {

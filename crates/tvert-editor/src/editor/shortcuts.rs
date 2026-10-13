@@ -27,8 +27,8 @@ pub fn history(event: &Event) -> Option<Message> {
 }
 
 pub fn tool(event: &Event) -> Option<Message> {
-    let (character, modfiers) = character_key(event)?;
-    if modfiers.control() || modfiers.alt() || modfiers.logo() {
+    let (character, modifiers) = character_key(event)?;
+    if modifiers.control() || modifiers.alt() || modifiers.logo() {
         return None;
     }
     if SELECT_KEY.eq_ignore_ascii_case(&character) {

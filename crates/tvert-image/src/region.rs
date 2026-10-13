@@ -20,7 +20,7 @@ impl RgbaRegion {
         let width = u32::try_from(x.len()).map_err(|_| Error::SizeOverflow)?;
         let height = u32::try_from(y.len()).map_err(|_| Error::SizeOverflow)?;
         Ok(Some(Self {
-            row_bytes: size.row_byes()?,
+            row_bytes: size.row_bytes()?,
             columns: start..end,
             rows: y,
             size: PixelSize::try_from((width, height))?,

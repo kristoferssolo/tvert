@@ -77,7 +77,7 @@ fn draw_annotations<'a>(
     rendered.draw_geometry(frame.into_geometry());
 
     let overlay = rendered.screenshot(Size::new(width, height), 1.0, Color::TRANSPARENT);
-    size.validate_rbga(&overlay)?;
+    size.validate_rgba(&overlay)?;
 
     let mut rgba = image.into_rgba();
 

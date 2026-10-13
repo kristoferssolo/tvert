@@ -25,7 +25,7 @@ pub fn paint(
 }
 
 fn replace(rgba: &mut [u8], region: &RgbaRegion, pixels: &[u8]) -> Result<(), Error> {
-    let row_bytes = region.size().row_byes()?;
+    let row_bytes = region.size().row_bytes()?;
 
     for (row, source) in region.rows_mut(rgba).zip(pixels.chunks_exact(row_bytes)) {
         row?.copy_from_slice(source);

@@ -20,7 +20,7 @@ fn check_config(path: &Path) -> Output {
 }
 
 #[test]
-fn check_config_validates_the_requested_file_withtout_wayland() {
+fn check_config_validates_the_requested_file_without_wayland() {
     let directory = assert_ok!(tempdir());
     let path = directory.path().join("config.toml");
 

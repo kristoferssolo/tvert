@@ -35,7 +35,7 @@ impl PixelSize {
     /// length cannot be represented by this process.
     pub fn rgba_len(self) -> Result<usize, Error> {
         let (_, height) = self.try_into()?;
-        self.row_byes()?
+        self.row_bytes()?
             .checked_mul(height)
             .ok_or(Error::SizeOverflow)
     }
@@ -62,7 +62,7 @@ impl PixelSize {
     /// # Errors
     ///
     /// Returns [`Error::SizeOverflow`] if the row length cannot be represented.
-    pub fn row_byes(self) -> Result<usize, Error> {
+    pub fn row_bytes(self) -> Result<usize, Error> {
         let (width, _): (usize, usize) = self.try_into()?;
         width.checked_mul(4).ok_or(Error::SizeOverflow)
     }
@@ -75,7 +75,7 @@ impl PixelSize {
     ///
     /// Returns [`Error::SizeOverflow`] if the expected length cannot be
     /// represented, or [`Error::InvalidPixelLength`] if the lengths differ.
-    pub fn validate_rbga(self, rgba: &[u8]) -> Result<(), Error> {
+    pub fn validate_rgba(self, rgba: &[u8]) -> Result<(), Error> {
         let expected = self.rgba_len()?;
         let actual = rgba.len();
         if actual != expected {

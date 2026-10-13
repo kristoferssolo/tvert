@@ -99,7 +99,7 @@ pub enum Error {
 #[error(r#"expected an output name, such as DP-1, or "all""#)]
 pub struct EmptyOutputName;
 
-/// A save path pattern that cannot prodce a PNG destination
+/// A save path pattern that cannot produce a PNG destination
 #[derive(Debug, thiserror::Error)]
 pub enum PatternError {
     /// The pattern is empty

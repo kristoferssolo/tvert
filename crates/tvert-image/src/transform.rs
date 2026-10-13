@@ -44,7 +44,7 @@ impl CapturedImage {
         let (width, height): (usize, usize) = source_size.try_into()?;
         let last_x = width.checked_sub(1).ok_or(Error::SizeOverflow)?;
         let last_y = height.checked_sub(1).ok_or(Error::SizeOverflow)?;
-        let row_bytes = source_size.row_byes()?;
+        let row_bytes = source_size.row_bytes()?;
 
         let destination_size = source_size.transformed(transform);
         let (destination_width, _) = destination_size.try_into()?;

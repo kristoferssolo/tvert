@@ -23,7 +23,7 @@ pub fn blur(
     unpremultiply(&mut output);
 
     let output: RgbaImage = output.convert();
-    let row_bytes = region.size().row_byes()?;
+    let row_bytes = region.size().row_bytes()?;
 
     for (row, blurred) in region
         .rows_mut(rgba)

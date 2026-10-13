@@ -124,7 +124,6 @@ mod tests {
         let renderer = Renderer::new(Font::DEFAULT, Pixels(14.0));
         let mut preview = editor.image_preview();
         let mut tree = Tree::new(preview.as_widget());
-        // The image fits below the toolbar, at (22, 44)–(178, 200)
         let limits = layout::Limits::new(Size::ZERO, Size::new(200.0, 200.0));
         let node = preview
             .as_widget_mut()

@@ -26,7 +26,7 @@ pub struct Annotation {
 
 /// The selected tool cannot create geometry from the draft's endpoints
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("annotation draft has invalid or emtpy geometry")]
+#[error("annotation draft has invalid or empty geometry")]
 pub struct InvalidAnnotation;
 
 impl AnnotationDraft {

@@ -21,7 +21,7 @@ impl CapturedImage {
     /// cannot be represented, or [`Error::InvalidPixelLength`] if the
     /// supplied storage length does not match.
     pub fn new(size: PixelSize, rgba: Vec<u8>) -> Result<Self, Error> {
-        size.validate_rbga(&rgba)?;
+        size.validate_rgba(&rgba)?;
         Ok(Self { size, rgba })
     }
 
@@ -139,7 +139,7 @@ impl TryFrom<(PixelSize, &[u8])> for CapturedImage {
     type Error = Error;
 
     fn try_from((size, rgba): (PixelSize, &[u8])) -> Result<Self, Self::Error> {
-        size.validate_rbga(rgba)?;
+        size.validate_rgba(rgba)?;
         let mut copy = Vec::new();
         copy.try_reserve_exact(rgba.len())?;
         copy.extend_from_slice(rgba);
@@ -179,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_the_entire_image() {
+    fn crops_the_bottom_right_pixel() {
         let image = fixture();
         let cropped = assert_ok!(image.crop(3..4, 2..3));
 

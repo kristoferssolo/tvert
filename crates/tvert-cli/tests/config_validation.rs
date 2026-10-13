@@ -9,7 +9,7 @@ use tempfile::tempdir;
 fn check_config(path: &Path) -> Output {
     assert_ok!(
         Command::new(env!("CARGO_BIN_EXE_tvert"))
-            .arg("check-config")
+            .args(["config", "check"])
             .arg("--config")
             .arg(path)
             .env_remove("WAYLAND_DISPLAY")

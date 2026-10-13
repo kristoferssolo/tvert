@@ -1,3 +1,9 @@
+[capture]
+# Output to capture, such as "DP-1", or "all" for the whole desktop.
+# Combining several outputs is not implemented yet, so "all" currently
+# requires exactly one output; choose one by name on multi-monitor setups.
+output = "all"
+
 [save]
 # strftime pattern for saved PNGs. A leading ~/ is the home directory,
 # relative paths start in the working directory, and %% is a literal %.

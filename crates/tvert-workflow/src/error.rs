@@ -7,6 +7,25 @@ pub enum Error {
     #[error("failed to capture output")]
     Capture(#[from] tvert_wayland::Error),
 
+    /// The compositor reported no outputs to capture
+    #[error("the compositor reported no outputs")]
+    NoOutputs,
+
+    /// No output has the requested name
+    #[error("no output named {name:?}; available outputs: {}", .available.join(", "))]
+    UnknownOutput {
+        name: String,
+        available: Vec<String>,
+    },
+
+    /// `all` spans several outputs, which cannot be combined yet
+    #[error(
+        "capturing all outputs as one image is not implemented yet; \
+         choose one of {} with --output NAME or capture.output",
+        .available.join(", ")
+    )]
+    CombinedCapture { available: Vec<String> },
+
     /// Creating the destination file failed
     #[error("failed to create PNG destination {path:?}")]
     CreateDestination {
@@ -55,6 +74,11 @@ pub enum Error {
     #[error("failed to access the Wayland clipboard")]
     Clipboard(#[from] wl_clipboard_rs::copy::Error),
 }
+
+/// An empty output name
+#[derive(Debug, thiserror::Error)]
+#[error(r#"expected an output name, such as DP-1, or "all""#)]
+pub struct EmptyOutputName;
 
 /// A save path pattern that cannot prodce a PNG destination
 #[derive(Debug, thiserror::Error)]

@@ -13,7 +13,7 @@ pub use overlay::OverlayState;
 pub use screencopy::ScreencopyState;
 
 use crate::{Error, Global, Output, state::State};
-use tracing::debug;
+use tracing::{debug, trace};
 use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
 
 /// Owns the Wayland event queue and protocol state
@@ -68,6 +68,13 @@ impl Wayland {
             pointer_created = wayland.state.pointer.is_some(),
             "capture global binding status"
         );
+
+        for global in &wayland.state.globals {
+            trace!(%global, "advertised global");
+        }
+        for output in wayland.state.outputs.values() {
+            trace!(%output, "discovered output");
+        }
 
         Ok(wayland)
     }

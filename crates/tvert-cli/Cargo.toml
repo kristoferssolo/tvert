@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 tvert-editor.workspace = true
+tvert-image.workspace = true
 tvert-wayland.workspace = true
 tvert-workflow.workspace = true
 

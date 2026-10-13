@@ -2,7 +2,9 @@ use crate::error::ConfigError;
 use iced::Color;
 use serde::{Deserialize, de};
 use std::{
-    env, fs,
+    env,
+    fmt::Display,
+    fs,
     io::ErrorKind,
     path::{Path, PathBuf},
     str::FromStr,
@@ -13,7 +15,7 @@ use toml::{
     de::{DeTable, DeValue},
 };
 use tvert_editor::{Settings, ThemePreference, Tool};
-use tvert_workflow::PathPattern;
+use tvert_workflow::{OutputSelection, PathPattern};
 
 type Result<T, E = ConfigError> = std::result::Result<T, E>;
 
@@ -23,6 +25,7 @@ const DEFAULT_CONFIG_NAME: &str = "configs/config.toml (embedded)";
 /// Preferences loaded from the embedded defaults and an optional user file
 #[derive(Debug, Clone, PartialEq)]
 pub struct AppConfig {
+    pub capture: CaptureSettings,
     pub editor: Settings,
     pub save: SaveSettings,
 }
@@ -30,6 +33,7 @@ pub struct AppConfig {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Config {
+    capture: CaptureSettings,
     editor: EditorConfig,
     save: SaveSettings,
 }
@@ -46,6 +50,15 @@ struct EditorConfig {
     stroke_width: u16,
     pixelation_block_size: u16,
     blur_sigma: u16,
+}
+
+/// Preferences for choosing what to capture
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CaptureSettings {
+    /// Output captured when `--output` is omitted
+    #[serde(deserialize_with = "deserialize_from_str")]
+    pub output: OutputSelection,
 }
 
 /// Preferences for saving screenshots
@@ -111,6 +124,16 @@ where
     value
         .parse()
         .map_err(|_| de::Error::unknown_variant(&value, T::VARIANTS))
+}
+
+fn deserialize_from_str<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: FromStr,
+    T::Err: Display,
+{
+    let value = String::deserialize(deserializer)?;
+    value.parse().map_err(de::Error::custom)
 }
 
 fn deserialize_path_pattern<'de, D>(deserializer: D) -> Result<PathPattern, D::Error>
@@ -179,6 +202,7 @@ fn decode(document: &Spanned<DeTable<'_>>, name: &str, source: &str) -> Result<A
         .map_err(|error| ConfigError::setting(name, source, document.get_ref(), error))?;
 
     Ok(AppConfig {
+        capture: config.capture,
         editor,
         save: config.save,
     })
@@ -247,6 +271,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn partial_capture_configuration_keeps_other_defaults() {
+        let defaults = assert_ok!(parse("test.toml", ""));
+        let config = assert_ok!(parse("test.toml", "[capture]\noutput = 'DP-1'"));
+
+        assert_eq!(
+            config,
+            AppConfig {
+                capture: CaptureSettings {
+                    output: OutputSelection::Named("DP-1".to_owned()),
+                },
+                ..defaults
+            }
+        );
+    }
+
     #[rstest]
     #[case("[editor]\ntool = 1")]
     #[case("[editor]\nstroke_color = 12")]
@@ -300,6 +340,8 @@ mod tests {
     #[case("[save]\npath = 1", "1")]
     #[case("[save]\npath = 'shots/%J.png'", "'shots/%J.png'")]
     #[case("[save]\ndirectory = 'shots'", "directory")]
+    #[case("[capture]\noutput = ''", "''")]
+    #[case("[capture]\nscreen = 'DP-1'", "screen")]
     fn diagnostics_point_to_the_original_user_source_after_merging(
         #[case] source: &'static str,
         #[case] expected: &'static str,

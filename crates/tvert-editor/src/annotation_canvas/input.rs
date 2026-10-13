@@ -161,7 +161,7 @@ mod tests {
     use crate::{style::RED, tool::Tool, viewport::Navigation};
     use claims::{assert_none, assert_some, assert_some_eq};
     use iced::{
-        Color, Size, event,
+        Color, Padding, Size, event,
         keyboard::{self, Modifiers},
         widget::canvas::{Cache, Program},
     };
@@ -179,6 +179,7 @@ mod tests {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
             navigation: Navigation::Fit,
+            padding: Padding::ZERO,
             tool,
             mode: Mode::Draw,
             size: STROKE_WIDTH,

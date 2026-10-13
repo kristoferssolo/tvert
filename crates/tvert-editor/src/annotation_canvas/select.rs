@@ -109,7 +109,7 @@ mod tests {
     };
     use claims::{assert_none, assert_ok, assert_some, assert_some_eq};
     use iced::{
-        Event, Rectangle, Size, event,
+        Event, Padding, Rectangle, Size, event,
         keyboard::{self, Event as KeyboardEvent, Key, Modifiers, key},
         mouse::{Button, Cursor, Event as MouseEvent},
         widget::canvas::{Cache, Program},
@@ -143,6 +143,7 @@ mod tests {
     fn canvas<'a>(edits: &'a [Edit], cache: &'a Cache) -> AnnotationCanvas<'a> {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
+            padding: Padding::ZERO,
             navigation: Navigation::Fit,
             tool: Tool::Rectangle,
             mode: Mode::Select(None),

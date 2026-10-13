@@ -73,7 +73,7 @@ mod tests {
     };
     use claims::{assert_none, assert_some, assert_some_eq};
     use iced::{
-        Event, Rectangle, Size,
+        Event, Padding, Rectangle, Size,
         mouse::{Button, Cursor, Event as MouseEvent},
         widget::canvas::{Cache, Program},
     };
@@ -92,6 +92,7 @@ mod tests {
         let cache = Cache::new();
         let canvas = AnnotationCanvas {
             image_size: IMAGE,
+            padding: Padding::ZERO,
             navigation,
             tool: Tool::Rectangle,
             mode: Mode::Draw,
@@ -111,7 +112,12 @@ mod tests {
     }
 
     fn viewport(navigation: Navigation) -> Viewport {
-        assert_some!(Viewport::navigated(IMAGE, BOUNDS, navigation))
+        assert_some!(Viewport::navigated(
+            IMAGE,
+            BOUNDS,
+            Padding::ZERO,
+            navigation
+        ))
     }
 
     fn image_point(navigation: Navigation, cursor: Point) -> Point {

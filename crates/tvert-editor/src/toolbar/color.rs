@@ -1,6 +1,9 @@
-use crate::color::parse_hex;
-use crate::toolbar::input;
-use crate::{editor::Message, style::RED, toolbar::ICON_FONT};
+use crate::{
+    color::parse_hex,
+    editor::Message,
+    style::RED,
+    toolbar::{ICON_FONT, button::button_style, input},
+};
 use iced::widget::{button, column, container, row, space, text, text_input};
 use iced::{Border, Color, Element, Fill, Theme, alignment::Vertical, widget::Row};
 use iced_aw::{DropDown, drop_down};
@@ -32,7 +35,7 @@ pub(super) fn view(selection: Selection, open: bool, hex: &str) -> Element<'stat
     .height(36)
     .padding(8)
     .on_press(Message::ToggleColorPalette)
-    .style(button::text);
+    .style(|theme, status| button_style(theme, status, false));
 
     DropDown::new(trigger, picker(selection, hex), open)
         .width(264)

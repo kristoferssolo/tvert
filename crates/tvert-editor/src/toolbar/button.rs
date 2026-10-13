@@ -43,7 +43,8 @@ pub(super) fn separator() -> Element<'static, Message> {
 
 pub(super) fn button_style(theme: &Theme, status: button::Status, selected: bool) -> button::Style {
     if selected {
-        return button::primary(theme, status);
+        button::primary(theme, status)
+    } else {
+        button::background(theme, status)
     }
-    button::text(theme, status)
 }

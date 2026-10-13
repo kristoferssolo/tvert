@@ -12,7 +12,7 @@ use crate::{
     viewport::{Navigation, Viewport},
 };
 use iced::{
-    Color, Rectangle, Renderer, Size, Theme,
+    Color, Padding, Rectangle, Renderer, Size, Theme,
     mouse::{self, Cursor},
     widget::canvas::{Cache, Program},
 };
@@ -36,6 +36,7 @@ type GestureState = Option<Gesture>;
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
     pub navigation: Navigation,
+    pub padding: Padding,
     pub tool: Tool,
     pub mode: Mode,
     pub size: u16,
@@ -108,6 +109,6 @@ impl Program<Message> for AnnotationCanvas<'_> {
 
 impl AnnotationCanvas<'_> {
     fn viewport(&self, bounds: Rectangle) -> Option<Viewport> {
-        Viewport::navigated(self.image_size, bounds, self.navigation)
+        Viewport::navigated(self.image_size, bounds, self.padding, self.navigation)
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     toolbar,
 };
 use iced::{
-    Color,
+    Color, Padding,
     widget::{canvas, column, container, opaque, space, stack, text},
 };
 use iced::{Element, Fill};
@@ -13,7 +13,8 @@ use std::error::Error as StdError;
 
 impl Editor {
     pub fn view(&self) -> Element<'_, Message> {
-        let mut content = column![
+        let mut content = column![stack![
+            self.image_preview(),
             toolbar::view(
                 self.drawing_tool(),
                 self.drawing_tool().and_then(|tool| toolbar::size_control(
@@ -28,8 +29,7 @@ impl Editor {
                 !self.undo_stack.is_empty(),
                 !self.redo_stack.is_empty(),
             ),
-            self.image_preview()
-        ];
+        ]];
 
         if let Some(error) = &self.error {
             content = content.push(text(error_message(error)).style(text::danger));
@@ -39,10 +39,12 @@ impl Editor {
     }
 
     fn image_preview(&self) -> Element<'_, Message> {
+        let padding = Padding::ZERO.top(toolbar::HEIGHT);
         let picture = canvas(ImageCanvas {
             preview: &self.preview,
             image_size: self.image_size,
             navigation: self.navigation,
+            padding,
         })
         .width(Fill)
         .height(Fill);
@@ -50,6 +52,7 @@ impl Editor {
         let annotations = canvas(AnnotationCanvas {
             image_size: self.image_size,
             navigation: self.navigation,
+            padding,
             tool: self.tool,
             mode: self.mode,
             size: self.selected_size(),
@@ -96,6 +99,7 @@ mod tests {
     use iced::advanced::{Layout, Shell, clipboard, layout, widget::Tree};
     use iced::mouse::{Button, Cursor, Event as MouseEvent};
     use iced::{Event, Font, Pixels, Point, Renderer, Size, widget::image::Handle};
+    use std::assert_matches;
     use std::rc::Rc;
 
     fn editor(color_palette_open: bool) -> Editor {
@@ -120,12 +124,13 @@ mod tests {
         let renderer = Renderer::new(Font::DEFAULT, Pixels(14.0));
         let mut preview = editor.image_preview();
         let mut tree = Tree::new(preview.as_widget());
-        let limits = layout::Limits::new(Size::ZERO, Size::new(100.0, 100.0));
+        // The image fits below the toolbar, at (22, 44)–(178, 200)
+        let limits = layout::Limits::new(Size::ZERO, Size::new(200.0, 200.0));
         let node = preview
             .as_widget_mut()
             .layout(&mut tree, &renderer, &limits);
         let layout = Layout::new(&node);
-        let (start, end) = (Point::new(25.0, 25.0), Point::new(75.0, 75.0));
+        let (start, end) = (Point::new(50.0, 100.0), Point::new(150.0, 150.0));
         let mut messages = Vec::new();
 
         for (event, position) in [
@@ -150,10 +155,10 @@ mod tests {
 
     #[test]
     fn the_click_that_dismisses_the_palette_does_not_draw() {
-        assert!(matches!(
+        assert_matches!(
             drag_across_preview(&editor(false)).as_slice(),
             [Message::AddEdit(_)]
-        ));
+        );
         assert_eq!(drag_across_preview(&editor(true)), []);
     }
 }

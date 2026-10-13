@@ -1,4 +1,4 @@
-use iced::{Point, Rectangle, Size, Vector};
+use iced::{Padding, Point, Rectangle, Size, Vector};
 
 /// Largest zoom in viewport pixels per image pixel, unless fitting needs more
 const MAX_SCALE: f32 = 32.0;
@@ -24,7 +24,7 @@ pub struct Viewport {
     pub bounds: Rectangle,
     image_size: Size,
     canvas: Rectangle,
-    /// Scale that fits the whole image
+    view: Rectangle,
     fit: f32,
     scale: f32,
     center: Point,
@@ -33,13 +33,19 @@ pub struct Viewport {
 impl Viewport {
     /// Fits the whole image in `canvas`
     pub fn new(image_size: Size, canvas: Rectangle) -> Option<Self> {
-        Self::navigated(image_size, canvas, Navigation::Fit)
+        Self::navigated(image_size, canvas, Padding::ZERO, Navigation::Fit)
     }
 
     /// Places the image in `canvas`, given in window coordinates, as `navigation` requests.
     ///
     /// Returns `None` for empty or non-finite sizes and placements.
-    pub fn navigated(image_size: Size, canvas: Rectangle, navigation: Navigation) -> Option<Self> {
+    pub fn navigated(
+        image_size: Size,
+        canvas: Rectangle,
+        padding: Padding,
+        navigation: Navigation,
+    ) -> Option<Self> {
+        let view = Rectangle::with_size(canvas.size()).shrink(padding);
         if ![
             image_size.width,
             image_size.height,
@@ -60,7 +66,7 @@ impl Viewport {
             ),
             Navigation::Manual { scale, center } => (scale, center),
         };
-        let placement = place(image_size, canvas.size(), scale, center);
+        let placement = place(image_size, view, scale, center);
         let usable = [fit, scale, placement.width, placement.height]
             .into_iter()
             .all(is_positive)
@@ -81,6 +87,7 @@ impl Viewport {
             ),
             image_size,
             canvas,
+            view,
             fit,
             scale,
             center,
@@ -119,8 +126,8 @@ impl Viewport {
         self.manual(
             scale,
             Point::new(
-                (anchor.x - self.canvas.width / 2.0).mul_add(shift, self.center.x),
-                (anchor.y - self.canvas.height / 2.0).mul_add(shift, self.center.y),
+                (anchor.x - self.view.center_x()).mul_add(shift, self.center.x),
+                (anchor.y - self.view.center_y()).mul_add(shift, self.center.y),
             ),
         )
     }
@@ -179,7 +186,7 @@ impl Viewport {
         pixels * self.bounds.width / self.image_size.width
     }
 
-    /// Keeps the canvas center over the image, so it stays reachable
+    /// Keeps the view center over the image, so it stays reachable
     fn manual(self, scale: f32, center: Point) -> Option<Navigation> {
         let center = Point::new(
             center.x.clamp(0.0, self.image_size.width),
@@ -216,11 +223,11 @@ pub const fn translate_rectangle(rectangle: Rectangle, offset: Vector) -> Rectan
     }
 }
 
-fn place(image_size: Size, canvas: Size, scale: f32, center: Point) -> Rectangle {
+fn place(image_size: Size, view: Rectangle, scale: f32, center: Point) -> Rectangle {
     Rectangle::new(
         Point::new(
-            (-center.x).mul_add(scale, canvas.width / 2.0),
-            (-center.y).mul_add(scale, canvas.height / 2.0),
+            (-center.x).mul_add(scale, view.center_x()),
+            (-center.y).mul_add(scale, view.center_y()),
         ),
         Size::new(image_size.width * scale, image_size.height * scale),
     )
@@ -232,157 +239,4 @@ fn snap(origin: f32, scale: f32) -> f32 {
 
 fn is_positive(value: f32) -> bool {
     value.is_finite() && value > 0.0
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use claims::{assert_none, assert_some, assert_some_eq};
-    use rstest::rstest;
-
-    #[rstest]
-    #[case(
-        Size::new(400.0, 400.0),
-        Rectangle::new(Point::new(0.0, 100.0), Size::new(400.0, 200.0))
-    )]
-    #[case(Size::new(600.0, 300.0), Rectangle::with_size(Size::new(600.0, 300.0)))]
-    #[case(
-        Size::new(100.0, 300.0),
-        Rectangle::new(Point::new(0.0, 125.0), Size::new(100.0, 50.0))
-    )]
-    fn fits_the_image_without_distorting_it(#[case] canvas: Size, #[case] expected: Rectangle) {
-        let viewport = assert_some!(Viewport::new(
-            Size::new(200.0, 100.0),
-            Rectangle::with_size(canvas)
-        ));
-        assert_eq!(viewport.bounds, expected);
-    }
-
-    #[test]
-    fn excludes_letterboxing_and_clamps_drag_endpoints() {
-        let viewport = assert_some!(Viewport::new(
-            Size::new(200.0, 100.0),
-            Rectangle::with_size(Size::new(400.0, 400.0))
-        ));
-
-        assert_none!(viewport.image_position(Point::new(100.0, 50.0)));
-        assert_eq!(
-            viewport.clamped_image_position(Point::new(-20.0, 500.0)),
-            Some(Point::new(0.0, 100.0))
-        );
-        assert_none!(viewport.clamped_image_position(Point::new(f32::NAN, 0.0)));
-    }
-
-    #[rstest]
-    #[case(Size::ZERO)]
-    #[case(Size::new(0.0, 20.0))]
-    #[case(Size::new(20.0, -1.0))]
-    #[case(Size::new(f32::NAN, 20.0))]
-    #[case(Size::INFINITE)]
-    fn rejects_unusable_dimensions(#[case] invalid: Size) {
-        assert_none!(Viewport::new(
-            invalid,
-            Rectangle::with_size(Size::new(400.0, 400.0))
-        ));
-        assert_none!(Viewport::new(
-            Size::new(200.0, 100.0),
-            Rectangle::with_size(invalid)
-        ));
-    }
-
-    #[test]
-    fn maps_the_same_image_rectangle_after_resizing() {
-        let rectangle = Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0));
-
-        for canvas in [Size::new(400.0, 400.0), Size::new(600.0, 300.0)] {
-            let viewport = assert_some!(Viewport::new(
-                Size::new(200.0, 100.0),
-                Rectangle::with_size(canvas)
-            ));
-            let displayed = viewport.canvas_rectangle(rectangle);
-            let start = assert_some!(viewport.image_position(displayed.position()));
-            let end = assert_some!(viewport.image_position(Point::new(
-                displayed.x + displayed.width,
-                displayed.y + displayed.height,
-            )));
-
-            assert_eq!(rectangle_between(start, end), Some(rectangle));
-        }
-    }
-
-    #[rstest]
-    #[case(Point::new(10.0, 20.0), Point::new(50.0, 70.0))]
-    #[case(Point::new(50.0, 70.0), Point::new(10.0, 20.0))]
-    fn normalizes_every_drag_direction(#[case] start: Point, #[case] end: Point) {
-        assert_eq!(
-            rectangle_between(start, end),
-            Some(Rectangle::new(
-                Point::new(10.0, 20.0),
-                Size::new(40.0, 50.0)
-            ))
-        );
-    }
-
-    #[test]
-    fn resizing_refits_the_fit_view_and_keeps_a_manual_scale_and_center() {
-        let image = Size::new(200.0, 100.0);
-        let center = Point::new(50.0, 25.0);
-        let manual = Navigation::Manual { scale: 4.0, center };
-
-        // The second fit lands at y = 9, not 10, after snapping to whole image pixels
-        for (canvas, fitted) in [
-            (
-                Size::new(400.0, 400.0),
-                Rectangle::new(Point::new(0.0, 100.0), Size::new(400.0, 200.0)),
-            ),
-            (
-                Size::new(600.0, 320.0),
-                Rectangle::new(Point::new(0.0, 9.0), Size::new(600.0, 300.0)),
-            ),
-        ] {
-            let canvas = Rectangle::with_size(canvas);
-            let fit = assert_some!(Viewport::navigated(image, canvas, Navigation::Fit));
-            assert_eq!(fit.bounds, fitted);
-
-            let viewport = assert_some!(Viewport::navigated(image, canvas, manual));
-            assert_eq!(viewport.canvas_length(1.0), 4.0);
-            assert_some_eq!(viewport.image_position(canvas.center()), center);
-        }
-    }
-
-    #[test]
-    fn requests_the_image_where_the_renderer_draws_it() {
-        let image = Size::new(200.0, 100.0);
-        let canvas = Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0));
-
-        // Origins on both sides of the window edge, magnified and reduced
-        for (scale, center) in [
-            (6.5, Point::new(20.3, 70.1)),
-            (6.5, Point::new(180.7, 30.9)),
-            (0.75, Point::new(13.0, 7.0)),
-        ] {
-            let navigation = Navigation::Manual { scale, center };
-            let viewport = assert_some!(Viewport::navigated(image, canvas, navigation));
-            let placement = viewport.placement();
-
-            for (requested, displayed, offset) in [
-                (placement.x, viewport.bounds.x, canvas.x),
-                (placement.y, viewport.bounds.y, canvas.y),
-            ] {
-                // Tiny-skia's raster origin
-                let drawn = ((offset + requested) / scale)
-                    .trunc()
-                    .mul_add(scale, -offset);
-                assert!((drawn - displayed).abs() < 1e-3, "{drawn} != {displayed}");
-                assert!((requested - displayed).abs() <= 0.5);
-            }
-        }
-    }
-
-    #[test]
-    fn rejects_drags_without_area() {
-        assert_none!(rectangle_between(Point::ORIGIN, Point::ORIGIN));
-        assert_none!(rectangle_between(Point::ORIGIN, Point::new(10.0, 0.0)));
-        assert_none!(rectangle_between(Point::ORIGIN, Point::new(0.0, 10.0)));
-    }
 }

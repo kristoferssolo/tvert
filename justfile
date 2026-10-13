@@ -60,8 +60,45 @@ run *ARGS:
 
 # Run an optimized build of Tvert
 [group("run")]
+[positional-arguments]
 run-release *ARGS:
-    cargo run --release --package tvert-cli -- {{ ARGS }}
+    cargo run --release --package tvert-cli -- "$@"
+
+# Open screen capture in the editor; pass --output NAME to restrict it
+[group("manual testing")]
+[positional-arguments]
+preview-screen *ARGS:
+    @just run-release preview screen "$@"
+
+# Select a region and open the editor; use --output NAME on multiple screens
+[group("manual testing")]
+[positional-arguments]
+preview-region *ARGS:
+    @just run-release preview region "$@"
+
+# Save screen capture using save.path or an explicit --path FILE
+[group("manual testing")]
+[positional-arguments]
+save-screen *ARGS:
+    @just run-release save screen "$@"
+
+# Select and save a region; use --output NAME on multiple screens
+[group("manual testing")]
+[positional-arguments]
+save-region *ARGS:
+    @just run-release save region "$@"
+
+# Check native overlay configuration without displaying the selector
+[group("manual testing")]
+[positional-arguments]
+probe-overlay *ARGS:
+    @just run-release debug overlay "$@"
+
+# Validate configuration without connecting to Wayland
+[group("manual testing")]
+[positional-arguments]
+check-config *ARGS:
+    @just run-release config check "$@"
 
 # Build the entire workspace
 [group("build")]

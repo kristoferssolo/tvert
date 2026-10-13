@@ -104,7 +104,9 @@ mod tests {
     use std::time::Instant;
 
     use super::*;
-    use crate::{annotation::AnnotationDraft, edit::Edit, style::RED, tool::Tool};
+    use crate::{
+        annotation::AnnotationDraft, edit::Edit, style::RED, tool::Tool, viewport::Navigation,
+    };
     use claims::{assert_none, assert_ok, assert_some, assert_some_eq};
     use iced::{
         Event, Rectangle, Size, event,
@@ -141,6 +143,7 @@ mod tests {
     fn canvas<'a>(edits: &'a [Edit], cache: &'a Cache) -> AnnotationCanvas<'a> {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
+            navigation: Navigation::Fit,
             tool: Tool::Rectangle,
             mode: Mode::Select(None),
             size: 4,

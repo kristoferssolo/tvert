@@ -8,6 +8,7 @@ mod export;
 mod figure;
 mod guide;
 mod hit;
+mod image_canvas;
 mod mode;
 mod pixel_effect;
 mod render;

@@ -1,9 +1,15 @@
 mod input;
+mod navigate;
 mod select;
 
 use crate::{
-    annotation::AnnotationDraft, annotation_canvas::select::MoveGesture, edit::Edit,
-    editor::Message, mode::Mode, tool::Tool, viewport::Viewport,
+    annotation::AnnotationDraft,
+    annotation_canvas::{navigate::PanGesture, select::MoveGesture},
+    edit::Edit,
+    editor::Message,
+    mode::Mode,
+    tool::Tool,
+    viewport::{Navigation, Viewport},
 };
 use iced::{
     Color, Rectangle, Renderer, Size, Theme,
@@ -11,19 +17,25 @@ use iced::{
     widget::canvas::{Cache, Program},
 };
 
-/// A primary-button gesture in progress on the canvas
+/// A pointer gesture in progress on the canvas.
+///
+/// Only one runs at a time, so navigation never changes the mapping
+/// beneath a draft or move.
 #[derive(Debug)]
 pub enum Gesture {
     /// Drawing a new edit with the appearance selected when it began
     Draw(AnnotationDraft),
     /// Pressing or dragging an existing edit
     Move(MoveGesture),
+    /// Dragging the view with the middle button
+    Pan(PanGesture),
 }
 
 type GestureState = Option<Gesture>;
 
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
+    pub navigation: Navigation,
     pub tool: Tool,
     pub mode: Mode,
     pub size: u16,
@@ -53,7 +65,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         bounds: Rectangle,
         _cursor: Cursor,
     ) -> Vec<iced::widget::canvas::Geometry<Renderer>> {
-        let Some(viewport) = Viewport::new(self.image_size, bounds) else {
+        let Some(viewport) = self.viewport(bounds) else {
             return Vec::new();
         };
 
@@ -77,8 +89,13 @@ impl Program<Message> for AnnotationCanvas<'_> {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> mouse::Interaction {
-        let over_image = Viewport::new(self.image_size, bounds)
-            .and_then(|viewport| viewport.image_position(cursor.position_from(bounds.position())?))
+        if matches!(state, Some(Gesture::Pan(_))) {
+            return mouse::Interaction::Grabbing;
+        }
+        let over_image = self
+            .viewport(bounds)
+            .zip(cursor.position_in(bounds))
+            .and_then(|(viewport, point)| viewport.image_position(point))
             .is_some();
 
         if self.mode == Mode::Draw && (over_image || state.is_some()) {
@@ -86,5 +103,11 @@ impl Program<Message> for AnnotationCanvas<'_> {
         } else {
             mouse::Interaction::None
         }
+    }
+}
+
+impl AnnotationCanvas<'_> {
+    fn viewport(&self, bounds: Rectangle) -> Option<Viewport> {
+        Viewport::navigated(self.image_size, bounds, self.navigation)
     }
 }

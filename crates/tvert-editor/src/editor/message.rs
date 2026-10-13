@@ -1,4 +1,7 @@
-use crate::{annotation::AnnotationDraft, export::ExportAction, size::SizeKind, tool::Tool};
+use crate::{
+    annotation::AnnotationDraft, export::ExportAction, size::SizeKind, tool::Tool,
+    viewport::Navigation,
+};
 use iced::{Color, Vector};
 use iced_color_triangle::Selection;
 
@@ -10,6 +13,7 @@ pub enum Message {
     SelectEdit(Option<usize>),
     DeleteSelected,
     Move(MoveMessage),
+    Navigate(Navigation),
     Size(SizeMessage),
     ToggleColorPalette,
     CloseColorPalette,

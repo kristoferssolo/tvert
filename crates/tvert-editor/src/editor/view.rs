@@ -1,13 +1,14 @@
 use crate::{
     annotation_canvas::AnnotationCanvas,
     editor::{Editor, Message},
+    image_canvas::ImageCanvas,
     toolbar,
 };
 use iced::{
     Color,
-    widget::{canvas, column, container, image, opaque, space, stack, text},
+    widget::{canvas, column, container, opaque, space, stack, text},
 };
-use iced::{ContentFit, Element, Fill};
+use iced::{Element, Fill};
 use std::error::Error as StdError;
 
 impl Editor {
@@ -38,13 +39,17 @@ impl Editor {
     }
 
     fn image_preview(&self) -> Element<'_, Message> {
-        let picture = image(&self.preview)
-            .width(Fill)
-            .height(Fill)
-            .content_fit(ContentFit::Contain);
+        let picture = canvas(ImageCanvas {
+            preview: &self.preview,
+            image_size: self.image_size,
+            navigation: self.navigation,
+        })
+        .width(Fill)
+        .height(Fill);
 
         let annotations = canvas(AnnotationCanvas {
             image_size: self.image_size,
+            navigation: self.navigation,
             tool: self.tool,
             mode: self.mode,
             size: self.selected_size(),
@@ -55,7 +60,12 @@ impl Editor {
         .width(Fill)
         .height(Fill);
 
-        let mut preview = stack![picture, annotations].width(Fill).height(Fill);
+        // Images ignore geometry clip bounds, and a stack clips only the
+        // layers above its first, so an empty base keeps both canvases clipped
+        let mut preview = stack![space().width(Fill).height(Fill), picture, annotations]
+            .width(Fill)
+            .height(Fill)
+            .clip(true);
 
         // Dismissing the palette must not start a drag on the image
         if self.color_palette_open {

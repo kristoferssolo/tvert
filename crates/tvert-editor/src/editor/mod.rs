@@ -19,6 +19,7 @@ use crate::{
     render::render_image,
     size::Sizes,
     tool::Tool,
+    viewport::Navigation,
 };
 use iced::{
     Size, Task,
@@ -35,6 +36,7 @@ pub struct Editor {
     original: Handle,
     preview: Handle,
     image_size: Size,
+    navigation: Navigation,
     tool: Tool,
     mode: Mode,
     initial_settings: Settings,
@@ -63,6 +65,7 @@ impl Editor {
             original: preview.clone(),
             preview,
             image_size,
+            navigation: Navigation::Fit,
             tool: settings.tool,
             mode: Mode::Draw,
             initial_settings: settings,
@@ -97,6 +100,10 @@ impl Editor {
             Message::SelectEdit(index) => self.select_edit(index),
             Message::DeleteSelected => self.delete_selected(),
             Message::Move(message) => self.update_move(message),
+            Message::Navigate(navigation) => {
+                self.navigation = navigation;
+                return Task::none();
+            }
             Message::SelectStrokeColor(stroke_color) => {
                 self.select_stroke_color(stroke_color);
                 return Task::none();
@@ -151,6 +158,55 @@ impl Editor {
                 self.error = Some(error);
                 Task::none()
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ThemePreference, annotation::AnnotationDraft, style::RED};
+    use claims::assert_ok;
+    use iced::Point;
+
+    #[test]
+    fn navigation_leaves_the_committed_image_exports_and_history_alone() {
+        let mut editor = Editor::new(
+            Handle::from_rgba(32, 16, [20, 40, 60, 255].repeat(512)),
+            Size::new(32.0, 16.0),
+            Settings {
+                theme: ThemePreference::Dark,
+                tool: Tool::Arrow,
+                stroke_color: RED,
+                stroke_width: 4,
+                pixelation_block_size: 4,
+                blur_sigma: 8,
+            },
+            Rc::new(|_, _| Ok(())),
+        );
+        let _ = editor.update(Message::AddEdit(AnnotationDraft {
+            tool: Tool::Line,
+            size: 2,
+            stroke_color: RED,
+            points: vec![Point::new(2.0, 8.0), Point::new(30.0, 8.0)],
+        }));
+        let preview = editor.preview.id();
+        let exported = assert_ok!(editor.render_image());
+
+        for navigation in [
+            Navigation::Manual {
+                scale: 8.0,
+                center: Point::new(4.0, 12.0),
+            },
+            Navigation::Fit,
+        ] {
+            let _ = editor.update(Message::Navigate(navigation));
+            let image = assert_ok!(editor.render_image());
+
+            assert_eq!(editor.preview.id(), preview);
+            assert_eq!(image.size(), exported.size());
+            assert_eq!(image.rgba(), exported.rgba());
+            assert_eq!(editor.undo_stack.len(), 1);
         }
     }
 }

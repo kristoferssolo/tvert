@@ -15,6 +15,7 @@ use crate::{
     },
     tool::Tool,
     toolbar::button::{icon_button, separator},
+    viewport::Navigation,
 };
 use iced::widget::container;
 use iced::{Element, Fill, Font, alignment::Vertical, widget::Row};
@@ -66,6 +67,12 @@ pub fn view(
             Icon::Redo2,
             "Redo (Ctrl+Y / Ctrl+Shift+Z)".into(),
             can_redo.then_some(Message::Redo),
+            false,
+        ))
+        .push(icon_button(
+            Icon::Maximize,
+            "Fit image (scroll to zoom, middle-drag to pan)".into(),
+            Some(Message::Navigate(Navigation::Fit)),
             false,
         ))
         .push(separator())

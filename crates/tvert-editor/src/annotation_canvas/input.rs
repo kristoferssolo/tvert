@@ -1,6 +1,9 @@
 use crate::{
     annotation::AnnotationDraft,
-    annotation_canvas::{AnnotationCanvas, Gesture, GestureState},
+    annotation_canvas::{
+        AnnotationCanvas, Gesture, GestureState,
+        navigate::{self, PanGesture},
+    },
     editor::{Message, MoveMessage, shortcuts},
     mode::Mode,
     viewport::Viewport,
@@ -25,38 +28,40 @@ impl AnnotationCanvas<'_> {
             return Some(action);
         }
 
-        let viewport = Viewport::new(self.image_size, bounds)?;
+        let viewport = self.viewport(bounds)?;
         let position = cursor.position_from(bounds.position());
 
         match event {
-            Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => match self.mode {
-                Mode::Draw => {
-                    let start = viewport.image_position(position?)?;
-                    *state = Some(Gesture::Draw(self.new_draft(start)));
-                    Some(self.redraw())
+            Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
+                navigate::zoom(state, viewport, cursor.position_in(bounds)?, *delta)
+            }
+            Event::Mouse(MouseEvent::ButtonPressed(Button::Middle)) => {
+                PanGesture::begin(state, viewport, cursor.position_in(bounds)?)
+            }
+            Event::Mouse(MouseEvent::ButtonPressed(Button::Left))
+                if !matches!(state, Some(Gesture::Pan(_))) =>
+            {
+                let point = cursor.position_in(bounds)?;
+                match self.mode {
+                    Mode::Draw => {
+                        let start = viewport.image_position(point)?;
+                        *state = Some(Gesture::Draw(self.new_draft(start)));
+                        Some(self.redraw())
+                    }
+                    Mode::Select(_) => Some(self.select_at(state, viewport, point)),
                 }
-                Mode::Select(_) => {
-                    Some(self.select_at(state, viewport, cursor.position_in(bounds)?))
-                }
-            },
+            }
             Event::Mouse(MouseEvent::CursorMoved { position }) => {
                 let local = Cursor::Available(*position).position_from(bounds.position())?;
                 match state.as_mut()? {
                     Gesture::Draw(draft) => self.record_motion(draft, local, viewport),
                     Gesture::Move(gesture) => gesture.drag(local, viewport),
+                    Gesture::Pan(gesture) => gesture.drag(local),
                 }
             }
-            Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => match state.take()? {
-                Gesture::Draw(mut draft) => {
-                    if let Some(point) =
-                        position.and_then(|point| viewport.clamped_image_position(point))
-                    {
-                        draft.record(point);
-                    }
-                    Some(self.finish_draft(draft))
-                }
-                Gesture::Move(gesture) => Some(gesture.release(position, viewport)),
-            },
+            Event::Mouse(MouseEvent::ButtonReleased(button)) => {
+                self.release(state, *button, position, viewport)
+            }
             Event::Window(WindowEvent::RedrawRequested(_)) => {
                 let Some(Gesture::Move(gesture)) = state else {
                     return None;
@@ -104,7 +109,7 @@ impl AnnotationCanvas<'_> {
         let gesture = state.take()?;
         self.cache.clear();
         let action = match gesture {
-            Gesture::Draw(_) => Action::request_redraw(),
+            Gesture::Draw(_) | Gesture::Pan(_) => Action::request_redraw(),
             Gesture::Move(_) => Action::publish(Message::Move(MoveMessage::Cancel)),
         };
         Some(if captured {
@@ -123,18 +128,41 @@ impl AnnotationCanvas<'_> {
         draft.record(viewport.clamped_image_position(point)?);
         Some(self.redraw())
     }
+
+    fn release(
+        &self,
+        state: &mut GestureState,
+        button: Button,
+        position: Option<Point>,
+        viewport: Viewport,
+    ) -> Option<Action<Message>> {
+        match (state.take()?, button) {
+            (Gesture::Draw(mut draft), Button::Left) => {
+                if let Some(point) =
+                    position.and_then(|point| viewport.clamped_image_position(point))
+                {
+                    draft.record(point);
+                }
+                Some(self.finish_draft(draft))
+            }
+            (Gesture::Move(gesture), Button::Left) => Some(gesture.release(position, viewport)),
+            (Gesture::Pan(_), Button::Middle) => Some(Action::capture()),
+            (gesture, _) => {
+                *state = Some(gesture);
+                None
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::style::RED;
-    use crate::tool::Tool;
+    use crate::{style::RED, tool::Tool, viewport::Navigation};
     use claims::{assert_none, assert_some, assert_some_eq};
-    use iced::event;
-    use iced::keyboard::{self, Modifiers};
     use iced::{
-        Color, Size,
+        Color, Size, event,
+        keyboard::{self, Modifiers},
         widget::canvas::{Cache, Program},
     };
     use rstest::rstest;
@@ -150,6 +178,7 @@ mod tests {
     fn canvas(cache: &Cache, tool: Tool) -> AnnotationCanvas<'_> {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
+            navigation: Navigation::Fit,
             tool,
             mode: Mode::Draw,
             size: STROKE_WIDTH,

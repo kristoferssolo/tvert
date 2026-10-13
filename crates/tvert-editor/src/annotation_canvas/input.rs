@@ -189,6 +189,12 @@ mod tests {
         }
     }
 
+    fn capture_status(draft: &mut GestureState, event: &Event) -> event::Status {
+        canvas(&Cache::new(), Tool::Rectangle)
+            .update(draft, event, BOUNDS, Cursor::Unavailable)
+            .map_or(event::Status::Ignored, |action| action.into_inner().2)
+    }
+
     fn dispatch_canvas(
         canvas: &AnnotationCanvas<'_>,
         draft: &mut GestureState,
@@ -199,16 +205,10 @@ mod tests {
             .update(
                 draft,
                 event,
-                Rectangle::new(Point::new(20.0, 40.0), Size::new(400.0, 400.0)),
+                BOUNDS,
                 position.map_or(Cursor::Unavailable, Cursor::Available),
             )
             .and_then(|action| action.into_inner().0)
-    }
-
-    fn capture_status(draft: &mut GestureState, event: &Event) -> event::Status {
-        canvas(&Cache::new(), Tool::Rectangle)
-            .update(draft, event, BOUNDS, Cursor::Unavailable)
-            .map_or(event::Status::Ignored, |action| action.into_inner().2)
     }
 
     fn dispatch(
@@ -216,16 +216,8 @@ mod tests {
         event: &Event,
         position: Option<Point>,
     ) -> Option<Message> {
-        dispatch_with_tool(draft, event, position, Tool::Rectangle)
-    }
-
-    fn dispatch_with_tool(
-        draft: &mut GestureState,
-        event: &Event,
-        position: Option<Point>,
-        tool: Tool,
-    ) -> Option<Message> {
-        dispatch_canvas(&canvas(&Cache::new(), tool), draft, event, position)
+        let cache = Cache::new();
+        dispatch_canvas(&canvas(&cache, Tool::Rectangle), draft, event, position)
     }
 
     fn begin(draft: &mut GestureState) {
@@ -391,19 +383,11 @@ mod tests {
 
     #[test]
     fn commits_line_endpoints_without_normalizing_them() {
+        let cache = Cache::new();
+        let canvas = canvas(&cache, Tool::Line);
         let mut draft = None;
-        assert_none!(dispatch_with_tool(
-            &mut draft,
-            &PRESS,
-            Some(START),
-            Tool::Line
-        ));
-        let message = dispatch_with_tool(
-            &mut draft,
-            &RELEASE,
-            Some(Point::new(80.0, 170.0)),
-            Tool::Line,
-        );
+        assert_none!(dispatch_canvas(&canvas, &mut draft, &PRESS, Some(START)));
+        let message = dispatch_canvas(&canvas, &mut draft, &RELEASE, Some(Point::new(80.0, 170.0)));
         let points = assert_some!(message.and_then(|message| match message {
             Message::AddEdit(AnnotationDraft {
                 tool: Tool::Line,
@@ -419,23 +403,20 @@ mod tests {
 
     #[test]
     fn pencil_retains_motion_samples_and_a_return_to_its_start() {
+        let cache = Cache::new();
+        let canvas = canvas(&cache, Tool::Pencil);
         let mut draft = None;
         let middle = Point::new(320.0, 190.0);
-        assert_none!(dispatch_with_tool(
-            &mut draft,
-            &PRESS,
-            Some(START),
-            Tool::Pencil
-        ));
+        assert_none!(dispatch_canvas(&canvas, &mut draft, &PRESS, Some(START)));
         for position in [middle, middle] {
-            assert_none!(dispatch_with_tool(
+            assert_none!(dispatch_canvas(
+                &canvas,
                 &mut draft,
                 &Event::Mouse(MouseEvent::CursorMoved { position }),
-                Some(position),
-                Tool::Pencil
+                Some(position)
             ));
         }
-        let message = dispatch_with_tool(&mut draft, &RELEASE, Some(START), Tool::Pencil);
+        let message = dispatch_canvas(&canvas, &mut draft, &RELEASE, Some(START));
         assert_some_eq!(
             message,
             expected_annotation(
@@ -452,19 +433,16 @@ mod tests {
 
     #[test]
     fn records_each_motion_position_instead_of_the_cursor_snapshot() {
+        let cache = Cache::new();
+        let canvas = canvas(&cache, Tool::Pencil);
         let mut draft = None;
-        assert_none!(dispatch_with_tool(
-            &mut draft,
-            &PRESS,
-            Some(START),
-            Tool::Pencil
-        ));
+        assert_none!(dispatch_canvas(&canvas, &mut draft, &PRESS, Some(START)));
         for position in [Point::new(220.0, 190.0), END] {
-            assert_none!(dispatch_with_tool(
+            assert_none!(dispatch_canvas(
+                &canvas,
                 &mut draft,
                 &Event::Mouse(MouseEvent::CursorMoved { position }),
-                Some(END),
-                Tool::Pencil
+                Some(END)
             ));
         }
         let Some(Gesture::Draw(draft)) = draft else {

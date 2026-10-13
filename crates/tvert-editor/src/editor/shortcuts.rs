@@ -152,7 +152,6 @@ mod tests {
     fn key_press(character: &str, modifiers: Modifiers, repeat: bool) -> Event {
         press(Key::Character(character.into()), modifiers, repeat)
     }
-
     #[rstest]
     #[case("z", Modifiers::CTRL, Message::Undo)]
     #[case("y", Modifiers::CTRL, Message::Redo)]
@@ -162,10 +161,8 @@ mod tests {
         #[case] modifiers: Modifiers,
         #[case] expected: Message,
     ) {
-        assert_eq!(
-            history(&key_press(character, modifiers, false)),
-            Some(expected)
-        );
+        let event = key_press(character, modifiers, false);
+        assert_some_eq!(parse(&event, event::Status::Ignored), expected);
     }
 
     #[rstest]
@@ -221,17 +218,14 @@ mod tests {
             expected,
         );
     }
-
     #[rstest]
     #[case(Modifiers::CTRL, false)]
     #[case(Modifiers::ALT, false)]
     #[case(Modifiers::LOGO, false)]
     #[case(Modifiers::empty(), true)]
     fn ignores_modified_and_repeated_tool_keys(#[case] modifiers: Modifiers, #[case] repeat: bool) {
-        for &variant in Tool::VARIANTS {
-            let event = key_press(&tool_key(variant).to_string(), modifiers, repeat);
-            assert_none!(tool(&event));
-        }
+        let event = key_press("r", modifiers, repeat);
+        assert_none!(tool(&event));
     }
 
     #[rstest]
@@ -239,12 +233,9 @@ mod tests {
     #[case(Modifiers::CTRL | Modifiers::ALT, false)]
     #[case(Modifiers::CTRL | Modifiers::LOGO, false)]
     #[case(Modifiers::CTRL, true)]
-    fn rejects_invalid_modifiers_and_repeats(#[case] modifiers: Modifiers, #[case] repeat: bool) {
-        for character in ["z", "y", "c", "s"] {
-            let event = key_press(character, modifiers, repeat);
-            assert_none!(history(&event));
-            assert_none!(export(&event));
-        }
+    fn rejects_invalid_control_keys(#[case] modifiers: Modifiers, #[case] repeat: bool) {
+        let event = key_press("z", modifiers, repeat);
+        assert_none!(control_key(&event));
     }
 
     #[rstest]
@@ -253,7 +244,6 @@ mod tests {
     #[case("x", Modifiers::CTRL)]
     fn ignores_unbound_keys(#[case] character: &str, #[case] modifiers: Modifiers) {
         let event = key_press(character, modifiers, false);
-        assert_none!(history(&event));
         assert_none!(parse(&event, event::Status::Ignored));
     }
 

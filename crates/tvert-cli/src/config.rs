@@ -255,38 +255,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn partial_save_configuration_keeps_editor_defaults() {
-        let defaults = assert_ok!(parse("test.toml", ""));
-        let config = assert_ok!(parse("test.toml", "[save]\npath = 'shots/%Y.png'"));
-
-        assert_eq!(
-            config,
-            AppConfig {
-                save: SaveSettings {
-                    path: assert_ok!(PathPattern::new("shots/%Y.png", None)),
-                },
-                ..defaults
-            }
-        );
-    }
-
-    #[test]
-    fn partial_capture_configuration_keeps_other_defaults() {
-        let defaults = assert_ok!(parse("test.toml", ""));
-        let config = assert_ok!(parse("test.toml", "[capture]\noutput = 'DP-1'"));
-
-        assert_eq!(
-            config,
-            AppConfig {
-                capture: CaptureSettings {
-                    output: OutputSelection::Named("DP-1".to_owned()),
-                },
-                ..defaults
-            }
-        );
-    }
-
     #[rstest]
     #[case("[editor]\ntool = 1")]
     #[case("[editor]\nstroke_color = 12")]
@@ -306,25 +274,6 @@ mod tests {
 
         assert_ok_eq!(load_path(&path, false), defaults);
         let _ = assert_err!(load_path(&path, true));
-    }
-
-    #[test]
-    fn user_file_overrides_embedded_defaults() {
-        let directory = assert_ok!(tempdir());
-        let path = directory.path().join("config.toml");
-        assert_ok!(fs::write(&path, "[editor]\nblur_sigma = 11"));
-        let defaults = assert_ok!(parse("test.toml", ""));
-
-        assert_ok_eq!(
-            load(Some(&path)),
-            AppConfig {
-                editor: Settings {
-                    blur_sigma: 11,
-                    ..defaults.editor
-                },
-                ..defaults
-            }
-        );
     }
 
     #[rstest]
@@ -392,5 +341,39 @@ mod tests {
         );
         assert!(message.contains("expected one of"));
         assert!(!message.contains("\nin `editor.tool`"));
+    }
+
+    #[test]
+    fn user_file_overrides_embedded_defaults() {
+        let directory = assert_ok!(tempdir());
+        let path = directory.path().join("config.toml");
+        assert_ok!(fs::write(
+            &path,
+            r#"
+            [capture]
+            output = "DP-1"
+            [save]
+            path = "shots/%Y.png"
+            [editor]
+            blur_sigma = 11
+            "#,
+        ));
+        let defaults = assert_ok!(parse("test.toml", ""));
+
+        assert_ok_eq!(
+            load(Some(&path)),
+            AppConfig {
+                capture: CaptureSettings {
+                    output: OutputSelection::Named("DP-1".to_owned()),
+                },
+                editor: Settings {
+                    blur_sigma: 11,
+                    ..defaults.editor
+                },
+                save: SaveSettings {
+                    path: assert_ok!(PathPattern::new("shots/%Y.png", None)),
+                },
+            }
+        );
     }
 }

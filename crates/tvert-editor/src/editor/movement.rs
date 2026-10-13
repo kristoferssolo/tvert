@@ -104,10 +104,11 @@ impl Editor {
 mod tests {
     use super::*;
     use crate::{
-        Settings, ThemePreference, Tool, annotation::AnnotationDraft, editor::Message, style::RED,
+        Settings, ThemePreference, Tool, annotation::AnnotationDraft, editor::Message,
+        render::render_edits, style::RED, viewport::Viewport,
     };
-    use claims::assert_ok;
-    use iced::{Color, Point, Size, widget::image::Handle};
+    use claims::{assert_ok, assert_some};
+    use iced::{Color, Point, Rectangle, Size, widget::image::Handle};
     use rstest::rstest;
     use std::rc::Rc;
 
@@ -129,13 +130,19 @@ mod tests {
         }
     }
 
-    /// A 32×16 image of alternating red and black columns
-    fn striped(drafts: impl IntoIterator<Item = AnnotationDraft>) -> Editor {
-        let stripes = (0..512)
-            .flat_map(|index| [if index % 2 == 0 { 255 } else { 0 }, 0, 0, 255])
+    fn editor(drafts: impl IntoIterator<Item = AnnotationDraft>) -> Editor {
+        let pixels = (0..512)
+            .flat_map(|index| {
+                [
+                    assert_ok!(u8::try_from(index % 32)),
+                    assert_ok!(u8::try_from(index / 32)),
+                    0,
+                    255,
+                ]
+            })
             .collect::<Vec<u8>>();
         let mut editor = Editor::new(
-            Handle::from_rgba(32, 16, stripes),
+            Handle::from_rgba(32, 16, pixels),
             Size::new(32.0, 16.0),
             SETTINGS,
             Rc::new(|_, _| Ok(())),
@@ -162,9 +169,44 @@ mod tests {
         Message::Move(MoveMessage::Finish(Vector::new(x, y)))
     }
 
-    /// Exact retained geometry and appearance of every edit
-    fn snapshot(editor: &Editor) -> String {
-        format!("{:?}", editor.edits)
+    fn assert_edits(editor: &Editor, drafts: &[AnnotationDraft]) {
+        // Unit dimensions avoid rounding coordinates through a scale conversion.
+        let unit = Size::new(1.0, 1.0);
+        let viewport = assert_some!(Viewport::new(unit, Rectangle::with_size(unit)));
+        let expected = drafts
+            .iter()
+            .cloned()
+            .map(|draft| assert_ok!(Edit::try_from(draft)))
+            .collect::<Vec<_>>();
+        assert_eq!(editor.edits.len(), expected.len());
+
+        for (actual, expected) in editor.edits.iter().zip(&expected) {
+            match (actual, expected) {
+                (Edit::Annotation(actual), Edit::Annotation(expected)) => {
+                    let actual_path = actual.figure.path(viewport);
+                    let expected_path = expected.figure.path(viewport);
+                    assert_eq!(
+                        actual_path.raw().iter().collect::<Vec<_>>(),
+                        expected_path.raw().iter().collect::<Vec<_>>()
+                    );
+                    assert_eq!(actual.figure.filled(), expected.figure.filled());
+                    assert_eq!(actual.stroke_width, expected.stroke_width);
+                    assert_eq!(actual.stroke_color, expected.stroke_color);
+                }
+                (Edit::PixelEffect(actual), Edit::PixelEffect(expected)) => {
+                    assert_eq!(
+                        actual.region().canvas_bounds(viewport),
+                        expected.region().canvas_bounds(viewport)
+                    );
+                }
+                _ => panic!("retained edit kind changed"),
+            }
+        }
+
+        assert_eq!(
+            pixels(editor),
+            assert_ok!(render_edits(&editor.original, &expected)).into_rgba()
+        );
     }
 
     fn pixels(editor: &Editor) -> Vec<u8> {
@@ -179,41 +221,39 @@ mod tests {
             Point::new(13.3, 4.4),
         ];
         let offset = Vector::new(0.7, -0.3);
-        let mut editor = striped([draft(Tool::Pencil, &points)]);
-        let start = snapshot(&editor);
+        let start = draft(Tool::Pencil, &points);
+        let mut editor = editor([start.clone()]);
 
         send(&mut editor, select(0));
         send(
             &mut editor,
             [drag(0.1, 0.2), drag(-3.3, 1.7), finish(offset.x, offset.y)],
         );
-        let moved = snapshot(&editor);
+        let moved = draft(Tool::Pencil, &points.map(|point| point + offset));
 
-        let expected = striped([draft(Tool::Pencil, &points.map(|point| point + offset))]);
-        assert_eq!(moved, snapshot(&expected));
-        assert_eq!(pixels(&editor), pixels(&expected));
+        assert_edits(&editor, std::slice::from_ref(&moved));
         assert_eq!(editor.mode, Mode::Select(Some(0)));
         assert_eq!(editor.undo_stack.len(), 2);
 
         send(&mut editor, [Message::Undo]);
-        assert_eq!(snapshot(&editor), start);
+        assert_edits(&editor, &[start]);
 
         send(&mut editor, [Message::Redo]);
-        assert_eq!(snapshot(&editor), moved);
+        assert_edits(&editor, &[moved]);
         assert!(editor.redo_stack.is_empty());
     }
 
     #[test]
     fn a_move_back_to_its_start_records_nothing_and_keeps_redo() {
         let points = [Point::new(2.0, 2.0), Point::new(20.0, 10.0)];
-        let mut editor = striped([draft(Tool::Line, &points), draft(Tool::Rectangle, &points)]);
+        let start = draft(Tool::Line, &points);
+        let mut editor = editor([start.clone(), draft(Tool::Rectangle, &points)]);
         send(&mut editor, [Message::Undo]);
-        let start = snapshot(&editor);
 
         send(&mut editor, select(0));
         send(&mut editor, [drag(6.0, 3.0), finish(0.0, 0.0)]);
 
-        assert_eq!(snapshot(&editor), start);
+        assert_edits(&editor, &[start]);
         assert_eq!(editor.mode, Mode::Select(Some(0)));
         assert_eq!(editor.undo_stack.len(), 1);
         assert_eq!(editor.redo_stack.len(), 1);
@@ -223,17 +263,16 @@ mod tests {
     #[case::cancel(Message::Move(MoveMessage::Cancel), Mode::Select(Some(0)))]
     #[case::tool_switch(Message::SelectTool(Tool::Line), Mode::Draw)]
     fn cancelling_restores_the_start_without_history(#[case] cancel: Message, #[case] mode: Mode) {
-        let region = [Point::ORIGIN, Point::new(8.0, 8.0)];
-        let mut editor = striped([draft(Tool::Pixelate, &region)]);
-        let (start, original) = (snapshot(&editor), pixels(&editor));
+        let start = draft(Tool::Pixelate, &[Point::ORIGIN, Point::new(8.0, 8.0)]);
+        let mut editor = editor([start.clone()]);
+        let original = pixels(&editor);
 
         send(&mut editor, select(0));
         send(&mut editor, [drag(8.0, 4.0)]);
         assert_ne!(pixels(&editor), original);
 
         send(&mut editor, [cancel]);
-        assert_eq!(snapshot(&editor), start);
-        assert_eq!(pixels(&editor), original);
+        assert_edits(&editor, &[start]);
         assert_eq!(editor.mode, mode);
         assert_eq!(editor.undo_stack.len(), 1);
     }
@@ -241,25 +280,25 @@ mod tests {
     #[test]
     fn a_moved_pixel_effect_rerenders_in_order_within_the_image() {
         let line = draft(Tool::Line, &[Point::new(0.0, 8.0), Point::new(32.0, 8.0)]);
-        let mut editor = striped([
+        let mut editor = editor([
             draft(Tool::Pixelate, &[Point::ORIGIN, Point::new(8.0, 8.0)]),
             line.clone(),
         ]);
-        let expected = striped([
+        let expected = [
             draft(
                 Tool::Pixelate,
                 &[Point::new(24.0, 4.0), Point::new(32.0, 12.0)],
             ),
             line,
-        ]);
-        assert_ne!(pixels(&editor), pixels(&expected));
+        ];
+        let original = pixels(&editor);
 
         send(&mut editor, select(0));
         send(&mut editor, [drag(40.0, 4.0)]);
-        assert_eq!(pixels(&editor), pixels(&expected));
+        assert_edits(&editor, &expected);
+        assert_ne!(pixels(&editor), original);
 
         send(&mut editor, [finish(40.0, 4.0)]);
-        assert_eq!(snapshot(&editor), snapshot(&expected));
-        assert_eq!(pixels(&editor), pixels(&expected));
+        assert_edits(&editor, &expected);
     }
 }

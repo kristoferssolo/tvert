@@ -1,9 +1,11 @@
 mod blur;
 mod color;
+mod compose;
 mod encode;
 mod error;
 mod image;
 mod pixelate;
+mod premultiplied;
 mod region;
 mod size;
 mod transform;

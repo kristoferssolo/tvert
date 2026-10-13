@@ -19,28 +19,12 @@ impl State {
         for global in self.globals.clone() {
             self.bind_global(registry, qh, &global);
         }
+        self.request_xdg_outputs(qh);
     }
 
     fn bind_global(&mut self, registry: &WlRegistry, qh: &QueueHandle<Self>, global: &Global) {
         if global.interface == WlOutput::interface().name {
-            let id = OutputId(global.name);
-
-            if self.output_states.contains_key(&id) {
-                return;
-            }
-
-            if global.version < 4 {
-                warn!(
-                    name = global.name,
-                    advertised = global.version,
-                    required = 4,
-                    "skipping output without wl_output name support"
-                );
-                return;
-            }
-
-            let proxy = registry.bind(global.name, 4, qh, OutputData { id });
-            self.output_states.insert(id, OutputState::new(proxy));
+            self.bind_output(registry, qh, global);
             return;
         }
 
@@ -101,6 +85,14 @@ impl State {
                 qh,
                 1..=1,
             ),
+            "zxdg_output_manager_v1" => bind_once(
+                &mut self.xdg_output_manager,
+                &mut self.bound_globals,
+                registry,
+                global,
+                qh,
+                1..=3,
+            ),
             "wl_seat" => bind_once(
                 &mut self.seat,
                 &mut self.bound_globals,
@@ -119,6 +111,27 @@ impl State {
             ),
             _ => {}
         }
+    }
+
+    fn bind_output(&mut self, registry: &WlRegistry, qh: &QueueHandle<Self>, global: &Global) {
+        let id = OutputId(global.name);
+
+        if self.output_states.contains_key(&id) {
+            return;
+        }
+
+        if global.version < 4 {
+            warn!(
+                name = global.name,
+                advertising = global.version,
+                required = 4,
+                "skipping output without wl_output name support"
+            );
+            return;
+        }
+
+        let proxy = registry.bind(global.name, 4, qh, OutputData { id });
+        self.output_states.insert(id, OutputState::new(proxy));
     }
 
     fn remove_global(&mut self, name: u32) {
@@ -162,9 +175,15 @@ impl State {
 
         self.outputs.remove(&id);
 
-        if let Some(output) = self.output_states.remove(&id)
-            && output.proxy.version() >= 3
-        {
+        let Some(output) = self.output_states.remove(&id) else {
+            return;
+        };
+
+        if let Some(xdg_output) = output.xdg_output {
+            xdg_output.destroy();
+        }
+
+        if output.proxy.version() >= 3 {
             output.proxy.release();
         }
     }
@@ -191,6 +210,7 @@ impl State {
         destroy_removed!(capture_manager);
         destroy_removed!(screencopy_manager);
         destroy_removed!(viewporter);
+        destroy_removed!(xdg_output_manager);
         destroy_removed!(cursor_shape_manager);
 
         if let Some(manager) = take_removed(&mut self.layer_shell, &mut self.bound_globals, name)
@@ -236,6 +256,7 @@ impl Dispatch<WlRegistry, GlobalListContents> for State {
 
                 state.globals.push(global.clone());
                 state.bind_global(registry, qh, &global);
+                state.request_xdg_outputs(qh);
             }
             Event::GlobalRemove { name } => {
                 state.remove_global(name);

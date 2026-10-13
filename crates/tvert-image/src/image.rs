@@ -1,4 +1,4 @@
-use crate::{Error, PixelSize, blur::blur, pixelate::pixelate, region::RgbaRegion};
+use crate::{Error, PixelSize, blur::blur, compose::paint, pixelate::pixelate, region::RgbaRegion};
 use std::{num::NonZeroU32, ops::Range};
 
 /// An owned image with tightly packed, top-to-bottom RGBA8 pixels.
@@ -23,6 +23,21 @@ impl CapturedImage {
     pub fn new(size: PixelSize, rgba: Vec<u8>) -> Result<Self, Error> {
         size.validate_rbga(&rgba)?;
         Ok(Self { size, rgba })
+    }
+
+    /// Creates an image whose pixels are all fully transparent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::SizeOverflow`] if the storage length cannot be
+    /// represented, or [`Error::Allocation`] if allocating it fails.
+    pub fn transparent(size: PixelSize) -> Result<Self, Error> {
+        let len = size.rgba_len()?;
+        let mut rgba = Vec::new();
+        rgba.try_reserve_exact(len)?;
+        rgba.resize(len, 0);
+
+        Self::new(size, rgba)
     }
 
     /// Returns the image dimensions in pixels.
@@ -100,6 +115,23 @@ impl CapturedImage {
     /// The image remains unchanged on error.
     pub fn blur(&mut self, x: Range<usize>, y: Range<usize>, sigma: f32) -> Result<(), Error> {
         blur(&mut self.rgba, self.size, x, y, sigma)
+    }
+
+    /// Replaces a region with `source` scaled to fill it.
+    ///
+    /// Range ends are exclusive. Pixels are replaced rather than blended, so a
+    /// later paint covers an earlier one. A source matching the region's size
+    /// is copied unchanged. Otherwise it is resampled with a triangle filter on
+    /// premultiplied alpha, so transparent pixels do not tint their neighbors.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPaintBounds`] for empty, reversed, or
+    /// out-of-bounds ranges, [`Error::SizeOverflow`] if dimensions or offsets
+    /// cannot be represented, or [`Error::Allocation`] if allocating the
+    /// resampled source fails. The image remains unchanged on error.
+    pub fn paint(&mut self, source: &Self, x: Range<usize>, y: Range<usize>) -> Result<(), Error> {
+        paint(&mut self.rgba, self.size, source, x, y)
     }
 }
 

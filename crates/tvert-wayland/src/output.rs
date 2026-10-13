@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, num::NonZeroU32};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OutputId(pub u32);
@@ -9,12 +9,25 @@ pub struct PhysicalSize {
     pub height: u32,
 }
 
-#[derive(Debug, Clone)]
+/// An output's area in the compositor's logical desktop coordinates.
+///
+/// Positions may be negative. The size already accounts for the output's
+/// scale and transform, so a rotated output reports its displayed shape.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LogicalRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: NonZeroU32,
+    pub height: NonZeroU32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
     pub id: OutputId,
     pub name: String,
     pub size: PhysicalSize,
     pub scale: i32,
+    pub logical: Option<LogicalRect>,
 }
 
 impl Display for PhysicalSize {
@@ -23,8 +36,18 @@ impl Display for PhysicalSize {
     }
 }
 
+impl Display for LogicalRect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}x{}{:+}{:+}", self.width, self.height, self.x, self.y)
+    }
+}
+
 impl Display for Output {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {} scale {}", self.name, self.size, self.scale)
+        write!(f, "{}: {} scale {}", self.name, self.size, self.scale)?;
+        if let Some(logical) = self.logical {
+            write!(f, " at {logical}")?;
+        }
+        Ok(())
     }
 }

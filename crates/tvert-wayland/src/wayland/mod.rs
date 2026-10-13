@@ -64,6 +64,7 @@ impl Wayland {
             compositor_bound = wayland.state.compositor.is_some(),
             layer_shell_bound = wayland.state.layer_shell.is_some(),
             viewporter_bound = wayland.state.viewporter.is_some(),
+            xdg_output_manager_bound = wayland.state.xdg_output_manager.is_some(),
             seat_bound = wayland.state.seat.is_some(),
             pointer_created = wayland.state.pointer.is_some(),
             "capture global binding status"

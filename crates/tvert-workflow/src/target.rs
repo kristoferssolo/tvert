@@ -15,8 +15,8 @@ pub enum Target {
 pub enum OutputSelection {
     /// Every output, combined according to the desktop layout
     ///
-    /// Combining is not implemented yet, so this resolves only when exactly
-    /// one output exists.
+    /// Region selection cannot span outputs yet, so it accepts this only when
+    /// exactly one output exists.
     All,
     /// The output with this name, such as `DP-1`
     Named(String),
@@ -31,7 +31,7 @@ impl OutputSelection {
     ///
     /// Returns [`Error::NoOutputs`] if `outputs` is empty,
     /// [`Error::UnknownOutput`] if no output has the requested name, or
-    /// [`Error::CombinedCapture`] if `All` spans several outputs.
+    /// [`Error::CrossScreenRegion`] if `All` spans several outputs.
     pub fn resolve<'a>(
         &self,
         outputs: impl IntoIterator<Item = &'a Output>,
@@ -49,7 +49,7 @@ impl OutputSelection {
         match (self, outputs.as_slice()) {
             (_, []) => Err(Error::NoOutputs),
             (Self::All, [output]) => Ok(output.id),
-            (Self::All, _) => Err(Error::CombinedCapture { available: names() }),
+            (Self::All, _) => Err(Error::CrossScreenRegion { available: names() }),
             (Self::Named(name), _) => outputs
                 .iter()
                 .find(|output| &output.name == name)
@@ -90,6 +90,7 @@ mod tests {
                 height: 1080,
             },
             scale: 1,
+            logical: None,
         }
     }
 
@@ -115,7 +116,7 @@ mod tests {
 
         assert_matches!(
             OutputSelection::All.resolve(&outputs),
-            Err(Error::CombinedCapture { available }) if available == names
+            Err(Error::CrossScreenRegion { available }) if available == names
         );
         assert_matches!(
             OutputSelection::Named("DP-2".to_owned()).resolve(&outputs),

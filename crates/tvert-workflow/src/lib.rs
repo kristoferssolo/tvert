@@ -1,5 +1,6 @@
 mod capture;
 mod clipboard;
+mod desktop;
 mod destination;
 mod error;
 mod export;

@@ -13,6 +13,7 @@ use wayland_protocols::{
         image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
     },
     wp::viewporter::client::wp_viewporter::WpViewporter,
+    xdg::xdg_output::zv1::client::zxdg_output_manager_v1::ZxdgOutputManagerV1,
 };
 use wayland_protocols_wlr::{
     layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1,
@@ -48,3 +49,4 @@ delegate_noop!(State: ignore WlCompositor);
 delegate_noop!(State: ignore WpViewporter);
 delegate_noop!(State: ignore ZwlrLayerShellV1);
 delegate_noop!(State: ignore ZwlrScreencopyManagerV1);
+delegate_noop!(State: ignore ZxdgOutputManagerV1);

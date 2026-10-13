@@ -23,6 +23,7 @@ use wayland_protocols::{
         cursor_shape::v1::client::wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
         viewporter::client::wp_viewporter::WpViewporter,
     },
+    xdg::xdg_output::zv1::client::zxdg_output_manager_v1::ZxdgOutputManagerV1,
 };
 use wayland_protocols_wlr::{
     layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1,
@@ -37,6 +38,7 @@ pub struct State {
 
     pub output_states: HashMap<OutputId, OutputState>,
     pub outputs: HashMap<OutputId, Output>,
+    pub xdg_output_manager: Option<ZxdgOutputManagerV1>,
 
     pub shm: Option<WlShm>,
     pub shm_formats: Vec<Format>,

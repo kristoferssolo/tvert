@@ -18,13 +18,32 @@ pub enum Error {
         available: Vec<String>,
     },
 
-    /// `all` spans several outputs, which cannot be combined yet
+    /// Region selection with `all` spans several outputs, which is not supported yet
     #[error(
-        "capturing all outputs as one image is not implemented yet; \
+        "selecting a region across several outputs is not implemented yet; \
          choose one of {} with --output NAME or capture.output",
         .available.join(", ")
     )]
-    CombinedCapture { available: Vec<String> },
+    CrossScreenRegion { available: Vec<String> },
+
+    /// The compositor did not report where an output is on the desktop
+    #[error(
+        "the desktop position of output {name:?} is unknown; \
+         combined capture requires zxdg_output_manager_v1"
+    )]
+    UnknownPlacement { name: String },
+
+    /// Outputs were added, removed, or rearranged while capturing the desktop
+    #[error("outputs changed while capturing the desktop")]
+    OutputsChanged,
+
+    /// The desktop layout cannot be mapped to a representable image
+    #[error("the desktop layout exceeds the supported image size")]
+    DesktopTooLarge,
+
+    /// Allocating or painting the combined desktop image failed
+    #[error("failed to combine the captured outputs")]
+    Compose(#[source] tvert_image::Error),
 
     /// Creating the destination file failed
     #[error("failed to create PNG destination {path:?}")]

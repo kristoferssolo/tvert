@@ -35,6 +35,10 @@ pub enum Error {
     #[error("blur bounds must describe a nonempty region inside the image")]
     InvalidBlurBounds,
 
+    /// The painted region is empty, reversed, or outside the image
+    #[error("paint bounds must describe a nonempty region inside the image")]
+    InvalidPaintBounds,
+
     /// Gaussian sigma is not a positive normal floating-point value
     #[error("blur sigma must be positive, finite, and not subnormal")]
     InvalidBlurSigma,

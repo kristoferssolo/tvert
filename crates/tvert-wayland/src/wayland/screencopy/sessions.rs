@@ -96,10 +96,11 @@ impl Wayland {
         }
     }
 
-    /// Captures an output and returns an owned RGBA8 image.
+    /// Captures an output and returns an owned RGBA8 image oriented as displayed.
     ///
-    /// Rows are ordered top-to-bottom without padding, and alpha is straight. The image remains
-    /// valid after another capture or after this instance is dropped.
+    /// Rows are ordered top-to-bottom without padding, and alpha is straight. The image keeps
+    /// the output's physical resolution, with width and height exchanged for quarter-turn
+    /// transforms. It remains valid after another capture or after this instance is dropped.
     ///
     /// Obtain `output_id` from this instance's [`Self::outputs`] method. The cursor is excluded.
     ///
@@ -112,7 +113,18 @@ impl Wayland {
     /// - [`Error::UnsupportedScreencopyFlags`] if the frame flags cannot be interpreted.
     /// - [`Error::ScreencopyFailed`] if the compositor rejects or aborts capture, or [`Error::Dispatch`] if communication fails;
     /// - [`Error::InvalidScreencopyState`] if the retained capture state is inconsistent.
+    /// - [`Error::UnsupportedOutputTransform`] for an unknown output transform, or [`Error::Image`] if orienting the image fails.
     pub fn capture_output(&mut self, output_id: OutputId) -> Result<CapturedImage, Error> {
+        let image = self.capture_buffer(output_id)?;
+
+        let Some(output) = self.state.output_states.get(&output_id) else {
+            return Err(Error::UnknownOutput(output_id));
+        };
+
+        Ok(image.transformed(output.displayed_transform()?)?)
+    }
+
+    pub(crate) fn capture_buffer(&mut self, output_id: OutputId) -> Result<CapturedImage, Error> {
         self.prepare_output_capture(output_id)?;
 
         let capture = &mut self.state.screencopy;

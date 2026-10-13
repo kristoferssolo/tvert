@@ -1,4 +1,8 @@
-use crate::{Error, target::Target};
+use crate::{
+    Error, OutputSelection,
+    desktop::{Screen, compose},
+    target::Target,
+};
 use tvert_image::CapturedImage;
 use tvert_wayland::{Output, OutputId, Wayland};
 
@@ -49,6 +53,7 @@ fn capture_from(
     target: &Target,
 ) -> Result<Option<CapturedImage>, Error> {
     match target {
+        Target::Screen(OutputSelection::All) => capture_desktop(backend).map(Some),
         Target::Screen(output) => {
             let output = output.resolve(backend.outputs())?;
             Ok(Some(backend.capture_output(output)?))
@@ -60,15 +65,46 @@ fn capture_from(
     }
 }
 
+fn capture_desktop(backend: &mut impl Backend) -> Result<CapturedImage, Error> {
+    let outputs = sorted_outputs(backend);
+
+    let screens = outputs
+        .iter()
+        .map(|output| {
+            let area = output.logical.ok_or_else(|| Error::UnknownPlacement {
+                name: output.name.clone(),
+            })?;
+            let image = backend.capture_output(output.id)?;
+
+            Ok(Screen {
+                name: &output.name,
+                area,
+                image,
+            })
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+
+    if sorted_outputs(backend) != outputs {
+        return Err(Error::OutputsChanged);
+    }
+
+    compose(screens)
+}
+
+fn sorted_outputs(backend: &impl Backend) -> Vec<Output> {
+    let mut outputs = backend.outputs().cloned().collect::<Vec<_>>();
+    outputs.sort_unstable_by_key(|output| output.id.0);
+    outputs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::target::OutputSelection;
-    use claims::{assert_ok, assert_some};
+    use claims::{assert_err, assert_ok, assert_some};
     use rstest::rstest;
     use std::num::NonZeroU32;
     use tvert_image::PixelSize;
-    use tvert_wayland::PhysicalSize;
+    use tvert_wayland::{LogicalRect, PhysicalSize};
 
     #[derive(Debug, PartialEq, Eq)]
     enum Call {
@@ -76,15 +112,25 @@ mod tests {
         Region(OutputId),
     }
 
+    #[derive(Debug, Clone, Copy)]
+    enum Failure {
+        Capture,
+        Disconnect,
+        Unplaced,
+    }
+
     struct Fake {
         outputs: Vec<Output>,
         selection: Option<CapturedImage>,
+        failure: Option<Failure>,
         calls: Vec<Call>,
     }
 
     impl Fake {
+        /// Two 4x4 outputs side by side at one pixel per logical unit
         fn new(selection: Option<CapturedImage>) -> Self {
-            let output = |id, name: &str| Output {
+            let four = assert_some!(NonZeroU32::new(4));
+            let output = |id, name: &str, x| Output {
                 id: OutputId(id),
                 name: name.to_owned(),
                 size: PhysicalSize {
@@ -92,13 +138,31 @@ mod tests {
                     height: 4,
                 },
                 scale: 1,
+                logical: Some(LogicalRect {
+                    x,
+                    y: 0,
+                    width: four,
+                    height: four,
+                }),
             };
 
             Self {
-                outputs: vec![output(1, "DP-1"), output(2, "HDMI-A-1")],
+                outputs: vec![output(1, "DP-1", 0), output(2, "HDMI-A-1", 4)],
                 selection,
+                failure: None,
                 calls: Vec::new(),
             }
+        }
+
+        fn failing(failure: Failure) -> Self {
+            let mut fake = Self::new(None);
+            fake.failure = Some(failure);
+
+            if let (Failure::Unplaced, Some(output)) = (failure, fake.outputs.get_mut(1)) {
+                output.logical = None;
+            }
+
+            fake
         }
     }
 
@@ -112,6 +176,17 @@ mod tests {
             output: OutputId,
         ) -> Result<CapturedImage, tvert_wayland::Error> {
             self.calls.push(Call::Screen(output));
+
+            match self.failure {
+                Some(Failure::Capture) if output == OutputId(2) => {
+                    return Err(tvert_wayland::Error::ScreencopyFailed);
+                }
+                Some(Failure::Disconnect) => {
+                    self.outputs.retain(|output| output.id != OutputId(1));
+                }
+                _ => {}
+            }
+
             Ok(image(4, 4))
         }
 
@@ -137,17 +212,49 @@ mod tests {
         OutputSelection::Named(name.to_owned())
     }
 
-    #[test]
-    fn screen_captures_the_named_output() {
+    #[rstest]
+    #[case::named(named("HDMI-A-1"), &[Call::Screen(OutputId(2))], 4)]
+    #[case::all(
+        OutputSelection::All,
+        &[Call::Screen(OutputId(1)), Call::Screen(OutputId(2))],
+        8
+    )]
+    fn screen_captures_the_selected_outputs(
+        #[case] selection: OutputSelection,
+        #[case] calls: &[Call],
+        #[case] width: u32,
+    ) {
         let mut backend = Fake::new(None);
 
-        let captured = assert_ok!(capture_from(
+        let captured = assert_ok!(capture_from(&mut backend, &Target::Screen(selection)));
+
+        assert_eq!(assert_some!(captured).size(), image(width, 4).size());
+        assert_eq!(backend.calls, calls);
+    }
+
+    #[rstest]
+    #[case(Failure::Capture)]
+    #[case(Failure::Disconnect)]
+    #[case(Failure::Unplaced)]
+    fn desktop_capture_never_returns_a_partial_image(#[case] failure: Failure) {
+        let mut backend = Fake::failing(failure);
+
+        let error = assert_err!(capture_from(
             &mut backend,
-            &Target::Screen(named("HDMI-A-1"))
+            &Target::Screen(OutputSelection::All)
         ));
 
-        assert_some!(captured);
-        assert_eq!(backend.calls, [Call::Screen(OutputId(2))]);
+        let expected = match failure {
+            Failure::Capture => matches!(
+                error,
+                Error::Capture(tvert_wayland::Error::ScreencopyFailed)
+            ),
+            Failure::Disconnect => matches!(error, Error::OutputsChanged),
+            Failure::Unplaced => {
+                matches!(&error, Error::UnknownPlacement { name } if name == "HDMI-A-1")
+            }
+        };
+        assert!(expected, "{failure:?}: {error:?}");
     }
 
     #[rstest]

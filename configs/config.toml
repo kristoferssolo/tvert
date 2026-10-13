@@ -1,7 +1,7 @@
 [capture]
 # Output to capture, such as "DP-1", or "all" for the whole desktop.
-# Combining several outputs is not implemented yet, so "all" currently
-# requires exactly one output; choose one by name on multi-monitor setups.
+# Region selection cannot span several outputs yet; on multi-monitor
+# setups, region capture requires an output name.
 output = "all"
 
 [save]

@@ -160,7 +160,7 @@ impl Wayland {
     }
 
     fn run_selection(&mut self, output_id: OutputId) -> Result<Option<CapturedImage>, Error> {
-        let image = self.capture_output(output_id)?;
+        let image = self.capture_buffer(output_id)?;
 
         let Some(output) = self.state.output_states.get(&output_id) else {
             return Err(Error::UnknownOutput(output_id));

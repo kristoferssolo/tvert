@@ -1,8 +1,11 @@
 use crate::{
     Error,
-    wayland::overlay::{SurfaceRect, geometry::PixelRect, size::SurfaceSize},
+    wayland::{
+        output::buffer_to_surface,
+        overlay::{SurfaceRect, geometry::PixelRect, size::SurfaceSize},
+    },
 };
-use tvert_image::{CapturedImage, ImageTransform};
+use tvert_image::CapturedImage;
 use wayland_client::protocol::wl_output::Transform;
 
 /// Copies a surface selection and orients its pixels as displayed.
@@ -30,22 +33,6 @@ pub fn selection(
         .transformed(buffer_to_surface(transform)?)?;
 
     Ok(Some(image))
-}
-
-fn buffer_to_surface(transform: Transform) -> Result<ImageTransform, Error> {
-    // set_buffer_transform describes an operation already applied by the client.
-    // The compositor displays its inverse.
-    match transform {
-        Transform::Normal => Ok(ImageTransform::Normal),
-        Transform::_90 => Ok(ImageTransform::Rotate270),
-        Transform::_180 => Ok(ImageTransform::Rotate180),
-        Transform::_270 => Ok(ImageTransform::Rotate90),
-        Transform::Flipped => Ok(ImageTransform::Flipped),
-        Transform::Flipped90 => Ok(ImageTransform::Flipped90),
-        Transform::Flipped180 => Ok(ImageTransform::Flipped180),
-        Transform::Flipped270 => Ok(ImageTransform::Flipped270),
-        _ => Err(Error::UnsupportedOutputTransform(u32::from(transform))),
-    }
 }
 
 #[cfg(test)]

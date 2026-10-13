@@ -1,6 +1,6 @@
 use crate::{
     edit::Edit,
-    editor::{Editor, MoveMessage, history::Change},
+    editor::{Editor, MoveMessage, document::Change},
     mode::Mode,
 };
 use iced::Vector;
@@ -41,12 +41,7 @@ impl Editor {
         if offset == Vector::ZERO {
             return;
         }
-        // The starting edits rendered before, so a failure only leaves the
-        // preview stale, never the edits or history
-        if let Some(edit) = self.edits.get_mut(index) {
-            *edit = original;
-        }
-        self.refresh_preview();
+        self.error = self.document.restore_edit(index, original).err();
         self.cache.clear();
     }
     /// Previews the selected edit at `requested` from its starting position.
@@ -60,12 +55,12 @@ impl Editor {
             .original
             .constrain_offset(requested, self.image_size);
         if offset != movement.offset
-            && self
-                .apply(Change::Replace(
-                    movement.index,
-                    movement.original.translated(offset),
-                ))
-                .is_ok()
+            && self.update_document(|document| {
+                let moved = movement.original.translated(offset);
+                document
+                    .apply(Change::Replace(movement.index, moved))
+                    .map(drop)
+            })
         {
             movement.offset = offset;
         }
@@ -78,7 +73,7 @@ impl Editor {
         };
         Some(Movement {
             index,
-            original: self.edits.get(index)?.translated(Vector::ZERO),
+            original: self.document.edits().get(index)?.translated(Vector::ZERO),
             offset: Vector::ZERO,
         })
     }
@@ -95,8 +90,8 @@ impl Editor {
         if offset == Vector::ZERO {
             return;
         }
-        self.undo_stack.push(Change::Replace(index, original));
-        self.redo_stack.clear();
+        self.document
+            .record_applied(Change::Replace(index, original));
     }
 }
 
@@ -131,6 +126,17 @@ mod tests {
     }
 
     fn editor(drafts: impl IntoIterator<Item = AnnotationDraft>) -> Editor {
+        let mut editor = Editor::new(
+            original(),
+            Size::new(32.0, 16.0),
+            SETTINGS,
+            Rc::new(|_, _| Ok(())),
+        );
+        send(&mut editor, drafts.into_iter().map(Message::AddEdit));
+        editor
+    }
+
+    fn original() -> Handle {
         let pixels = (0..512)
             .flat_map(|index| {
                 [
@@ -141,14 +147,7 @@ mod tests {
                 ]
             })
             .collect::<Vec<u8>>();
-        let mut editor = Editor::new(
-            Handle::from_rgba(32, 16, pixels),
-            Size::new(32.0, 16.0),
-            SETTINGS,
-            Rc::new(|_, _| Ok(())),
-        );
-        send(&mut editor, drafts.into_iter().map(Message::AddEdit));
-        editor
+        Handle::from_rgba(32, 16, pixels)
     }
 
     fn send(editor: &mut Editor, messages: impl IntoIterator<Item = Message>) {
@@ -178,9 +177,9 @@ mod tests {
             .cloned()
             .map(|draft| assert_ok!(Edit::try_from(draft)))
             .collect::<Vec<_>>();
-        assert_eq!(editor.edits.len(), expected.len());
+        assert_eq!(editor.document.edits().len(), expected.len());
 
-        for (actual, expected) in editor.edits.iter().zip(&expected) {
+        for (actual, expected) in editor.document.edits().iter().zip(&expected) {
             match (actual, expected) {
                 (Edit::Annotation(actual), Edit::Annotation(expected)) => {
                     let actual_path = actual.figure.path(viewport);
@@ -205,7 +204,7 @@ mod tests {
 
         assert_eq!(
             pixels(editor),
-            assert_ok!(render_edits(&editor.original, &expected)).into_rgba()
+            assert_ok!(render_edits(&original(), &expected)).into_rgba()
         );
     }
 
@@ -233,14 +232,13 @@ mod tests {
 
         assert_edits(&editor, std::slice::from_ref(&moved));
         assert_eq!(editor.mode, Mode::Select(Some(0)));
-        assert_eq!(editor.undo_stack.len(), 2);
 
         send(&mut editor, [Message::Undo]);
         assert_edits(&editor, &[start]);
 
         send(&mut editor, [Message::Redo]);
         assert_edits(&editor, &[moved]);
-        assert!(editor.redo_stack.is_empty());
+        assert!(!editor.document.can_redo());
     }
 
     #[test]
@@ -255,8 +253,10 @@ mod tests {
 
         assert_edits(&editor, &[start]);
         assert_eq!(editor.mode, Mode::Select(Some(0)));
-        assert_eq!(editor.undo_stack.len(), 1);
-        assert_eq!(editor.redo_stack.len(), 1);
+        assert!(editor.document.can_redo());
+
+        send(&mut editor, [Message::Undo]);
+        assert_edits(&editor, &[]);
     }
 
     #[rstest]
@@ -274,7 +274,9 @@ mod tests {
         send(&mut editor, [cancel]);
         assert_edits(&editor, &[start]);
         assert_eq!(editor.mode, mode);
-        assert_eq!(editor.undo_stack.len(), 1);
+
+        send(&mut editor, [Message::Undo]);
+        assert_edits(&editor, &[]);
     }
 
     #[test]

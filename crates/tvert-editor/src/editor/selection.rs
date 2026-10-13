@@ -19,7 +19,7 @@ impl Editor {
     /// Selects an existing edit, ignoring indices outside the current edits
     pub(super) fn select_edit(&mut self, index: Option<usize>) {
         if let Mode::Select(selected) = &mut self.mode {
-            *selected = index.filter(|&index| index < self.edits.len());
+            *selected = index.filter(|&index| index < self.document.edits().len());
         }
     }
 
@@ -71,7 +71,7 @@ mod tests {
         let _ = editor.update(Message::SelectEdit(Some(0)));
         let _ = editor.update(Message::DeleteSelected);
         assert_eq!(editor.mode, Mode::Draw);
-        assert_eq!(editor.edits.len(), 1);
+        assert_eq!(editor.document.edits().len(), 1);
 
         let _ = editor.update(Message::SelectionMode);
         let _ = editor.update(Message::SelectEdit(Some(1)));
@@ -98,6 +98,22 @@ mod tests {
         assert_eq!(editor.drawing_tool(), Some(Tool::Pencil));
 
         let _ = editor.update(Message::DeleteSelected);
-        assert_eq!(editor.edits.len(), 1);
+        assert_eq!(editor.document.edits().len(), 1);
+    }
+
+    #[test]
+    fn deleting_the_selected_edit_clears_the_selection() {
+        let mut editor = editor_with_line();
+
+        for message in [
+            Message::SelectionMode,
+            Message::SelectEdit(Some(0)),
+            Message::DeleteSelected,
+        ] {
+            let _ = editor.update(message);
+        }
+
+        assert!(editor.document.edits().is_empty());
+        assert_eq!(editor.mode, Mode::Select(None));
     }
 }

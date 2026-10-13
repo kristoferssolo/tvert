@@ -26,8 +26,8 @@ impl Editor {
                 self.stroke_selection,
                 self.color_palette_open,
                 &self.color_hex,
-                !self.undo_stack.is_empty(),
-                !self.redo_stack.is_empty(),
+                self.document.can_undo(),
+                self.document.can_redo(),
             ),
         ]];
 
@@ -41,7 +41,7 @@ impl Editor {
     fn image_preview(&self) -> Element<'_, Message> {
         let padding = Padding::ZERO.top(toolbar::HEIGHT);
         let picture = canvas(ImageCanvas {
-            preview: &self.preview,
+            preview: self.document.preview(),
             image_size: self.image_size,
             navigation: self.navigation,
             padding,
@@ -57,7 +57,7 @@ impl Editor {
             mode: self.mode,
             size: self.selected_size(),
             stroke_color: Color::from(self.stroke_selection),
-            edits: &self.edits,
+            edits: self.document.edits(),
             cache: &self.cache,
         })
         .width(Fill)

@@ -1,5 +1,5 @@
 pub mod color;
-mod history;
+mod document;
 mod message;
 mod movement;
 mod selection;
@@ -13,7 +13,10 @@ use crate::{
     Error, Settings,
     color::format_hex,
     edit::Edit,
-    editor::{history::Change, movement::Movement},
+    editor::{
+        document::{ApplyError, Change, Document},
+        movement::Movement,
+    },
     export::ExportAction,
     mode::Mode,
     render::render_image,
@@ -33,8 +36,7 @@ use tvert_image::CapturedImage;
 pub type ExportHandler = Rc<dyn Fn(ExportAction, &CapturedImage) -> Result<(), Error>>;
 
 pub struct Editor {
-    original: Handle,
-    preview: Handle,
+    document: Document,
     image_size: Size,
     navigation: Navigation,
     tool: Tool,
@@ -47,9 +49,6 @@ pub struct Editor {
     color_hex: String,
     export: ExportHandler,
     error: Option<Error>,
-    edits: Vec<Edit>,
-    undo_stack: Vec<Change>,
-    redo_stack: Vec<Change>,
     movement: Option<Movement>,
     cache: Cache,
 }
@@ -62,8 +61,7 @@ impl Editor {
         export: ExportHandler,
     ) -> Self {
         Self {
-            original: preview.clone(),
-            preview,
+            document: Document::new(preview),
             image_size,
             navigation: Navigation::Fit,
             tool: settings.tool,
@@ -76,9 +74,6 @@ impl Editor {
             color_hex: format_hex(settings.stroke_color),
             export,
             error: None,
-            edits: Vec::new(),
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
             movement: None,
             cache: Cache::new(),
         }
@@ -93,12 +88,18 @@ impl Editor {
                 let Ok(edit) = Edit::try_from(draft) else {
                     return Task::none();
                 };
-                self.add_edit(edit);
+                self.update_document(|document| {
+                    document.record(Change::Insert(document.edits().len(), edit))
+                });
             }
             Message::SelectTool(tool) => self.select_tool(tool),
             Message::SelectionMode => self.enter_selection_mode(),
             Message::SelectEdit(index) => self.select_edit(index),
-            Message::DeleteSelected => self.delete_selected(),
+            Message::DeleteSelected => {
+                if let Mode::Select(Some(index)) = self.mode {
+                    self.update_document(|document| document.record(Change::Remove(index)));
+                }
+            }
             Message::Move(message) => self.update_move(message),
             Message::Navigate(navigation) => {
                 self.navigation = navigation;
@@ -128,8 +129,12 @@ impl Editor {
                 self.edit_color_hex(value);
                 return Task::none();
             }
-            Message::Undo => self.undo(),
-            Message::Redo => self.redo(),
+            Message::Undo => {
+                self.update_document(Document::undo);
+            }
+            Message::Redo => {
+                self.update_document(Document::redo);
+            }
             Message::Export(action) => return self.export(action),
         }
         self.cache.clear();
@@ -142,7 +147,7 @@ impl Editor {
     ///
     /// Returns an error if preparing the pixel storage fails.
     pub fn render_image(&self) -> Result<CapturedImage, Error> {
-        render_image(&self.preview, &[])
+        render_image(self.document.preview(), &[])
     }
 
     pub fn export(&mut self, action: ExportAction) -> Task<Message> {
@@ -160,18 +165,42 @@ impl Editor {
             }
         }
     }
+
+    /// Runs a document operation, shows its result, and returns whether it applied.
+    ///
+    /// Inserting or removing an edit clears the selection because indices may
+    /// shift; replacing preserves it.
+    fn update_document(
+        &mut self,
+        operation: impl FnOnce(&mut Document) -> Result<(), ApplyError>,
+    ) -> bool {
+        let count = self.document.edits().len();
+        match operation(&mut self.document) {
+            Ok(()) => {
+                self.error = None;
+                if self.document.edits().len() != count {
+                    self.select_edit(None);
+                }
+                true
+            }
+            Err(ApplyError::Rejected) => false,
+            Err(ApplyError::Render(error)) => {
+                self.error = Some(error);
+                false
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ThemePreference, annotation::AnnotationDraft, style::RED};
-    use claims::assert_ok;
-    use iced::Point;
+    use crate::{ThemePreference, annotation::AnnotationDraft, size::SizeKind, style::RED};
+    use claims::{assert_ok, assert_some};
+    use iced::{Color, Point};
 
-    #[test]
-    fn navigation_leaves_the_committed_image_exports_and_history_alone() {
-        let mut editor = Editor::new(
+    fn editor() -> Editor {
+        Editor::new(
             Handle::from_rgba(32, 16, [20, 40, 60, 255].repeat(512)),
             Size::new(32.0, 16.0),
             Settings {
@@ -183,14 +212,23 @@ mod tests {
                 blur_sigma: 8,
             },
             Rc::new(|_, _| Ok(())),
-        );
-        let _ = editor.update(Message::AddEdit(AnnotationDraft {
+        )
+    }
+
+    fn line(size: u16, stroke_color: Color) -> Message {
+        Message::AddEdit(AnnotationDraft {
             tool: Tool::Line,
-            size: 2,
-            stroke_color: RED,
+            size,
+            stroke_color,
             points: vec![Point::new(2.0, 8.0), Point::new(30.0, 8.0)],
-        }));
-        let preview = editor.preview.id();
+        })
+    }
+
+    #[test]
+    fn navigation_leaves_the_committed_image_exports_and_history_alone() {
+        let mut editor = editor();
+        let _ = editor.update(line(2, RED));
+        let preview = editor.document.preview().id();
         let exported = assert_ok!(editor.render_image());
 
         for navigation in [
@@ -203,10 +241,63 @@ mod tests {
             let _ = editor.update(Message::Navigate(navigation));
             let image = assert_ok!(editor.render_image());
 
-            assert_eq!(editor.preview.id(), preview);
+            assert_eq!(editor.document.preview().id(), preview);
             assert_eq!(image.size(), exported.size());
             assert_eq!(image.rgba(), exported.rgba());
-            assert_eq!(editor.undo_stack.len(), 1);
+            assert!(editor.document.can_undo());
         }
+    }
+
+    #[test]
+    fn appearance_changes_preserve_existing_figures_and_history() {
+        let mut editor = editor();
+        let blue = Color::from_rgb8(64, 128, 255);
+        let green = Color::from_rgb8(64, 200, 96);
+
+        let _ = editor.update(line(2, RED));
+        let _ = editor.update(Message::Size(SizeMessage::Select(SizeKind::StrokeWidth, 8)));
+        let _ = editor.update(Message::SelectStrokeColor(blue));
+        let _ = editor.update(line(8, blue));
+        let _ = editor.update(Message::Undo);
+        let _ = editor.update(Message::Size(SizeMessage::Select(SizeKind::StrokeWidth, 4)));
+        let _ = editor.update(Message::SelectStrokeColor(green));
+        let _ = editor.update(Message::Redo);
+
+        let appearances = editor
+            .document
+            .edits()
+            .iter()
+            .map(|edit| {
+                let annotation = assert_some!(edit.annotation());
+                (annotation.stroke_width, annotation.stroke_color)
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(appearances, [(2, RED), (8, blue)]);
+
+        assert_eq!(editor.sizes.get(SizeKind::StrokeWidth), 4);
+        assert!(!editor.document.can_redo());
+        assert_eq!(
+            Color::from(editor.stroke_selection).into_rgba8(),
+            green.into_rgba8()
+        );
+    }
+
+    #[test]
+    fn a_failed_edit_shows_its_error_until_the_next_change() {
+        let mut editor = editor();
+
+        let _ = editor.update(Message::AddEdit(AnnotationDraft {
+            tool: Tool::Pixelate,
+            size: 4,
+            stroke_color: RED,
+            points: vec![Point::new(40.0, 0.0), Point::new(48.0, 8.0)],
+        }));
+        assert!(editor.error.is_some());
+        assert!(editor.document.edits().is_empty());
+
+        let _ = editor.update(line(2, RED));
+        assert!(editor.error.is_none());
+        assert_eq!(editor.document.edits().len(), 1);
     }
 }

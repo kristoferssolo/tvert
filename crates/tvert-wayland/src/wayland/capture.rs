@@ -10,7 +10,6 @@ impl Wayland {
     /// Creates and retains an image source for an output on this connection.
     ///
     /// Replaces any previously retained source.
-    /// Obtain `output_id` from this instance's [`Self::outputs`] method.
     ///
     /// # Errors
     /// Returns

@@ -40,7 +40,6 @@ impl CapturedImage {
         Self::new(size, rgba)
     }
 
-    /// Returns the image dimensions in pixels.
     #[must_use]
     pub const fn size(&self) -> PixelSize {
         self.size

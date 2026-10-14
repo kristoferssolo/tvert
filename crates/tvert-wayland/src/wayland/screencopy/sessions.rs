@@ -17,7 +17,6 @@ impl Wayland {
     /// Retains both objects for a subsequent copy request. Calling this again
     /// destroys the previously retained frame and buffer.
     ///
-    /// Obtain `output_id` from this instance's [`Self::outputs`] method.
     /// The cursor is excluded from the requested frame.
     ///
     /// # Errors
@@ -102,18 +101,16 @@ impl Wayland {
     /// the output's physical resolution, with width and height exchanged for quarter-turn
     /// transforms. It remains valid after another capture or after this instance is dropped.
     ///
-    /// Obtain `output_id` from this instance's [`Self::outputs`] method. The cursor is excluded.
+    /// The cursor is excluded.
     ///
     /// # Errors
     ///
-    /// Returns
-    /// - [`Error::MissingGlobal`] if a required protocol is unavailable, or [`Error::UnknownOutput`] if the output is no longer tracked;
-    /// - [`Error::ScreencopyShmUnavailable`], [`Error::UnsupportedShmFormat`], or [`Error::InvalidShmLayout`] if the advertised buffer requirements cannot be used;
-    /// - [`Error::ImageAllocation`] if allocating image storage fails.
-    /// - [`Error::UnsupportedScreencopyFlags`] if the frame flags cannot be interpreted.
-    /// - [`Error::ScreencopyFailed`] if the compositor rejects or aborts capture, or [`Error::Dispatch`] if communication fails;
-    /// - [`Error::InvalidScreencopyState`] if the retained capture state is inconsistent.
-    /// - [`Error::UnsupportedOutputTransform`] for an unknown output transform, or [`Error::Image`] if orienting the image fails.
+    /// Returns any error from [`Self::prepare_output_capture`]. Also returns
+    /// [`Error::ScreencopyFailed`] if the compositor aborts the copy,
+    /// [`Error::UnsupportedScreencopyFlags`] for flags this client cannot interpret,
+    /// [`Error::ShmIo`], [`Error::ImageAllocation`], or [`Error::InvalidShmLayout`]
+    /// if reading the buffer fails, or [`Error::UnsupportedOutputTransform`] or
+    /// [`Error::Image`] if orienting the image fails.
     pub fn capture_output(&mut self, output_id: OutputId) -> Result<CapturedImage, Error> {
         let image = self.capture_buffer(output_id)?;
 

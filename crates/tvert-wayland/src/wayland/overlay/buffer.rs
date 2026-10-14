@@ -12,7 +12,6 @@ pub enum OverlayBuffer {
 }
 
 impl OverlayBuffer {
-    /// Returns the retained Wayland buffer
     pub const fn proxy(&self) -> &WlBuffer {
         match self {
             Self::Submitted(buffer) | Self::Released(buffer) => buffer.proxy(),

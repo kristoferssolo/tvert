@@ -1,5 +1,9 @@
 use std::{fmt::Display, num::NonZeroU32};
 
+/// Identifies an output by its registry name on one [`Wayland`](crate::Wayland)
+/// connection.
+///
+/// Obtain it from [`Wayland::outputs`](crate::Wayland::outputs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OutputId(pub u32);
 

@@ -68,7 +68,7 @@ impl ShmBuffer {
     /// # Errors
     ///
     /// Returns [`Error::InvalidShmLayout`] if the dimensions cannot be
-    /// represented by the SHM protocol, , [`Error::UnsupportedShmFormat`]
+    /// represented by the SHM protocol, [`Error::UnsupportedShmFormat`]
     /// if ARGB8888 is unavailable, [`Error::ImageAllocation`] if temporary
     /// storage allocation fails, or [`Error::ShmIo`] if creating or
     /// writing the backing file fails.

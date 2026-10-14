@@ -19,12 +19,10 @@ impl SurfacePosition {
         Some(Self { x, y })
     }
 
-    /// Returns the horizontal surface-local coordinate
     pub const fn x(self) -> f64 {
         self.x
     }
 
-    /// Returns the vertical surface-local coordinate
     pub const fn y(self) -> f64 {
         self.y
     }

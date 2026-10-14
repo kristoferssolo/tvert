@@ -8,7 +8,7 @@ use iced::{
 };
 use std::{f32::consts::TAU, fmt::Debug};
 
-/// A elliptical outline in captured-image pixel coordinates
+/// An elliptical outline in captured-image pixel coordinates
 #[derive(Debug)]
 pub struct EllipseFigure {
     bounds: Rectangle,

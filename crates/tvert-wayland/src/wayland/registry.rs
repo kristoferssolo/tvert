@@ -224,7 +224,7 @@ impl State {
             seat.release();
         }
 
-        // wl_compositor has no destructor at the version that gets bind
+        // wl_compositor has no destructor at the version that is bound
         drop(take_removed(
             &mut self.compositor,
             &mut self.bound_globals,

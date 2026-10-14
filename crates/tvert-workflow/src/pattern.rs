@@ -11,7 +11,7 @@ use crate::error::PatternError;
 /// variables and other shell syntax are kept literally.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathPattern {
-    /// Home direcotry from a leading `~/`, kept out for strftime formatting
+    /// Home directory from a leading `~/`, kept out for strftime formatting
     root: PathBuf,
     format: String,
 }

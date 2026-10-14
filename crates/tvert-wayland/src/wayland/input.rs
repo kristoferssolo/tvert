@@ -32,7 +32,7 @@ impl State {
 
         if let Some(overlay) = self.overlay.as_mut() {
             overlay.pointer_position = None;
-            overlay.selection.cacel_drag();
+            overlay.selection.cancel_drag();
         }
     }
 
@@ -51,7 +51,7 @@ impl State {
 
         let Some(position) = SurfacePosition::new(x, y) else {
             overlay.pointer_position = None;
-            overlay.selection.cacel_drag();
+            overlay.selection.cancel_drag();
             return;
         };
 

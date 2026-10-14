@@ -14,11 +14,11 @@ pub struct Settings {
     pub tool: Tool,
     /// Initial color for drawing strokes
     pub stroke_color: Color,
-    /// Stroke width in image pixels, from 1 to 32
+    /// Stroke width in image pixels
     pub stroke_width: u16,
-    /// Pixelation block size in image pixels, from 4 to 64
+    /// Pixelation block size in image pixels
     pub pixelation_block_size: u16,
-    /// Blur sigma in image pixels, from 4 to 64
+    /// Blur sigma in image pixels
     pub blur_sigma: u16,
 }
 

@@ -12,9 +12,9 @@ pub enum Error {
     #[error("failed to dispatch Wayland events")]
     Dispatch(#[from] DispatchError),
 
-    /// A required protocol global was not discovered
     #[error("required Wayland global is unavailable: {interface}")]
     MissingGlobal { interface: &'static str },
+
     /// The output is not present in this connection's tracked outputs
     #[error("unknown Wayland output: {0:?}")]
     UnknownOutput(OutputId),
@@ -23,11 +23,9 @@ pub enum Error {
     #[error("the compositor failed to capture the frame")]
     ScreencopyFailed,
 
-    /// The frame does not advertise a shared-memory buffer
     #[error("the screencopy frame does not support SHM buffers")]
     ScreencopyShmUnavailable,
 
-    /// The advertised SHM layout cannot be represented or is invalid
     #[error("invalid or oversized SHM buffer layout")]
     InvalidShmLayout,
 
@@ -43,11 +41,9 @@ pub enum Error {
     #[error("invalid screencopy frame state")]
     InvalidScreencopyState,
 
-    /// Allocating storage for the captured image failed
     #[error("failed to allocate captured image storage")]
     ImageAllocation(#[from] std::collections::TryReserveError),
 
-    /// The compositor returned flags this implementation cannot interpret
     #[error("unsupported screencopy flags: {0:#x}")]
     UnsupportedScreencopyFlags(u32),
 
@@ -55,7 +51,6 @@ pub enum Error {
     #[error("the compositor closed the selection overlay")]
     OverlayClosed,
 
-    /// Initial registry discovery failed
     #[error("failed to initialize the Wayland registry")]
     RegistryInit(#[from] GlobalError),
 
@@ -63,11 +58,9 @@ pub enum Error {
     #[error("unsupported overlay surface size: {width}x{height}")]
     UnsupportedOverlaySize { width: u32, height: u32 },
 
-    /// The output advertises a transform this client cannot interpret
     #[error("unsupported output transform: {0}")]
     UnsupportedOutputTransform(u32),
 
-    /// Constructing the captured image failed
     #[error("failed to construct the captured image")]
     Image(#[from] tvert_image::Error),
 }

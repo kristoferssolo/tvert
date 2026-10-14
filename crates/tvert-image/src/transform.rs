@@ -6,22 +6,14 @@ use crate::{CapturedImage, Error};
 /// Flipped variants mirror left-to-right before rotating.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ImageTransform {
-    /// Preserve the image.
     #[default]
     Normal,
-    /// Rotate 90 degrees counterclockwise.
     Rotate90,
-    /// Rotate 180 degrees.
     Rotate180,
-    /// Rotate 270 degrees counterclockwise.
     Rotate270,
-    /// Mirror left-to-right.
     Flipped,
-    /// Mirror left-to-right, then rotate 90 degrees counterclockwise.
     Flipped90,
-    /// Mirror left-to-right, then rotate 180 degrees.
     Flipped180,
-    /// Mirror left-to-right, then rotate 270 degrees counterclockwise.
     Flipped270,
 }
 

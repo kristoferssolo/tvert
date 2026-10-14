@@ -5,7 +5,6 @@ use crate::wayland::overlay::{SurfacePosition, SurfaceRect, size::SurfaceSize};
 /// Completed endpoints have not yet been normalized or clipped.
 #[derive(Debug, Clone, Copy, Default)]
 pub enum SelectionState {
-    /// No selection is active
     #[default]
     Idle,
     /// The left button is held while the endpoint moves
@@ -51,7 +50,7 @@ impl SelectionState {
     }
 
     /// Discards an unfinished drag, preserving any completed selection
-    pub const fn cacel_drag(&mut self) {
+    pub const fn cancel_drag(&mut self) {
         if !matches!(self, Self::Dragging { .. }) {
             return;
         }

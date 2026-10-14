@@ -41,22 +41,18 @@ impl SurfaceRect {
         })
     }
 
-    /// Returns the left edge
     pub const fn left(self) -> f64 {
         self.left
     }
 
-    /// Returns the top edge
     pub const fn top(self) -> f64 {
         self.top
     }
 
-    /// Returns the right edge
     pub const fn right(self) -> f64 {
         self.right
     }
 
-    /// Returns the bottom edge
     pub const fn bottom(self) -> f64 {
         self.bottom
     }

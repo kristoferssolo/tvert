@@ -26,13 +26,12 @@ impl Wayland {
     /// Retains the surface without attaching a buffer or requesting keyboard focus. Replaces any
     /// previously retained overlay.
     ///
-    /// Obtain `output_id` from this instance's [`Self::outputs`] method.
-    ///
     /// # Errors
     ///
     /// Returns
-    /// - [`Error::MissingGlobal`] if the compositor or layer-shell global is unavailable.
+    /// - [`Error::MissingGlobal`] if the compositor, layer-shell, or viewporter global is unavailable.
     /// - [`Error::UnknownOutput`] if the output is no longer tracked.
+    /// - [`Error::UnsupportedOverlaySize`] if the configured dimensions cannot be used.
     /// - [`Error::OverlayClosed`] if the compositor closes the overlay.
     /// - [`Error::Dispatch`] if communicating with the compositor fails.
     pub fn prepare_overlay(&mut self, output_id: OutputId) -> Result<SuggestedSurfaceSize, Error> {
@@ -125,22 +124,16 @@ impl Wayland {
     /// returns an owned image oriented as displayed. Empty drags keep waiting.
     /// Right-clicking or a compositor closure after mapping returns `None`.
     ///
-    /// The overlay is destroyed before this method returns. Obtain `output_id`
-    /// from this instance's [`Self::outputs`] method.
+    /// The overlay is destroyed before this method returns.
     ///
     /// # Errors
     ///
-    /// Returns errors from [`Self::capture_output`] or [`Self::prepare_overlay`].
-    ///
-    /// Returns [`Error::MissingGlobal`] if SHM is unavailable,
-    /// [`Error::InvalidShmLayout`] or [`Error::UnsupportedShmFormat`] if the
-    /// display buffer cannot be created, [`Error::ImageAllocation`] if outline
-    /// storage cannot be allocated, or [`Error::ShmIo`] if writing it fails.
-    ///
-    /// Returns [`Error::UnsupportedOverlaySize`] if configured dimensions
-    /// cannot be used, [`Error::UnsupportedOutputTransform`] for an unknown
-    /// transform, [`Error::Image`] if outlining, cropping or transforming fails,
-    /// or [`Error::Dispatch`] if communication or overlay cleanup fails.
+    /// Returns any error from [`Self::capture_output`] or [`Self::prepare_overlay`].
+    /// Displaying the selection can also return [`Error::MissingGlobal`] if SHM is
+    /// unavailable, or [`Error::InvalidShmLayout`], [`Error::UnsupportedShmFormat`],
+    /// [`Error::ImageAllocation`], [`Error::ShmIo`], or [`Error::Image`] if the
+    /// outline or display buffer cannot be created. [`Error::Dispatch`] also
+    /// covers overlay cleanup.
     pub fn select_region(&mut self, output_id: OutputId) -> Result<Option<CapturedImage>, Error> {
         self.state.pointer_surface = None;
         drop(self.state.overlay.take());

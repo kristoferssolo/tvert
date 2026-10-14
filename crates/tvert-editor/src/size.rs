@@ -35,7 +35,7 @@ impl SizeKind {
         }
     }
 
-    /// Parses and exact size, rejection values outside [`Self::range`]
+    /// Parses an exact size, rejecting values outside [`Self::range`]
     pub fn parse(self, input: &str) -> Option<u16> {
         input
             .trim()

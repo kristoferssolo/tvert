@@ -12,13 +12,6 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 use wayland_protocols::{
-    ext::{
-        image_capture_source::v1::client::{
-            ext_image_capture_source_v1::ExtImageCaptureSourceV1,
-            ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
-        },
-        image_copy_capture::v1::client::ext_image_copy_capture_manager_v1::ExtImageCopyCaptureManagerV1,
-    },
     wp::{
         cursor_shape::v1::client::wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
         viewporter::client::wp_viewporter::WpViewporter,
@@ -43,9 +36,6 @@ pub struct State {
     pub shm: Option<WlShm>,
     pub shm_formats: Vec<Format>,
 
-    pub output_capture_source_manager: Option<ExtOutputImageCaptureSourceManagerV1>,
-    pub capture_manager: Option<ExtImageCopyCaptureManagerV1>,
-
     pub screencopy_manager: Option<ZwlrScreencopyManagerV1>,
     pub screencopy: ScreencopyState,
 
@@ -53,7 +43,6 @@ pub struct State {
     pub layer_shell: Option<ZwlrLayerShellV1>,
     pub overlays: HashMap<OutputId, OverlayState>,
     pub viewporter: Option<WpViewporter>,
-    pub capture_source: Option<(OutputId, ExtImageCaptureSourceV1)>,
 
     pub seat: Option<WlSeat>,
     pub pointer: Option<WlPointer>,

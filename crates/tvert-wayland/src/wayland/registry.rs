@@ -36,8 +36,6 @@ impl State {
             bound_globals: &mut self.bound_globals,
         };
         binder.bind(&mut self.shm, 1..=2);
-        binder.bind(&mut self.output_capture_source_manager, 1..=1);
-        binder.bind(&mut self.capture_manager, 1..=1);
         binder.bind(&mut self.screencopy_manager, 1..=3);
         binder.bind(&mut self.compositor, 4..=4);
         binder.bind(&mut self.layer_shell, 1..=4);
@@ -92,15 +90,6 @@ impl State {
 
         drop(self.overlays.remove(&id));
 
-        if self
-            .capture_source
-            .as_ref()
-            .is_some_and(|(output_id, _)| *output_id == id)
-            && let Some((_, source)) = self.capture_source.take()
-        {
-            source.destroy();
-        }
-
         self.outputs.remove(&id);
 
         let Some(output) = self.output_states.remove(&id) else {
@@ -134,8 +123,6 @@ impl State {
             };
         }
 
-        destroy_removed!(output_capture_source_manager);
-        destroy_removed!(capture_manager);
         destroy_removed!(screencopy_manager);
         destroy_removed!(viewporter);
         destroy_removed!(xdg_output_manager);

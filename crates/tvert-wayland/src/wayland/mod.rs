@@ -1,4 +1,3 @@
-mod capture;
 mod dispatch;
 mod input;
 mod output;
@@ -57,9 +56,6 @@ impl Wayland {
         wayland.event_queue.roundtrip(&mut wayland.state)?;
         debug!(
             shm_bound = wayland.state.shm.is_some(),
-            output_capture_source_manager_bound =
-                wayland.state.output_capture_source_manager.is_some(),
-            capture_manager_bound = wayland.state.capture_manager.is_some(),
             screencopy_manager_bound = wayland.state.screencopy_manager.is_some(),
             compositor_bound = wayland.state.compositor.is_some(),
             layer_shell_bound = wayland.state.layer_shell.is_some(),

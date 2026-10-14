@@ -1,9 +1,6 @@
-use crate::{
-    OutputId,
-    wayland::overlay::{
-        OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfacePosition, SurfaceRect,
-        size::SurfaceSize,
-    },
+use crate::wayland::overlay::{
+    OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfacePosition, SurfaceRect,
+    size::SurfaceSize,
 };
 use wayland_client::protocol::{wl_callback::WlCallback, wl_surface::WlSurface};
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
@@ -21,7 +18,6 @@ pub enum OverlayStatus {
 /// Owns the overlay's protocol objects and retained display buffer
 #[derive(Debug)]
 pub struct OverlayState {
-    pub output_id: OutputId,
     pub surface: WlSurface,
     pub layer_surface: ZwlrLayerSurfaceV1,
     pub viewport: WpViewport,
@@ -33,10 +29,6 @@ pub struct OverlayState {
 }
 
 impl OverlayState {
-    pub const fn output_id(&self) -> OutputId {
-        self.output_id
-    }
-
     pub fn set_destination(&self, size: SurfaceSize) {
         self.viewport.set_destination(size.width(), size.height());
     }

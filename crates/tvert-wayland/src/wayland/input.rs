@@ -1,4 +1,7 @@
-use crate::{state::State, wayland::overlay::SurfacePosition};
+use crate::{
+    state::State,
+    wayland::{OverlayState, overlay::SurfacePosition},
+};
 use tracing::{debug, trace};
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum, delegate_noop,
@@ -27,27 +30,25 @@ impl State {
         }
     }
 
-    fn clear_pointer_focus(&mut self) {
-        self.pointer_surface = None;
+    fn focused_overlay(&mut self) -> Option<&mut OverlayState> {
+        let surface = self.pointer_surface.as_ref()?;
+        self.overlays
+            .values_mut()
+            .find(|overlay| overlay.is_surface(surface))
+    }
 
-        if let Some(overlay) = self.overlay.as_mut() {
+    fn clear_pointer_focus(&mut self) {
+        if let Some(overlay) = self.focused_overlay() {
             overlay.pointer_position = None;
             overlay.selection.cancel_drag();
         }
+        self.pointer_surface = None;
     }
 
     fn update_overlay_pointer_position(&mut self, x: f64, y: f64) {
-        let Some(surface) = self.pointer_surface.as_ref() else {
+        let Some(overlay) = self.focused_overlay() else {
             return;
         };
-
-        let Some(overlay) = self.overlay.as_mut() else {
-            return;
-        };
-
-        if !overlay.is_surface(surface) {
-            return;
-        }
 
         let Some(position) = SurfacePosition::new(x, y) else {
             overlay.pointer_position = None;
@@ -65,15 +66,11 @@ impl State {
     }
 
     fn handle_overlay_button(&mut self, button: u32, button_state: ButtonState) {
-        let Some(surface) = self.pointer_surface.as_ref() else {
+        let Some(overlay) = self.focused_overlay() else {
             return;
         };
 
-        let Some(overlay) = self.overlay.as_mut() else {
-            return;
-        };
-
-        if !overlay.is_surface(surface) || !overlay.is_interactive() {
+        if !overlay.is_interactive() {
             return;
         }
 
@@ -107,16 +104,14 @@ impl State {
         }
     }
 
-    fn set_overlay_crusor(&self, pointer: &WlPointer, serial: u32, qh: &QueueHandle<Self>) {
-        let Some(surface) = self.pointer_surface.as_ref() else {
-            return;
-        };
+    fn set_overlay_cursor(&self, pointer: &WlPointer, serial: u32, qh: &QueueHandle<Self>) {
+        let on_overlay = self.pointer_surface.as_ref().is_some_and(|surface| {
+            self.overlays
+                .values()
+                .any(|overlay| overlay.is_surface(surface))
+        });
 
-        let Some(overlay) = self.overlay.as_ref() else {
-            return;
-        };
-
-        if !overlay.is_surface(surface) {
+        if !on_overlay {
             return;
         }
 
@@ -188,7 +183,7 @@ impl Dispatch<WlPointer, ()> for State {
                 state.clear_pointer_focus();
                 state.pointer_surface = Some(surface);
                 state.update_overlay_pointer_position(surface_x, surface_y);
-                state.set_overlay_crusor(pointer, serial, qh);
+                state.set_overlay_cursor(pointer, serial, qh);
             }
             PointerEvent::Motion {
                 surface_x,

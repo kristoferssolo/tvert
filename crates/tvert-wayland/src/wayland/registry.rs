@@ -89,13 +89,7 @@ impl State {
     fn remove_output(&mut self, id: OutputId) {
         self.screencopy.cancel_for_output(id);
 
-        if self
-            .overlay
-            .as_ref()
-            .is_some_and(|overlay| overlay.output_id() == id)
-        {
-            drop(self.overlay.take());
-        }
+        drop(self.overlays.remove(&id));
 
         if self
             .capture_source

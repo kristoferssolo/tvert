@@ -24,13 +24,13 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
         _conn: &wayland_client::Connection,
         _qh: &wayland_client::QueueHandle<Self>,
     ) {
-        let Some(overlay) = state.overlay.as_mut() else {
+        let Some(overlay) = state
+            .overlays
+            .values_mut()
+            .find(|overlay| &overlay.layer_surface == layer_surface)
+        else {
             return;
         };
-
-        if &overlay.layer_surface != layer_surface {
-            return;
-        }
 
         match event {
             Event::Configure {
@@ -77,13 +77,13 @@ impl Dispatch<WlCallback, ()> for State {
             return;
         }
 
-        let Some(overlay) = state.overlay.as_mut() else {
+        let Some(overlay) = state
+            .overlays
+            .values_mut()
+            .find(|overlay| overlay.frame_callback.as_ref() == Some(callback))
+        else {
             return;
         };
-
-        if overlay.frame_callback.as_ref() != Some(callback) {
-            return;
-        }
 
         drop(overlay.frame_callback.take());
     }

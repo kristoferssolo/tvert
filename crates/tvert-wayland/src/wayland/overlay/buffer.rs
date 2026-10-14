@@ -32,17 +32,14 @@ impl Dispatch<WlBuffer, ()> for State {
             return;
         }
 
-        let Some(overlay) = state.overlay.as_mut() else {
+        let Some(overlay) = state.overlays.values_mut().find(|overlay| {
+            overlay
+                .buffer
+                .as_ref()
+                .is_some_and(|current| current.proxy() == proxy)
+        }) else {
             return;
         };
-
-        let Some(current) = overlay.buffer.as_ref() else {
-            return;
-        };
-
-        if current.proxy() != proxy {
-            return;
-        }
 
         let Some(buffer) = overlay.buffer.take() else {
             return;

@@ -51,7 +51,7 @@ pub struct State {
 
     pub compositor: Option<WlCompositor>,
     pub layer_shell: Option<ZwlrLayerShellV1>,
-    pub overlay: Option<OverlayState>,
+    pub overlays: HashMap<OutputId, OverlayState>,
     pub viewporter: Option<WpViewporter>,
     pub capture_source: Option<(OutputId, ExtImageCaptureSourceV1)>,
 

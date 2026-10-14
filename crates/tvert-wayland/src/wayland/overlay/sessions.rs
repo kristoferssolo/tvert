@@ -25,7 +25,7 @@ impl Wayland {
     /// Creates an overlay and waits for its initial configuration.
     ///
     /// Retains the surface without attaching a buffer or requesting keyboard focus. Replaces any
-    /// previously retained overlay.
+    /// overlay already retained for the same output.
     ///
     /// # Errors
     ///
@@ -75,24 +75,27 @@ impl Wayland {
         layer_surface.set_exclusive_zone(-1);
         layer_surface.set_keyboard_interactivity(KeyboardInteractivity::None);
 
-        self.state.overlay = Some(OverlayState {
+        let previous = self.state.overlays.insert(
             output_id,
-            surface,
-            layer_surface,
-            viewport,
-            status: OverlayStatus::Waiting,
-            buffer: None,
-            frame_callback: None,
-            pointer_position: None,
-            selection: SelectionState::default(),
-        });
+            OverlayState {
+                surface,
+                layer_surface,
+                viewport,
+                status: OverlayStatus::Waiting,
+                buffer: None,
+                frame_callback: None,
+                pointer_position: None,
+                selection: SelectionState::default(),
+            },
+        );
+        drop(previous);
 
-        if let Some(overlay) = self.state.overlay.as_ref() {
+        if let Some(overlay) = self.state.overlays.get(&output_id) {
             overlay.surface.commit();
         }
 
         loop {
-            let Some(overlay) = self.state.overlay.as_ref() else {
+            let Some(overlay) = self.state.overlays.get(&output_id) else {
                 return Err(Error::OverlayClosed);
             };
 
@@ -104,7 +107,7 @@ impl Wayland {
                     return Ok(configure);
                 }
                 OverlayStatus::UnsupportedSize(size) => {
-                    drop(self.state.overlay.take());
+                    drop(self.state.overlays.remove(&output_id));
 
                     return Err(Error::UnsupportedOverlaySize {
                         width: size.width,
@@ -112,7 +115,7 @@ impl Wayland {
                     });
                 }
                 OverlayStatus::Closed | OverlayStatus::Cancelled => {
-                    drop(self.state.overlay.take());
+                    drop(self.state.overlays.remove(&output_id));
                     return Err(Error::OverlayClosed);
                 }
             }
@@ -137,10 +140,10 @@ impl Wayland {
     /// covers overlay cleanup.
     pub fn select_region(&mut self, output_id: OutputId) -> Result<Option<CapturedImage>, Error> {
         self.state.pointer_surface = None;
-        drop(self.state.overlay.take());
+        self.state.overlays.clear();
 
         let result = self.run_selection(output_id);
-        drop(self.state.overlay.take());
+        self.state.overlays.clear();
 
         // Send destruction requests before handing the image to another stage.
         // Preserve the original error if both selection and cleanup fail.
@@ -169,11 +172,11 @@ impl Wayland {
         let orientation = buffer_to_surface(transform)?;
 
         let size = SurfaceSize::try_from(self.prepare_overlay(output_id)?)?;
-        self.display_preview(&image, size, transform, orientation, None)?;
+        self.display_preview(output_id, &image, size, transform, orientation, None)?;
         let mut displayed = (size, None);
 
         loop {
-            let Some(overlay) = self.state.overlay.as_ref() else {
+            let Some(overlay) = self.state.overlays.get(&output_id) else {
                 return Ok(None);
             };
 
@@ -204,7 +207,7 @@ impl Wayland {
             let next = (size, rectangle);
 
             if next != displayed && overlay.frame_callback.is_none() {
-                self.display_preview(&image, size, transform, orientation, rectangle)?;
+                self.display_preview(output_id, &image, size, transform, orientation, rectangle)?;
                 displayed = next;
             }
 
@@ -214,6 +217,7 @@ impl Wayland {
 
     fn display_preview(
         &mut self,
+        output_id: OutputId,
         image: &CapturedImage,
         size: SurfaceSize,
         transform: Transform,
@@ -240,7 +244,7 @@ impl Wayland {
         let height =
             i32::try_from(image_size.height().get()).map_err(|_| Error::InvalidShmLayout)?;
 
-        let Some(overlay) = self.state.overlay.as_mut() else {
+        let Some(overlay) = self.state.overlays.get_mut(&output_id) else {
             return Err(Error::OverlayClosed);
         };
 

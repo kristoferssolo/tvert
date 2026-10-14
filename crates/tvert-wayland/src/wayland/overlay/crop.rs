@@ -1,12 +1,8 @@
 use crate::{
     Error,
-    wayland::{
-        output::buffer_to_surface,
-        overlay::{SurfaceRect, geometry::PixelRect, size::SurfaceSize},
-    },
+    wayland::overlay::{SurfaceRect, geometry::PixelRect, size::SurfaceSize},
 };
-use tvert_image::CapturedImage;
-use wayland_client::protocol::wl_output::Transform;
+use tvert_image::{CapturedImage, ImageTransform};
 
 /// Copies a surface selection and orients its pixels as displayed.
 ///
@@ -15,14 +11,13 @@ use wayland_client::protocol::wl_output::Transform;
 ///
 /// # Errors
 ///
-/// Returns [`Error::UnsupportedOutputTransform`] for an unsupported transform,
-/// [`Error::InvalidShmLayout`] if pixel bounds cannot be represented, or
-/// [`Error::Image`] if cropping or transforming the image fails.
+/// Returns [`Error::InvalidShmLayout`] if pixel bounds cannot be represented,
+/// or [`Error::Image`] if cropping or transforming the image fails.
 pub fn selection(
     image: &CapturedImage,
     rectangle: SurfaceRect,
     surface: SurfaceSize,
-    transform: Transform,
+    transform: ImageTransform,
 ) -> Result<Option<CapturedImage>, Error> {
     let Some(bounds) = PixelRect::from_surface(rectangle, surface, image.size(), transform)? else {
         return Ok(None);
@@ -30,7 +25,7 @@ pub fn selection(
 
     let image = image
         .crop(bounds.x().clone(), bounds.y().clone())?
-        .transformed(buffer_to_surface(transform)?)?;
+        .transformed(transform)?;
 
     Ok(Some(image))
 }
@@ -38,11 +33,15 @@ pub fn selection(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wayland::overlay::{SuggestedSurfaceSize, SurfacePosition};
+    use crate::wayland::{
+        output::buffer_to_surface,
+        overlay::{SuggestedSurfaceSize, SurfacePosition},
+    };
     use claims::{assert_ok, assert_some};
     use rstest::rstest;
     use std::num::NonZeroU32;
     use tvert_image::PixelSize;
+    use wayland_client::protocol::wl_output::Transform;
 
     fn pixels(width: u32, height: u32) -> PixelSize {
         PixelSize::new(
@@ -87,6 +86,7 @@ mod tests {
             surface,
         ));
 
+        let transform = assert_ok!(buffer_to_surface(transform));
         let result = assert_some!(assert_ok!(selection(&image, rectangle, surface, transform)));
         let expected = expected
             .into_iter()

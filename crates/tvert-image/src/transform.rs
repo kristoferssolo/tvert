@@ -17,6 +17,17 @@ pub enum ImageTransform {
     Flipped270,
 }
 
+impl ImageTransform {
+    /// Whether the transform exchanges width and height.
+    #[must_use]
+    pub const fn swaps_axes(self) -> bool {
+        match self {
+            Self::Rotate90 | Self::Rotate270 | Self::Flipped90 | Self::Flipped270 => true,
+            Self::Normal | Self::Rotate180 | Self::Flipped | Self::Flipped180 => false,
+        }
+    }
+}
+
 impl CapturedImage {
     /// Consumes the image and transforms its pixels.
     ///

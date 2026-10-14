@@ -45,15 +45,10 @@ impl PixelSize {
     /// Quarter turns exchange width and height. Other transforms preserve them.
     #[must_use]
     pub const fn transformed(self, transform: ImageTransform) -> Self {
-        match transform {
-            ImageTransform::Rotate90
-            | ImageTransform::Rotate270
-            | ImageTransform::Flipped90
-            | ImageTransform::Flipped270 => Self::new(self.height, self.width),
-            ImageTransform::Normal
-            | ImageTransform::Rotate180
-            | ImageTransform::Flipped
-            | ImageTransform::Flipped180 => self,
+        if transform.swaps_axes() {
+            Self::new(self.height, self.width)
+        } else {
+            self
         }
     }
 

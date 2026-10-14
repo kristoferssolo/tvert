@@ -1,6 +1,7 @@
 use crate::{
     Error, OutputId, Wayland,
     wayland::{
+        output::buffer_to_surface,
         overlay::{
             OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfaceRect, crop, render,
             size::SurfaceSize,
@@ -9,7 +10,7 @@ use crate::{
         shm::ShmBuffer,
     },
 };
-use tvert_image::CapturedImage;
+use tvert_image::{CapturedImage, ImageTransform};
 use wayland_client::{
     Proxy, WEnum,
     protocol::{wl_compositor::WlCompositor, wl_output::Transform, wl_shm::WlShm},
@@ -165,9 +166,10 @@ impl Wayland {
                 return Err(Error::UnsupportedOutputTransform(value));
             }
         };
+        let orientation = buffer_to_surface(transform)?;
 
         let size = SurfaceSize::try_from(self.prepare_overlay(output_id)?)?;
-        self.display_preview(&image, size, transform, None)?;
+        self.display_preview(&image, size, transform, orientation, None)?;
         let mut displayed = (size, None);
 
         loop {
@@ -194,7 +196,7 @@ impl Wayland {
 
             if matches!(overlay.selection, SelectionState::Complete { .. })
                 && let Some(rectangle) = rectangle
-                && let Some(selected) = crop::selection(&image, rectangle, size, transform)?
+                && let Some(selected) = crop::selection(&image, rectangle, size, orientation)?
             {
                 return Ok(Some(selected));
             }
@@ -202,7 +204,7 @@ impl Wayland {
             let next = (size, rectangle);
 
             if next != displayed && overlay.frame_callback.is_none() {
-                self.display_preview(&image, size, transform, rectangle)?;
+                self.display_preview(&image, size, transform, orientation, rectangle)?;
                 displayed = next;
             }
 
@@ -215,10 +217,11 @@ impl Wayland {
         image: &CapturedImage,
         size: SurfaceSize,
         transform: Transform,
+        orientation: ImageTransform,
         rectangle: Option<SurfaceRect>,
     ) -> Result<(), Error> {
         let rendered = rectangle
-            .map(|rectangle| render::selection_outline(image, rectangle, size, transform))
+            .map(|rectangle| render::selection_outline(image, rectangle, size, orientation))
             .transpose()?;
         let display_image = rendered.as_ref().unwrap_or(image);
 

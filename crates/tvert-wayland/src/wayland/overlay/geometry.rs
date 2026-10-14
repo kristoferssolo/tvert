@@ -3,8 +3,7 @@ use crate::{
     wayland::overlay::{SurfaceRect, size::SurfaceSize},
 };
 use std::ops::Range;
-use tvert_image::PixelSize;
-use wayland_client::protocol::wl_output::Transform;
+use tvert_image::{ImageTransform, PixelSize};
 
 /// Nonempty pixel ranges in the captured buffer, with exclusive upper bounds
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,9 +25,9 @@ impl PixelRect {
         rectangle: SurfaceRect,
         surface: SurfaceSize,
         pixels: PixelSize,
-        transform: Transform,
+        transform: ImageTransform,
     ) -> Result<Option<Self>, Error> {
-        let [left, top, right, bottom] = buffer_edges(rectangle, surface, pixels, transform)?;
+        let [left, top, right, bottom] = buffer_edges(rectangle, surface, pixels, transform);
         let x = pixel_range(left, right, pixels.width().get())?;
         let y = pixel_range(top, bottom, pixels.height().get())?;
 
@@ -44,29 +43,28 @@ pub fn buffer_edges(
     rectangle: SurfaceRect,
     surface: SurfaceSize,
     pixels: PixelSize,
-    transform: Transform,
-) -> Result<[f64; 4], Error> {
+    transform: ImageTransform,
+) -> [f64; 4] {
     let left = rectangle.left() / f64::from(surface.width());
     let top = rectangle.top() / f64::from(surface.height());
     let right = rectangle.right() / f64::from(surface.width());
     let bottom = rectangle.bottom() / f64::from(surface.height());
 
     let [left, top, right, bottom] = match transform {
-        Transform::Normal => [left, top, right, bottom],
-        Transform::_90 => [top, 1.0 - right, bottom, 1.0 - left],
-        Transform::_180 => [1.0 - right, 1.0 - bottom, 1.0 - left, 1.0 - top],
-        Transform::_270 => [1.0 - bottom, left, 1.0 - top, right],
-        Transform::Flipped => [1.0 - right, top, 1.0 - left, bottom],
-        Transform::Flipped90 => [top, left, bottom, right],
-        Transform::Flipped180 => [left, 1.0 - bottom, right, 1.0 - top],
-        Transform::Flipped270 => [1.0 - bottom, 1.0 - right, 1.0 - top, 1.0 - left],
-        _ => return Err(Error::UnsupportedOutputTransform(u32::from(transform))),
+        ImageTransform::Normal => [left, top, right, bottom],
+        ImageTransform::Rotate270 => [top, 1.0 - right, bottom, 1.0 - left],
+        ImageTransform::Rotate180 => [1.0 - right, 1.0 - bottom, 1.0 - left, 1.0 - top],
+        ImageTransform::Rotate90 => [1.0 - bottom, left, 1.0 - top, right],
+        ImageTransform::Flipped => [1.0 - right, top, 1.0 - left, bottom],
+        ImageTransform::Flipped90 => [top, left, bottom, right],
+        ImageTransform::Flipped180 => [left, 1.0 - bottom, right, 1.0 - top],
+        ImageTransform::Flipped270 => [1.0 - bottom, 1.0 - right, 1.0 - top, 1.0 - left],
     };
 
     let width = f64::from(pixels.width().get());
     let height = f64::from(pixels.height().get());
 
-    Ok([left * width, top * height, right * width, bottom * height])
+    [left * width, top * height, right * width, bottom * height]
 }
 
 fn pixel_range(start: f64, end: f64, limit: u32) -> Result<Range<usize>, Error> {
@@ -104,10 +102,14 @@ fn ceiling_edge(edge: f64, limit: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wayland::overlay::{SuggestedSurfaceSize, SurfacePosition};
+    use crate::wayland::{
+        output::buffer_to_surface,
+        overlay::{SuggestedSurfaceSize, SurfacePosition},
+    };
     use claims::{assert_ok, assert_some};
     use rstest::rstest;
     use std::num::NonZeroU32;
+    use wayland_client::protocol::wl_output::Transform;
 
     fn bounds(start: (f64, f64), end: (f64, f64), transform: Transform) -> PixelRect {
         let surface = assert_ok!(SurfaceSize::try_from(SuggestedSurfaceSize {
@@ -125,7 +127,10 @@ mod tests {
         ));
 
         assert_some!(assert_ok!(PixelRect::from_surface(
-            rectangle, surface, pixels, transform
+            rectangle,
+            surface,
+            pixels,
+            assert_ok!(buffer_to_surface(transform))
         )))
     }
 

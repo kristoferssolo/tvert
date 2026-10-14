@@ -6,8 +6,7 @@ use crate::{
         size::SurfaceSize,
     },
 };
-use tvert_image::{CapturedImage, PixelSize};
-use wayland_client::protocol::wl_output::Transform;
+use tvert_image::{CapturedImage, ImageTransform, PixelSize};
 
 const BORDER_LIGHT: [u8; 4] = [255, 255, 255, 255];
 const BORDER_DARK: [u8; 4] = [0, 0, 0, 255];
@@ -21,17 +20,16 @@ const DASH_LENGTH: f64 = 6.0;
 ///
 /// # Errors
 ///
-/// Returns [`Error::UnsupportedOutputTransform`] for an unsupported transform,
-/// [`Error::InvalidShmLayout`] if row addressing cannot be represented,
+/// Returns [`Error::InvalidShmLayout`] if row addressing cannot be represented,
 /// [`Error::ImageAllocation`] if allocating the copy fails, or [`Error::Image`]
 /// if constructing the resulting image fails.
 pub fn selection_outline(
     image: &CapturedImage,
     rectangle: SurfaceRect,
     surface_size: SurfaceSize,
-    transform: Transform,
+    transform: ImageTransform,
 ) -> Result<CapturedImage, Error> {
-    let outline = Outline::new(rectangle, surface_size, image.size(), transform)?;
+    let outline = Outline::new(rectangle, surface_size, image.size(), transform);
     let row_bytes = image
         .size()
         .row_bytes()
@@ -89,23 +87,22 @@ impl Outline {
         rectangle: SurfaceRect,
         surface: SurfaceSize,
         pixels: PixelSize,
-        transform: Transform,
-    ) -> Result<Self, Error> {
-        let [left, top, right, bottom] = buffer_edges(rectangle, surface, pixels, transform)?;
+        transform: ImageTransform,
+    ) -> Self {
+        let [left, top, right, bottom] = buffer_edges(rectangle, surface, pixels, transform);
         let surface_width = f64::from(surface.width());
         let surface_height = f64::from(surface.height());
 
-        let (axis_width, axis_height) = match transform {
-            Transform::_90 | Transform::_270 | Transform::Flipped90 | Transform::Flipped270 => {
-                (surface_height, surface_width)
-            }
-            _ => (surface_width, surface_height),
+        let (axis_width, axis_height) = if transform.swaps_axes() {
+            (surface_height, surface_width)
+        } else {
+            (surface_width, surface_height)
         };
 
         let scale_x = f64::from(pixels.width().get()) / axis_width;
         let scale_y = f64::from(pixels.height().get()) / axis_height;
 
-        Ok(Self {
+        Self {
             left,
             top,
             right,
@@ -114,7 +111,7 @@ impl Outline {
             stroke_y: BORDER_WIDTH * scale_y,
             scale_x,
             scale_y,
-        })
+        }
     }
 
     fn contains(&self, x: f64, y: f64) -> bool {
@@ -195,7 +192,7 @@ mod tests {
             &image,
             rectangle,
             surface,
-            Transform::Normal
+            ImageTransform::Normal
         ));
 
         let rows = rendered
@@ -248,7 +245,7 @@ mod tests {
             &image,
             rectangle,
             surface,
-            Transform::Normal
+            ImageTransform::Normal
         ));
         let pixels = rendered.rgba().as_chunks::<4>().0;
 

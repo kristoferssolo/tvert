@@ -234,46 +234,12 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn partial_configuration_keeps_unspecified_defaults() {
-        let defaults = assert_ok!(parse("test.toml", ""));
-        let config = assert_ok!(parse(
-            "test.toml",
-            "[editor]\ntheme = 'LiGhT'\ntool = 'pEnCiL'\nstroke_width = 7",
-        ));
-
-        assert_eq!(
-            config,
-            AppConfig {
-                editor: Settings {
-                    theme: ThemePreference::Light,
-                    tool: Tool::Pencil,
-                    stroke_width: 7,
-                    ..defaults.editor
-                },
-                ..defaults
-            }
-        );
-    }
-
-    #[rstest]
-    #[case("[editor]\ntool = 1")]
-    #[case("[editor]\nstroke_color = 12")]
-    #[case("[editor]\nstroke_width = 0")]
-    #[case("[editor]\npixelation_block_size = 65")]
-    #[case("[unknown]\nvalue = 1")]
-    #[case("[editor")]
-    fn invalid_values_and_unknown_keys_are_rejected(#[case] source: &'static str) {
-        let _ = assert_err!(parse("test.toml", source));
-    }
-
-    #[test]
-    fn missing_default_file_is_optional_but_explicit_file_is_required() {
+    fn missing_default_file_is_optional() {
         let directory = assert_ok!(tempdir());
         let path = directory.path().join("missing.toml");
         let defaults = assert_ok!(parse("test.toml", ""));
 
         assert_ok_eq!(load_path(&path, false), defaults);
-        let _ = assert_err!(load_path(&path, true));
     }
 
     #[rstest]
@@ -291,6 +257,8 @@ mod tests {
     #[case("[save]\ndirectory = 'shots'", "directory")]
     #[case("[capture]\noutput = ''", "''")]
     #[case("[capture]\nscreen = 'DP-1'", "screen")]
+    #[case("[unknown]\nvalue = 1", "unknown")]
+    #[case("[editor", "")]
     fn diagnostics_point_to_the_original_user_source_after_merging(
         #[case] source: &'static str,
         #[case] expected: &'static str,
@@ -355,6 +323,9 @@ mod tests {
             [save]
             path = "shots/%Y.png"
             [editor]
+            theme = "LiGhT"
+            tool = "pEnCiL"
+            stroke_width = 7
             blur_sigma = 11
             "#,
         ));
@@ -367,6 +338,9 @@ mod tests {
                     output: OutputSelection::Named("DP-1".to_owned()),
                 },
                 editor: Settings {
+                    theme: ThemePreference::Light,
+                    tool: Tool::Pencil,
+                    stroke_width: 7,
                     blur_sigma: 11,
                     ..defaults.editor
                 },

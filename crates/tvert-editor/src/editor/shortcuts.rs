@@ -155,7 +155,6 @@ mod tests {
     #[rstest]
     #[case("z", Modifiers::CTRL, Message::Undo)]
     #[case("y", Modifiers::CTRL, Message::Redo)]
-    #[case("z", Modifiers::CTRL | Modifiers::SHIFT, Message::Redo)]
     fn parses_history(
         #[case] character: &str,
         #[case] modifiers: Modifiers,

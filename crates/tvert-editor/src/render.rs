@@ -38,6 +38,11 @@ pub fn render_edits(preview: &Handle, edits: &[Edit]) -> Result<CapturedImage, E
     Ok(image)
 }
 
+pub fn handle_from_image(image: CapturedImage) -> Handle {
+    let (width, height) = image.size().into();
+    Handle::from_rgba(width, height, image.into_rgba())
+}
+
 fn image_from_handle(preview: &Handle) -> Result<CapturedImage, Error> {
     let Handle::Rgba {
         width,

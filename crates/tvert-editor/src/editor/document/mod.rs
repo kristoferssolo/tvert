@@ -2,7 +2,11 @@ mod change;
 
 pub(super) use change::Change;
 
-use crate::{Error, edit::Edit, render::render_edits};
+use crate::{
+    Error,
+    edit::Edit,
+    render::{handle_from_image, render_edits},
+};
 use iced::widget::image::Handle;
 
 /// Retained edits, their undo history, and their full-resolution rendering
@@ -129,9 +133,7 @@ impl Document {
     }
 
     fn refresh_preview(&mut self) -> Result<(), Error> {
-        let image = render_edits(&self.original, &self.edits)?;
-        let (width, height) = image.size().into();
-        self.preview = Handle::from_rgba(width, height, image.into_rgba());
+        self.preview = handle_from_image(render_edits(&self.original, &self.edits)?);
         Ok(())
     }
 }

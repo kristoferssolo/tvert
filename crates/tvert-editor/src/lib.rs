@@ -28,9 +28,10 @@ pub use tool::Tool;
 
 use crate::{
     editor::{Editor, ExportHandler, shortcuts},
+    render::handle_from_image,
     toolbar::{HEIGHT, MIN_WIDTH},
 };
-use iced::{ContentFit, Size, Theme, event, widget::image::Handle, window};
+use iced::{ContentFit, Size, Theme, event, window};
 use std::{error::Error as StdError, rc::Rc};
 use tvert_image::CapturedImage;
 
@@ -59,7 +60,7 @@ where
 
     let (width, height) = image.size().into();
     let image_size = Size::from((width, height));
-    let preview = Handle::from_rgba(width, height, image.into_rgba());
+    let preview = handle_from_image(image);
     let export: ExportHandler = Rc::new(move |action, image| {
         export(action, image).map_err(|source| Error::Export(Box::new(source)))
     });

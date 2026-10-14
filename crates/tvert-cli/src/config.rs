@@ -158,7 +158,7 @@ fn home_dir() -> Option<PathBuf> {
         .filter(|path| path.is_absolute())
 }
 
-fn load_path(path: &Path, required: bool) -> Result<AppConfig, ConfigError> {
+fn load_path(path: &Path, required: bool) -> Result<AppConfig> {
     let source = match fs::read_to_string(path) {
         Ok(source) => source,
         Err(error) if error.kind() == ErrorKind::NotFound && !required => {

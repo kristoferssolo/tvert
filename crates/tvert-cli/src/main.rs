@@ -92,7 +92,7 @@ fn preview(
     destination: Destination,
 ) -> miette::Result<()> {
     let clipboard = Rc::new(RefCell::new(None));
-    let edito_clipboard = clipboard.clone();
+    let editor_clipboard = clipboard.clone();
 
     tvert_editor::run(
         image,
@@ -109,7 +109,7 @@ fn preview(
             }
 
             if let Some(offer) = offer {
-                edito_clipboard.replace(Some(offer));
+                editor_clipboard.replace(Some(offer));
             }
 
             Ok(())

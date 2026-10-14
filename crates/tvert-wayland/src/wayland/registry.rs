@@ -1,5 +1,6 @@
 use crate::{
-    Global, OutputId,
+    OutputId,
+    global::Global,
     state::State,
     wayland::{OutputState, output::OutputData},
 };

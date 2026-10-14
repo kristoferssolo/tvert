@@ -12,7 +12,7 @@ pub use output::OutputState;
 pub use overlay::OverlayState;
 pub use screencopy::ScreencopyState;
 
-use crate::{Error, Global, Output, state::State};
+use crate::{Error, Output, global::Global, state::State};
 use tracing::{debug, trace};
 use wayland_client::{Connection, EventQueue, globals::registry_queue_init};
 
@@ -78,12 +78,6 @@ impl Wayland {
         }
 
         Ok(wayland)
-    }
-
-    /// Returns the globals discovered on this connection
-    #[must_use]
-    pub fn globals(&self) -> &[Global] {
-        &self.state.globals
     }
 
     /// Returns the output snapshots collected on this connection

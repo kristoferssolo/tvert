@@ -11,7 +11,7 @@ pub fn parse_hex(value: &str) -> Option<Color> {
     hex.parse().ok()
 }
 
-pub(crate) fn format_hex(color: Color) -> String {
+pub fn format_hex(color: Color) -> String {
     let [red, green, blue, alpha] = color.into_rgba8();
     if alpha == u8::MAX {
         return format!("#{red:02X}{green:02X}{blue:02X}");

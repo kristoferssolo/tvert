@@ -1,6 +1,6 @@
 mod annotation;
 mod annotation_canvas;
-pub mod color;
+mod color;
 mod edit;
 mod editor;
 mod error;
@@ -20,6 +20,7 @@ mod tool;
 mod toolbar;
 mod viewport;
 
+pub use color::parse_hex;
 pub use error::Error;
 pub use export::ExportAction;
 pub use settings::Settings;

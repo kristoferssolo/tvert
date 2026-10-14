@@ -110,7 +110,7 @@ where
 {
     let value = String::deserialize(deserializer)?;
 
-    tvert_editor::color::parse_hex(&value)
+    tvert_editor::parse_hex(&value)
         .ok_or_else(|| de::Error::custom("expected a hex color in #RRGGBB or #RRGGBBAA format"))
 }
 

@@ -41,7 +41,7 @@ impl OutputState {
         }
     }
 
-    pub fn snapshot(&self, id: OutputId) -> Option<Output> {
+    fn snapshot(&self, id: OutputId) -> Option<Output> {
         Some(Output {
             id,
             name: self.name.clone()?,

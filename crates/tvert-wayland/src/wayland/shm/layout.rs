@@ -52,7 +52,7 @@ impl Stride {
     ///
     /// Returns [`Error::InvalidShmLayout`] if the length exceeds
     /// the positive `i32` range required by `wl_shm_pool`.
-    pub fn buffer_len(self, height: NonZeroU32) -> Result<i32, Error> {
+    fn buffer_len(self, height: NonZeroU32) -> Result<i32, Error> {
         self.bytes()
             .checked_mul(height.get())
             .and_then(|bytes| i32::try_from(bytes).ok())

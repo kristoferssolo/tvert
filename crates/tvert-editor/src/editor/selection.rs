@@ -4,16 +4,14 @@ impl Editor {
     pub(super) fn select_tool(&mut self, tool: Tool) {
         self.tool = tool;
         self.mode = Mode::Draw;
-        self.size_input = None;
-        self.close_color_palette();
+        self.dismiss_controls();
     }
 
     pub(super) fn enter_selection_mode(&mut self) {
         if self.mode == Mode::Draw {
             self.mode = Mode::Select(None);
         }
-        self.size_input = None;
-        self.close_color_palette();
+        self.dismiss_controls();
     }
 
     /// Selects an existing edit, ignoring indices outside the current edits
@@ -36,9 +34,15 @@ impl Editor {
 mod tests {
     use super::*;
     use crate::{
-        Settings, ThemePreference, annotation::AnnotationDraft, editor::Message, style::RED,
+        Settings, ThemePreference,
+        annotation::AnnotationDraft,
+        editor::{Message, SizeMessage},
+        size::SizeKind,
+        style::RED,
     };
+    use claims::assert_none;
     use iced::{Point, Size, widget::image::Handle};
+    use rstest::rstest;
     use std::rc::Rc;
 
     fn editor_with_line() -> Editor {
@@ -115,5 +119,23 @@ mod tests {
 
         assert!(editor.document.edits().is_empty());
         assert_eq!(editor.mode, Mode::Select(None));
+    }
+
+    #[rstest]
+    #[case::tool(Message::SelectTool(Tool::Pencil))]
+    #[case::selection_mode(Message::SelectionMode)]
+    fn changing_mode_dismisses_controls(#[case] change: Message) {
+        let mut editor = editor_with_line();
+
+        for message in [
+            Message::ToggleColorPalette,
+            Message::Size(SizeMessage::Edit(SizeKind::StrokeWidth, "9x".into())),
+            change,
+        ] {
+            let _ = editor.update(message);
+        }
+
+        assert_none!(&editor.size_input);
+        assert!(!editor.color_palette_open);
     }
 }

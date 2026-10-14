@@ -1,4 +1,4 @@
-pub mod color;
+mod color;
 mod document;
 mod message;
 mod movement;
@@ -142,15 +142,11 @@ impl Editor {
     }
 
     /// Returns the committed image at full resolution.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if preparing the pixel storage fails.
-    pub fn render_image(&self) -> Result<CapturedImage, Error> {
+    fn render_image(&self) -> Result<CapturedImage, Error> {
         render_image(self.document.preview(), &[])
     }
 
-    pub fn export(&mut self, action: ExportAction) -> Task<Message> {
+    fn export(&mut self, action: ExportAction) -> Task<Message> {
         match self
             .render_image()
             .and_then(|image| (self.export)(action, &image))
@@ -164,6 +160,12 @@ impl Editor {
                 Task::none()
             }
         }
+    }
+
+    /// Discards unapplied size text and closes the color palette.
+    fn dismiss_controls(&mut self) {
+        self.size_input = None;
+        self.close_color_palette();
     }
 
     /// Runs a document operation, shows its result, and returns whether it applied.

@@ -95,27 +95,13 @@ fn error_message(error: &dyn StdError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Settings, ThemePreference, Tool, style::RED};
     use iced::advanced::{Layout, Shell, clipboard, layout, widget::Tree};
     use iced::mouse::{Button, Cursor, Event as MouseEvent};
-    use iced::{Event, Font, Pixels, Point, Renderer, Size, widget::image::Handle};
+    use iced::{Event, Font, Pixels, Point, Renderer, Size};
     use std::assert_matches;
-    use std::rc::Rc;
 
     fn editor(color_palette_open: bool) -> Editor {
-        let mut editor = Editor::new(
-            Handle::from_rgba(2, 2, vec![0; 16]),
-            Size::new(2.0, 2.0),
-            Settings {
-                theme: ThemePreference::Dark,
-                tool: Tool::Rectangle,
-                stroke_color: RED,
-                stroke_width: 4,
-                pixelation_block_size: 16,
-                blur_sigma: 8,
-            },
-            Rc::new(|_, _| Ok(())),
-        );
+        let mut editor = Editor::for_test(2, 2, vec![0; 16]);
         editor.color_palette_open = color_palette_open;
         editor
     }

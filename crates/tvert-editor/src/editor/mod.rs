@@ -24,6 +24,8 @@ use crate::{
     tool::Tool,
     viewport::Navigation,
 };
+#[cfg(test)]
+use crate::{ThemePreference, style::RED};
 use iced::{
     Size, Task,
     widget::{canvas::Cache, image::Handle},
@@ -195,26 +197,34 @@ impl Editor {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{ThemePreference, annotation::AnnotationDraft, size::SizeKind, style::RED};
-    use claims::{assert_ok, assert_some};
-    use iced::{Color, Point};
-
-    fn editor() -> Editor {
-        Editor::new(
-            Handle::from_rgba(32, 16, [20, 40, 60, 255].repeat(512)),
-            Size::new(32.0, 16.0),
+impl Editor {
+    /// An editor over an RGBA image with fixed settings and exports that succeed
+    fn for_test(width: u32, height: u32, rgba: Vec<u8>) -> Self {
+        Self::new(
+            Handle::from_rgba(width, height, rgba),
+            Size::from((width, height)),
             Settings {
                 theme: ThemePreference::Dark,
                 tool: Tool::Arrow,
                 stroke_color: RED,
                 stroke_width: 4,
-                pixelation_block_size: 4,
+                pixelation_block_size: 16,
                 blur_sigma: 8,
             },
             Rc::new(|_, _| Ok(())),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{annotation::AnnotationDraft, size::SizeKind, style::RED};
+    use claims::{assert_ok, assert_some};
+    use iced::{Color, Point};
+
+    fn editor() -> Editor {
+        Editor::for_test(32, 16, [20, 40, 60, 255].repeat(512))
     }
 
     fn line(size: u16, stroke_color: Color) -> Message {

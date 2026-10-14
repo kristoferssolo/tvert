@@ -34,31 +34,17 @@ impl Editor {
 mod tests {
     use super::*;
     use crate::{
-        Settings, ThemePreference,
         annotation::AnnotationDraft,
         editor::{Message, SizeMessage},
         size::SizeKind,
         style::RED,
     };
     use claims::assert_none;
-    use iced::{Point, Size, widget::image::Handle};
+    use iced::Point;
     use rstest::rstest;
-    use std::rc::Rc;
 
     fn editor_with_line() -> Editor {
-        let mut editor = Editor::new(
-            Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
-            Size::new(1.0, 1.0),
-            Settings {
-                theme: ThemePreference::Dark,
-                tool: Tool::Arrow,
-                stroke_color: RED,
-                stroke_width: 4,
-                pixelation_block_size: 16,
-                blur_sigma: 8,
-            },
-            Rc::new(|_, _| Ok(())),
-        );
+        let mut editor = Editor::for_test(1, 1, vec![0, 0, 0, 255]);
         let _ = editor.update(Message::AddEdit(AnnotationDraft {
             tool: Tool::Line,
             size: 4,

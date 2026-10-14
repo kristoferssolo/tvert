@@ -99,22 +99,12 @@ impl Editor {
 mod tests {
     use super::*;
     use crate::{
-        Settings, ThemePreference, Tool, annotation::AnnotationDraft, editor::Message,
-        render::render_edits, style::RED, viewport::Viewport,
+        Tool, annotation::AnnotationDraft, editor::Message, render::render_edits,
+        viewport::Viewport,
     };
     use claims::{assert_ok, assert_some};
     use iced::{Color, Point, Rectangle, Size, widget::image::Handle};
     use rstest::rstest;
-    use std::rc::Rc;
-
-    const SETTINGS: Settings = Settings {
-        theme: ThemePreference::Dark,
-        tool: Tool::Arrow,
-        stroke_color: RED,
-        stroke_width: 4,
-        pixelation_block_size: 4,
-        blur_sigma: 8,
-    };
 
     fn draft(tool: Tool, points: &[Point]) -> AnnotationDraft {
         AnnotationDraft {
@@ -126,18 +116,13 @@ mod tests {
     }
 
     fn editor(drafts: impl IntoIterator<Item = AnnotationDraft>) -> Editor {
-        let mut editor = Editor::new(
-            original(),
-            Size::new(32.0, 16.0),
-            SETTINGS,
-            Rc::new(|_, _| Ok(())),
-        );
+        let mut editor = Editor::for_test(32, 16, original());
         send(&mut editor, drafts.into_iter().map(Message::AddEdit));
         editor
     }
 
-    fn original() -> Handle {
-        let pixels = (0..512)
+    fn original() -> Vec<u8> {
+        (0..512)
             .flat_map(|index| {
                 [
                     assert_ok!(u8::try_from(index % 32)),
@@ -146,8 +131,7 @@ mod tests {
                     255,
                 ]
             })
-            .collect::<Vec<u8>>();
-        Handle::from_rgba(32, 16, pixels)
+            .collect()
     }
 
     fn send(editor: &mut Editor, messages: impl IntoIterator<Item = Message>) {
@@ -204,7 +188,11 @@ mod tests {
 
         assert_eq!(
             pixels(editor),
-            assert_ok!(render_edits(&original(), &expected)).into_rgba()
+            assert_ok!(render_edits(
+                &Handle::from_rgba(32, 16, original()),
+                &expected
+            ))
+            .into_rgba()
         );
     }
 

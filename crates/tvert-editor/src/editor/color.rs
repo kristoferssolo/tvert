@@ -40,24 +40,10 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Settings, ThemePreference, Tool, editor::Message, style::RED};
-    use iced::{Size, widget::image::Handle};
-    use std::rc::Rc;
+    use crate::editor::Message;
 
     fn editor() -> Editor {
-        Editor::new(
-            Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
-            Size::new(1.0, 1.0),
-            Settings {
-                theme: ThemePreference::Dark,
-                tool: Tool::Arrow,
-                stroke_color: RED,
-                stroke_width: 4,
-                pixelation_block_size: 16,
-                blur_sigma: 4,
-            },
-            Rc::new(|_, _| Ok(())),
-        )
+        Editor::for_test(1, 1, vec![0, 0, 0, 255])
     }
 
     #[test]

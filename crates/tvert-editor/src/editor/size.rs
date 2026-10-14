@@ -27,26 +27,12 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Settings, ThemePreference, Tool, editor::Message, size::SizeKind, style::RED};
+    use crate::{Tool, editor::Message, size::SizeKind};
     use claims::assert_none;
-    use iced::{Size, widget::image::Handle};
     use rstest::rstest;
-    use std::rc::Rc;
 
     fn editor() -> Editor {
-        Editor::new(
-            Handle::from_rgba(1, 1, vec![0, 0, 0, 255]),
-            Size::new(1.0, 1.0),
-            Settings {
-                theme: ThemePreference::Dark,
-                tool: Tool::Arrow,
-                stroke_color: RED,
-                stroke_width: 4,
-                pixelation_block_size: 16,
-                blur_sigma: 8,
-            },
-            Rc::new(|_, _| Ok(())),
-        )
+        Editor::for_test(1, 1, vec![0, 0, 0, 255])
     }
 
     fn edit(editor: &mut Editor, kind: SizeKind, input: &str) {

@@ -1,9 +1,9 @@
 use crate::{
     Error, OutputId, Wayland,
     wayland::{
-        output::buffer_to_surface,
         overlay::{
-            OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfaceRect, crop, render,
+            OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfaceRect, render,
+            selector::SelectionTarget,
             size::SurfaceSize,
             state::{OverlayState, OverlayStatus},
         },
@@ -12,7 +12,7 @@ use crate::{
 };
 use tvert_image::{CapturedImage, ImageTransform};
 use wayland_client::{
-    Proxy, WEnum,
+    Proxy,
     protocol::{wl_compositor::WlCompositor, wl_output::Transform, wl_shm::WlShm},
 };
 use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
@@ -20,12 +20,6 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
     zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity},
 };
-
-#[derive(Debug, Clone, Copy)]
-enum SelectionTarget {
-    Screen,
-    Region(OutputId),
-}
 
 impl Wayland {
     /// Creates an overlay and waits for its initial configuration.
@@ -139,6 +133,7 @@ impl Wayland {
     /// # Errors
     ///
     /// Returns any error from [`Self::capture_output`] or [`Self::prepare_overlay`].
+    /// Returns [`Error::UnsupportedOverlaySize`] if the suggested size cannot be used.
     /// Displaying the selection can also return [`Error::MissingGlobal`] if SHM is
     /// unavailable, or [`Error::InvalidShmLayout`], [`Error::UnsupportedShmFormat`],
     /// [`Error::ImageAllocation`], [`Error::ShmIo`], or [`Error::Image`] if the
@@ -183,10 +178,7 @@ impl Wayland {
         self.state.keyboard_surface = None;
         self.state.overlays.clear();
 
-        let result = match target {
-            SelectionTarget::Screen => self.run_screen_selection(),
-            SelectionTarget::Region(output_id) => self.run_selection(output_id),
-        };
+        let result = self.run_selection(target);
         self.state.overlays.clear();
 
         // Send destruction requests before handing the image to another stage.
@@ -199,62 +191,6 @@ impl Wayland {
         cleanup?;
 
         Ok(selected)
-    }
-
-    fn run_selection(&mut self, output_id: OutputId) -> Result<Option<CapturedImage>, Error> {
-        let image = self.capture_buffer(output_id)?;
-
-        let Some(output) = self.state.output_states.get(&output_id) else {
-            return Err(Error::UnknownOutput(output_id));
-        };
-
-        let transform = match output.transform {
-            WEnum::Value(transform) => transform,
-            WEnum::Unknown(value) => {
-                return Err(Error::UnsupportedOutputTransform(value));
-            }
-        };
-        let orientation = buffer_to_surface(transform)?;
-
-        let size = self.prepare_selection_overlay(output_id)?;
-        self.display_preview(output_id, &image, size, transform, orientation, None)?;
-        let mut displayed = (size, None);
-
-        loop {
-            let Some(overlay) = self.state.overlays.get(&output_id) else {
-                return Ok(None);
-            };
-
-            if matches!(
-                overlay.status,
-                OverlayStatus::Closed | OverlayStatus::Cancelled
-            ) {
-                return Ok(None);
-            }
-
-            let Some(size) = overlay.status.size()? else {
-                self.event_queue.blocking_dispatch(&mut self.state)?;
-                continue;
-            };
-
-            let rectangle = overlay.selection_rectangle();
-
-            if matches!(overlay.selection, SelectionState::Complete { .. })
-                && let Some(rectangle) = rectangle
-                && let Some(selected) = crop::selection(&image, rectangle, size, orientation)?
-            {
-                return Ok(Some(selected));
-            }
-
-            let next = (size, rectangle);
-
-            if next != displayed && overlay.frame_callback.is_none() {
-                self.display_preview(output_id, &image, size, transform, orientation, rectangle)?;
-                displayed = next;
-            }
-
-            self.event_queue.blocking_dispatch(&mut self.state)?;
-        }
     }
 
     pub(super) fn display_preview(

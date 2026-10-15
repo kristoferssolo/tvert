@@ -7,6 +7,7 @@ use crate::config::{CaptureSettings, SaveSettings};
 const EXAMPLES: &str = r"
 Examples:
   tvert preview region
+  tvert preview desktop
   tvert preview screen --output DP-1
   tvert save region --path shot.png
   tvert config check --config ~/.config/tvert/config.toml
@@ -29,15 +30,12 @@ pub enum Command {
     /// Capture and open the editor to copy or save
     #[command(subcommand)]
     Preview(TargetCommand),
-
     /// Capture and save immediately
     #[command(subcommand)]
     Save(TargetCommand),
-
     /// Inspect configuration without connecting to Wayland
     #[command(subcommand)]
     Config(ConfigCommand),
-
     /// Development diagnostics
     #[command(subcommand)]
     Debug(DebugCommand),
@@ -45,6 +43,8 @@ pub enum Command {
 
 #[derive(Debug, Subcommand)]
 pub enum TargetCommand {
+    /// Capture all outputs in their desktop layout without selection
+    Desktop(DestinationArgs),
     /// Capture an entire screen
     Screen(TargetArgs),
     /// Drag to select part of the screen. Right-click to cancel
@@ -56,7 +56,12 @@ pub struct TargetArgs {
     /// Output name, such as DP-1, or "all"; overrides capture.output
     #[arg(long, value_name = "NAME")]
     output: Option<OutputSelection>,
+    #[command(flatten)]
+    destination: DestinationArgs,
+}
 
+#[derive(Debug, clap::Args)]
+pub struct DestinationArgs {
     /// PNG file to create; overrides save.path
     ///
     /// An explicit file must not already exist, and its directory is not
@@ -86,15 +91,18 @@ pub enum DebugCommand {
 
 impl TargetCommand {
     pub fn resolve(self, capture: &CaptureSettings, save: &SaveSettings) -> (Target, Destination) {
-        let (target, args): (fn(OutputSelection) -> Target, _) = match self {
-            Self::Screen(args) => (Target::Screen, args),
-            Self::Region(args) => (Target::Region, args),
+        let output =
+            |output: Option<OutputSelection>| output.unwrap_or_else(|| capture.output.clone());
+
+        let (target, destination) = match self {
+            Self::Desktop(destination) => (Target::Desktop, destination),
+            Self::Screen(args) => (Target::Screen(output(args.output)), args.destination),
+            Self::Region(args) => (Target::Region(output(args.output)), args.destination),
         };
 
-        let output = args.output.unwrap_or_else(|| capture.output.clone());
         (
-            target(output),
-            Destination::new(args.path, save.path.clone()),
+            target,
+            Destination::new(destination.path, save.path.clone()),
         )
     }
 }
@@ -102,7 +110,7 @@ impl TargetCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::assert_ok;
+    use claims::{assert_err, assert_ok};
     use rstest::rstest;
     use tvert_workflow::PathPattern;
 
@@ -116,6 +124,12 @@ mod tests {
         &["preview", "screen", "--output", "all", "--path", "shot.png"],
         Target::Screen(OutputSelection::All),
         Some("shot.png")
+    )]
+    #[case(&["preview", "desktop"], Target::Desktop, None)]
+    #[case(
+        &["save", "desktop", "--path", "desktop.png"],
+        Target::Desktop,
+        Some("desktop.png")
     )]
     fn flags_override_configuration(
         #[case] args: &[&str],
@@ -137,5 +151,12 @@ mod tests {
             command.resolve(&capture, &save),
             (target, Destination::new(path.map(PathBuf::from), save.path))
         );
+    }
+
+    #[test]
+    fn desktop_rejects_an_output_restriction() {
+        assert_err!(Args::try_parse_from([
+            "tvert", "preview", "desktop", "--output", "DP-1"
+        ]));
     }
 }

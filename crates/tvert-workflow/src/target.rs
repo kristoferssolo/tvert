@@ -4,6 +4,8 @@ use tvert_wayland::{Output, OutputId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
+    /// Every output, combined without interactive selection
+    Desktop,
     /// An entire output
     Screen(OutputSelection),
     /// A region the user drags out on an output

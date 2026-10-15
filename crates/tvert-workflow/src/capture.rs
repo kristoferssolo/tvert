@@ -53,7 +53,9 @@ fn capture_from(
     target: &Target,
 ) -> Result<Option<CapturedImage>, Error> {
     match target {
-        Target::Screen(OutputSelection::All) => capture_desktop(backend).map(Some),
+        Target::Desktop | Target::Screen(OutputSelection::All) => {
+            capture_desktop(backend).map(Some)
+        }
         Target::Screen(output) => {
             let output = output.resolve(backend.outputs())?;
             Ok(Some(backend.capture_output(output)?))
@@ -213,20 +215,29 @@ mod tests {
     }
 
     #[rstest]
-    #[case::named(named("HDMI-A-1"), &[Call::Screen(OutputId(2))], 4)]
+    #[case::named(
+        Target::Screen(named("HDMI-A-1")),
+        &[Call::Screen(OutputId(2))],
+        4
+    )]
     #[case::all(
-        OutputSelection::All,
+        Target::Screen(OutputSelection::All),
+        &[Call::Screen(OutputId(1)), Call::Screen(OutputId(2))],
+        8
+    )]
+    #[case::desktop(
+        Target::Desktop,
         &[Call::Screen(OutputId(1)), Call::Screen(OutputId(2))],
         8
     )]
     fn screen_captures_the_selected_outputs(
-        #[case] selection: OutputSelection,
+        #[case] selection: Target,
         #[case] calls: &[Call],
         #[case] width: u32,
     ) {
         let mut backend = Fake::new(None);
 
-        let captured = assert_ok!(capture_from(&mut backend, &Target::Screen(selection)));
+        let captured = assert_ok!(capture_from(&mut backend, &selection));
 
         assert_eq!(assert_some!(captured).size(), image(width, 4).size());
         assert_eq!(backend.calls, calls);
@@ -239,10 +250,7 @@ mod tests {
     fn desktop_capture_never_returns_a_partial_image(#[case] failure: Failure) {
         let mut backend = Fake::failing(failure);
 
-        let error = assert_err!(capture_from(
-            &mut backend,
-            &Target::Screen(OutputSelection::All)
-        ));
+        let error = assert_err!(capture_from(&mut backend, &Target::Desktop));
 
         let expected = match failure {
             Failure::Capture => matches!(

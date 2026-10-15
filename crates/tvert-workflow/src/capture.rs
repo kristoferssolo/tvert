@@ -4,12 +4,13 @@ use crate::{
     target::Target,
 };
 use tvert_image::CapturedImage;
-use tvert_wayland::{Output, OutputId, Wayland};
+use tvert_wayland::{FrozenOutput, Output, OutputId, Wayland};
 
 /// The compositor operations capture needs, separated for testing
 trait Backend {
     fn outputs(&self) -> impl Iterator<Item = &Output>;
     fn capture_output(&mut self, output: OutputId) -> Result<CapturedImage, tvert_wayland::Error>;
+    fn freeze_outputs(&mut self) -> Result<Vec<FrozenOutput>, tvert_wayland::Error>;
     fn select_screen(&mut self) -> Result<Option<CapturedImage>, tvert_wayland::Error>;
     fn select_region(
         &mut self,
@@ -24,6 +25,10 @@ impl Backend for Wayland {
 
     fn capture_output(&mut self, output: OutputId) -> Result<CapturedImage, tvert_wayland::Error> {
         self.capture_output(output)
+    }
+
+    fn freeze_outputs(&mut self) -> Result<Vec<FrozenOutput>, tvert_wayland::Error> {
+        self.freeze_outputs()
     }
 
     fn select_screen(&mut self) -> Result<Option<CapturedImage>, tvert_wayland::Error> {
@@ -72,35 +77,26 @@ fn capture_from(
 }
 
 fn capture_desktop(backend: &mut impl Backend) -> Result<CapturedImage, Error> {
-    let outputs = sorted_outputs(backend);
-
-    let screens = outputs
-        .iter()
-        .map(|output| {
+    let frozen = backend.freeze_outputs().map_err(|error| match error {
+        tvert_wayland::Error::NoOutputs => Error::NoOutputs,
+        tvert_wayland::Error::OutputsChanged => Error::OutputsChanged,
+        other => Error::Capture(other),
+    })?;
+    let screens = frozen
+        .into_iter()
+        .map(|frozen| {
+            let (output, image) = frozen.into_parts()?;
             let area = output.logical.ok_or_else(|| Error::UnknownPlacement {
                 name: output.name.clone(),
             })?;
-            let image = backend.capture_output(output.id)?;
-
             Ok(Screen {
-                name: &output.name,
+                name: output.name,
                 area,
                 image,
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
-
-    if sorted_outputs(backend) != outputs {
-        return Err(Error::OutputsChanged);
-    }
-
     compose(screens)
-}
-
-fn sorted_outputs(backend: &impl Backend) -> Vec<Output> {
-    let mut outputs = backend.outputs().cloned().collect::<Vec<_>>();
-    outputs.sort_unstable_by_key(|output| output.id.0);
-    outputs
 }
 
 #[cfg(test)]
@@ -109,12 +105,13 @@ mod tests {
     use claims::{assert_err, assert_ok, assert_some};
     use rstest::rstest;
     use std::num::NonZeroU32;
-    use tvert_image::PixelSize;
+    use tvert_image::{ImageTransform, PixelSize};
     use tvert_wayland::{LogicalRect, PhysicalSize};
 
     #[derive(Debug, PartialEq, Eq)]
     enum Call {
         Screen(OutputId),
+        Freeze,
         ScreenPicker,
         Region(OutputId),
     }
@@ -184,17 +181,26 @@ mod tests {
         ) -> Result<CapturedImage, tvert_wayland::Error> {
             self.calls.push(Call::Screen(output));
 
+            Ok(image(4, 4))
+        }
+
+        fn freeze_outputs(&mut self) -> Result<Vec<FrozenOutput>, tvert_wayland::Error> {
+            self.calls.push(Call::Freeze);
             match self.failure {
-                Some(Failure::Capture) if output == OutputId(2) => {
-                    return Err(tvert_wayland::Error::ScreencopyFailed);
-                }
-                Some(Failure::Disconnect) => {
-                    self.outputs.retain(|output| output.id != OutputId(1));
-                }
+                Some(Failure::Capture) => return Err(tvert_wayland::Error::ScreencopyFailed),
+                Some(Failure::Disconnect) => return Err(tvert_wayland::Error::OutputsChanged),
                 _ => {}
             }
-
-            Ok(image(4, 4))
+            Ok(self
+                .outputs
+                .iter()
+                .cloned()
+                .map(|output| FrozenOutput {
+                    output,
+                    image: image(4, 4),
+                    orientation: ImageTransform::Normal,
+                })
+                .collect())
         }
 
         fn select_screen(&mut self) -> Result<Option<CapturedImage>, tvert_wayland::Error> {
@@ -230,11 +236,7 @@ mod tests {
         &[Call::Screen(OutputId(2))],
         4
     )]
-    #[case::desktop(
-        Target::Desktop,
-        &[Call::Screen(OutputId(1)), Call::Screen(OutputId(2))],
-        8
-    )]
+    #[case::desktop(Target::Desktop, &[Call::Freeze], 8)]
     fn screen_captures_the_selected_outputs(
         #[case] selection: Target,
         #[case] calls: &[Call],

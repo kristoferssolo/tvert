@@ -1,4 +1,6 @@
+use crate::Error;
 use std::{fmt::Display, num::NonZeroU32};
+use tvert_image::{CapturedImage, ImageTransform};
 
 /// Identifies an output by its registry name on one [`Wayland`](crate::Wayland)
 /// connection.
@@ -32,6 +34,25 @@ pub struct Output {
     pub size: PhysicalSize,
     pub scale: i32,
     pub logical: Option<LogicalRect>,
+}
+
+/// An output snapshot and its frozen pixels in capture-buffer orientation.
+#[derive(Debug)]
+pub struct FrozenOutput {
+    pub output: Output,
+    pub image: CapturedImage,
+    pub orientation: ImageTransform,
+}
+
+impl FrozenOutput {
+    /// Returns the metadata and owned image oriented as displayed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Image`] if transforming the pixels fails.
+    pub fn into_parts(self) -> Result<(Output, CapturedImage), Error> {
+        Ok((self.output, self.image.transformed(self.orientation)?))
+    }
 }
 
 impl Display for PhysicalSize {

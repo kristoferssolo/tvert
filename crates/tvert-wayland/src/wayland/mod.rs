@@ -1,4 +1,5 @@
 mod dispatch;
+mod freeze;
 mod input;
 mod output;
 mod overlay;

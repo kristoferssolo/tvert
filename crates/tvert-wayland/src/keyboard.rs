@@ -1,9 +1,8 @@
+use crate::state::State;
 use wayland_client::{
     Dispatch, WEnum,
     protocol::wl_keyboard::{Event, KeyState, WlKeyboard},
 };
-
-use crate::state::State;
 
 const KEY_ESCAPE: u32 = 1;
 

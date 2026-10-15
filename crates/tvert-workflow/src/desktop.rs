@@ -1,15 +1,11 @@
 use crate::Error;
-use std::{
-    cmp::{Ordering, Reverse},
-    num::NonZeroU32,
-    ops::Range,
-};
+use std::{cmp::Ordering, num::NonZeroU32, ops::Range};
 use tvert_image::{CapturedImage, PixelSize};
 use tvert_wayland::LogicalRect;
 
 /// A captured output, oriented as displayed, and its logical desktop area
-pub struct Screen<'a> {
-    pub name: &'a str,
+pub struct Screen {
+    pub name: String,
     pub area: LogicalRect,
     pub image: CapturedImage,
 }
@@ -30,7 +26,11 @@ pub struct Screen<'a> {
 /// if the layout cannot be mapped to image coordinates, or [`Error::Compose`]
 /// if allocating or painting the combined image fails.
 pub fn compose(mut screens: Vec<Screen>) -> Result<CapturedImage, Error> {
-    screens.sort_by_key(|screen| (screen.densities(), Reverse(screen.name)));
+    screens.sort_by(|left, right| {
+        left.densities()
+            .cmp(&right.densities())
+            .then_with(|| right.name.cmp(&left.name))
+    });
     let densest = screens.last().ok_or(Error::NoOutputs)?;
     let (x_density, y_density) = densest.densities();
 
@@ -50,7 +50,7 @@ pub fn compose(mut screens: Vec<Screen>) -> Result<CapturedImage, Error> {
     Ok(canvas)
 }
 
-impl Screen<'_> {
+impl Screen {
     const fn densities(&self) -> (Density, Density) {
         let size = self.image.size();
         (
@@ -157,7 +157,7 @@ mod tests {
     const BLUE: [u8; 4] = [0, 0, 255, 255];
     const CLEAR: [u8; 4] = [0; 4];
 
-    fn screen(name: &str, [x, y, width, height]: [i32; 4], image: CapturedImage) -> Screen<'_> {
+    fn screen(name: &str, [x, y, width, height]: [i32; 4], image: CapturedImage) -> Screen {
         let len = |value| assert_some!(u32::try_from(value).ok().and_then(NonZeroU32::new));
         let area = LogicalRect {
             x,
@@ -166,7 +166,11 @@ mod tests {
             height: len(height),
         };
 
-        Screen { name, area, image }
+        Screen {
+            name: name.to_owned(),
+            area,
+            image,
+        }
     }
 
     fn image(width: u32, height: u32, pixels: &[[u8; 4]]) -> CapturedImage {

@@ -1,6 +1,5 @@
-use std::num::NonZeroU32;
-
 use crate::{Error, LogicalRect, Output, OutputId, PhysicalSize, state::State};
+use std::num::NonZeroU32;
 use tvert_image::ImageTransform;
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum,
@@ -57,8 +56,17 @@ impl OutputState {
     ///
     /// Returns [`Error::UnsupportedOutputTransform`] for an unknown transform.
     pub fn displayed_transform(&self) -> Result<ImageTransform, Error> {
+        buffer_to_surface(self.transform()?)
+    }
+
+    /// Returns the known output buffer transform.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedOutputTransform`] for an unknown transform.
+    pub const fn transform(&self) -> Result<Transform, Error> {
         match self.transform {
-            WEnum::Value(transform) => buffer_to_surface(transform),
+            WEnum::Value(transform) => Ok(transform),
             WEnum::Unknown(value) => Err(Error::UnsupportedOutputTransform(value)),
         }
     }

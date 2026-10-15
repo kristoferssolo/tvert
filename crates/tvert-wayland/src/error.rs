@@ -67,6 +67,6 @@ pub enum Error {
     #[error("no Wayland outputs are available")]
     NoOutputs,
 
-    #[error("outputs changed during monitor selection")]
+    #[error("outputs changed during capture or selection")]
     OutputsChanged,
 }

@@ -136,6 +136,7 @@ impl State {
 
         if let Some(seat) = take_removed(&mut self.seat, &mut self.bound_globals, name) {
             self.release_pointer();
+            self.release_keyboard();
             seat.release();
         }
 

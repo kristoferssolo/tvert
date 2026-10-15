@@ -6,6 +6,7 @@ use crate::{
 use std::collections::HashMap;
 use wayland_client::protocol::{
     wl_compositor::WlCompositor,
+    wl_keyboard::WlKeyboard,
     wl_pointer::WlPointer,
     wl_seat::WlSeat,
     wl_shm::{Format, WlShm},
@@ -48,4 +49,7 @@ pub struct State {
     pub pointer: Option<WlPointer>,
     pub pointer_surface: Option<WlSurface>,
     pub cursor_shape_manager: Option<WpCursorShapeManagerV1>,
+
+    pub keyboard: Option<WlKeyboard>,
+    pub keyboard_surface: Option<WlSurface>,
 }

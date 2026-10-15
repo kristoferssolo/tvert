@@ -147,16 +147,18 @@ impl Dispatch<WlSeat, ()> for State {
             WEnum::Unknown(bits) => Capability::from_bits_truncate(bits),
         };
 
+        if capabilities.contains(Capability::Pointer) && state.pointer.is_none() {
+            state.pointer = Some(seat.get_pointer(qh, ()));
+        }
         if !capabilities.contains(Capability::Pointer) {
             state.release_pointer();
-            return;
         }
-
-        if state.pointer.is_some() {
-            return;
+        if capabilities.contains(Capability::Keyboard) && state.keyboard.is_none() {
+            state.keyboard = Some(seat.get_keyboard(qh, ()));
         }
-
-        state.pointer = Some(seat.get_pointer(qh, ()));
+        if !capabilities.contains(Capability::Keyboard) {
+            state.release_keyboard();
+        }
     }
 }
 

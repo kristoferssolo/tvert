@@ -68,10 +68,12 @@ fn run_capture(outcome: Outcome, command: TargetCommand, config: &AppConfig) -> 
     let (target, destination) = command.resolve(&config.capture, &config.save);
     match &target {
         Target::Screen(_) => {
-            println!("Click a monitor to capture it; right-click to canel.");
+            println!("Click a monitor to capture it; Escape or right-click to cancel.");
         }
         Target::Region(_) => {
-            println!("Drag to select a region. Release to accept; right-click to cancel.");
+            println!(
+                "Drag to select a region. Release to accept; Escape or right-click to cancel."
+            );
         }
         Target::Desktop => {}
     }

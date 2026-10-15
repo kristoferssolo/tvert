@@ -47,7 +47,7 @@ pub enum TargetCommand {
     Desktop(DestinationArgs),
     /// Click a monitor to capture it; a named --output bypasses selection
     Screen(TargetArgs),
-    /// Drag to select part of the screen. Right-click to cancel
+    /// Drag to select part of the screen. Escape or right-click to cancel
     Region(TargetArgs),
 }
 

@@ -132,7 +132,7 @@ impl Wayland {
     ///
     /// Dragging with the left button displays a selection outline. Releasing
     /// returns an owned image oriented as displayed. Empty drags keep waiting.
-    /// Right-clicking or a compositor closure after mapping returns `None`.
+    /// Escape, right-clicking, or a compositor closure after mapping returns `None`.
     ///
     /// The overlay is destroyed before this method returns.
     ///
@@ -152,7 +152,7 @@ impl Wayland {
     ///
     /// The hovered monitor is shown at normal brightness with a dashed outline.
     /// Releasing the left button returns its original capture, oriented as
-    /// displayed. Right-clicking or closure after mapping returns `None`.
+    /// displayed. Escape, right-clicking, or closure after mapping returns `None`.
     /// All selector surfaces are destroyed before returning, including on error.
     ///
     /// # Errors
@@ -166,6 +166,7 @@ impl Wayland {
 
     fn select(&mut self, target: SelectionTarget) -> Result<Option<CapturedImage>, Error> {
         self.state.pointer_surface = None;
+        self.state.keyboard_surface = None;
         self.state.overlays.clear();
 
         let result = match target {
@@ -178,6 +179,7 @@ impl Wayland {
         // Preserve the original error if both selection and cleanup fail.
         let cleanup = self.event_queue.roundtrip(&mut self.state);
         self.state.pointer_surface = None;
+        self.state.keyboard_surface = None;
 
         let selected = result?;
         cleanup?;
@@ -270,6 +272,11 @@ impl Wayland {
             return Err(Error::OverlayClosed);
         };
 
+        if overlay.buffer.is_none() {
+            overlay
+                .layer_surface
+                .set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        }
         overlay.surface.set_buffer_transform(transform);
         overlay.set_destination(size);
         overlay.surface.attach(Some(buffer.proxy()), 0, 0);

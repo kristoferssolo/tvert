@@ -1,3 +1,4 @@
+use crate::editor::Message;
 use iced::{
     Element, Event, Renderer, Theme,
     advanced::{
@@ -10,8 +11,6 @@ use iced::{
         text_input::{self, Status, Style},
     },
 };
-
-use crate::editor::Message;
 
 pub(super) fn style(valid: bool) -> impl Fn(&Theme, Status) -> Style {
     move |theme, status| {

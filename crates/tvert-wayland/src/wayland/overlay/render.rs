@@ -1,10 +1,6 @@
 use crate::{
     Error,
-    wayland::overlay::{
-        SurfaceRect,
-        geometry::{PixelRect, buffer_edges},
-        size::SurfaceSize,
-    },
+    wayland::overlay::{SurfaceRect, geometry::buffer_edges, size::SurfaceSize},
 };
 use tvert_image::{CapturedImage, ImageTransform, PixelSize};
 
@@ -13,23 +9,25 @@ const BORDER_DARK: [u8; 4] = [0, 0, 0, 255];
 const BORDER_WIDTH: f64 = 2.0;
 const DASH_LENGTH: f64 = 6.0;
 
-/// Renders an inward black-and-white dashed outline over the frozen image.
+/// Dims the frozen image outside the selection and draws its dashed outline.
 ///
-/// The rectangle is in surface coordinates. The returned image retains the
-/// original buffer dimensions and orientation. Coverage uses pixel centers.
+/// With no rectangle, dims the whole image. Coordinates and border widths use
+/// surface units, with coverage determined by buffer pixel centers. The source,
+/// buffer dimensions, orientation, and non-border alpha values are preserved.
 ///
 /// # Errors
 ///
 /// Returns [`Error::InvalidShmLayout`] if row addressing cannot be represented,
 /// [`Error::ImageAllocation`] if allocating the copy fails, or [`Error::Image`]
 /// if constructing the resulting image fails.
-pub fn selection_outline(
+pub fn selection_preview(
     image: &CapturedImage,
-    rectangle: SurfaceRect,
+    rectangle: Option<SurfaceRect>,
     surface_size: SurfaceSize,
     transform: ImageTransform,
 ) -> Result<CapturedImage, Error> {
-    let outline = Outline::new(rectangle, surface_size, image.size(), transform);
+    let outline =
+        rectangle.map(|rectangle| Outline::new(rectangle, surface_size, image.size(), transform));
     let row_bytes = image
         .size()
         .row_bytes()
@@ -39,32 +37,25 @@ pub fn selection_outline(
     rgba.try_reserve_exact(image.rgba().len())?;
     rgba.extend_from_slice(image.rgba());
 
-    let Some(bounds) = PixelRect::from_surface(rectangle, surface_size, image.size(), transform)?
-    else {
-        return Ok(CapturedImage::new(image.size(), rgba)?);
-    };
-
-    for (y, row) in rgba
-        .chunks_exact_mut(row_bytes)
-        .enumerate()
-        .skip(bounds.y().start)
-        .take(bounds.y().len())
-    {
+    for (y, row) in rgba.chunks_exact_mut(row_bytes).enumerate() {
         let y = f64::from(u32::try_from(y).map_err(|_| Error::InvalidShmLayout)?) + 0.5;
 
-        for (x, pixel) in row
-            .as_chunks_mut::<4>()
-            .0
-            .iter_mut()
-            .enumerate()
-            .skip(bounds.x().start)
-            .take(bounds.x().len())
-        {
+        for (x, pixel) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let x = f64::from(u32::try_from(x).map_err(|_| Error::InvalidShmLayout)?) + 0.5;
 
-            if let Some(color) = outline.color(x, y) {
-                *pixel = color;
+            if let Some(outline) = outline.as_ref()
+                && outline.covers(x, y)
+            {
+                if let Some(color) = outline.color(x, y) {
+                    *pixel = color;
+                }
+                continue;
             }
+
+            let [red, green, blue, _] = pixel;
+            *red >>= 1;
+            *green >>= 1;
+            *blue >>= 1;
         }
     }
 
@@ -115,7 +106,7 @@ impl Outline {
     }
 
     fn contains(&self, x: f64, y: f64) -> bool {
-        if x < self.left || x >= self.right || y < self.top || y >= self.bottom {
+        if !self.covers(x, y) {
             return false;
         }
 
@@ -147,6 +138,10 @@ impl Outline {
         } else {
             BORDER_DARK
         })
+    }
+
+    fn covers(&self, x: f64, y: f64) -> bool {
+        x >= self.left && x < self.right && y >= self.top && y < self.bottom
     }
 }
 
@@ -180,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn draws_inward_without_changing_the_frozen_source() {
+    fn dims_outside_the_selection_without_changing_the_frozen_source() {
         let original = [10, 20, 30, 255];
         let image = assert_ok!(CapturedImage::new(
             pixels(8, 8),
@@ -188,9 +183,9 @@ mod tests {
         ));
         let surface = surface(8, 8);
         let rectangle = rectangle((1.0, 1.0), (7.0, 7.0), surface);
-        let rendered = assert_ok!(selection_outline(
+        let rendered = assert_ok!(selection_preview(
             &image,
-            rectangle,
+            Some(rectangle),
             surface,
             ImageTransform::Normal
         ));
@@ -207,9 +202,11 @@ mod tests {
                     .map(|pixel| {
                         if matches!(*pixel, BORDER_LIGHT | BORDER_DARK) {
                             '#'
-                        } else {
-                            assert_eq!(*pixel, original);
+                        } else if *pixel == original {
                             '.'
+                        } else {
+                            assert_eq!(*pixel, [5, 10, 15, 255]);
+                            'd'
                         }
                     })
                     .collect::<String>()
@@ -219,8 +216,8 @@ mod tests {
         assert_eq!(
             rows,
             [
-                "........", ".######.", ".######.", ".##..##.", ".##..##.", ".######.", ".######.",
-                "........",
+                "dddddddd", "d######d", "d######d", "d##..##d", "d##..##d", "d######d", "d######d",
+                "dddddddd",
             ]
         );
         assert!(
@@ -241,9 +238,9 @@ mod tests {
         ));
         let surface = surface(8, 8);
         let rectangle = rectangle((1.1, 1.1), (2.2, 2.2), surface);
-        let rendered = assert_ok!(selection_outline(
+        let rendered = assert_ok!(selection_preview(
             &image,
-            rectangle,
+            Some(rectangle),
             surface,
             ImageTransform::Normal
         ));
@@ -257,5 +254,21 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn dims_without_a_selection_and_preserves_alpha() {
+        let original = vec![255, 101, 1, 128, 17, 33, 65, 0];
+        let image = assert_ok!(CapturedImage::new(pixels(2, 1), original.clone()));
+
+        let rendered = assert_ok!(selection_preview(
+            &image,
+            None,
+            surface(2, 1),
+            ImageTransform::Normal
+        ));
+
+        assert_eq!(rendered.rgba(), [127, 50, 0, 128, 8, 16, 32, 0]);
+        assert_eq!(image.rgba(), original);
     }
 }

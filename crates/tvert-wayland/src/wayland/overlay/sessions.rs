@@ -224,10 +224,7 @@ impl Wayland {
         orientation: ImageTransform,
         rectangle: Option<SurfaceRect>,
     ) -> Result<(), Error> {
-        let rendered = rectangle
-            .map(|rectangle| render::selection_outline(image, rectangle, size, orientation))
-            .transpose()?;
-        let display_image = rendered.as_ref().unwrap_or(image);
+        let image = render::selection_preview(image, rectangle, size, orientation)?;
 
         let Some(shm) = self.state.shm.as_ref() else {
             return Err(Error::MissingGlobal {
@@ -236,13 +233,9 @@ impl Wayland {
         };
 
         let queue_handle = self.event_queue.handle();
-        let buffer =
-            ShmBuffer::from_image(shm, &self.state.shm_formats, display_image, &queue_handle)?;
+        let buffer = ShmBuffer::from_image(shm, &self.state.shm_formats, &image, &queue_handle)?;
 
-        let image_size = display_image.size();
-        let width = i32::try_from(image_size.width().get()).map_err(|_| Error::InvalidShmLayout)?;
-        let height =
-            i32::try_from(image_size.height().get()).map_err(|_| Error::InvalidShmLayout)?;
+        let (width, height) = image.size().try_into()?;
 
         let Some(overlay) = self.state.overlays.get_mut(&output_id) else {
             return Err(Error::OverlayClosed);

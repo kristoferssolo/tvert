@@ -1,5 +1,5 @@
 use crate::{
-    LogicalRect,
+    Error, LogicalRect,
     wayland::overlay::{
         DesktopPosition, OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfacePosition,
         SurfaceRect, size::SurfaceSize,
@@ -12,10 +12,23 @@ use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::ZwlrL
 #[derive(Debug, Clone, Copy)]
 pub enum OverlayStatus {
     Waiting,
-    Configured(SuggestedSurfaceSize),
+    Configured(SurfaceSize),
     UnsupportedSize(SuggestedSurfaceSize),
     Cancelled,
     Closed,
+}
+
+impl OverlayStatus {
+    pub(super) const fn size(self) -> Result<Option<SurfaceSize>, Error> {
+        match self {
+            Self::Configured(size) => Ok(Some(size)),
+            Self::UnsupportedSize(size) => Err(Error::UnsupportedOverlaySize {
+                width: size.width,
+                height: size.height,
+            }),
+            Self::Waiting | Self::Cancelled | Self::Closed => Ok(None),
+        }
+    }
 }
 
 /// Owns the overlay's protocol objects and retained display buffer
@@ -61,19 +74,17 @@ impl OverlayState {
             return None;
         }
 
-        let OverlayStatus::Configured(suggested) = self.status else {
+        let OverlayStatus::Configured(bounds) = self.status else {
             return None;
         };
 
-        let bounds = SurfaceSize::try_from(suggested).ok()?;
         self.selection.rectangle(bounds)
     }
 
     pub fn desktop_pointer(&self, output: LogicalRect) -> Option<DesktopPosition> {
-        let OverlayStatus::Configured(suggested) = self.status else {
+        let OverlayStatus::Configured(bounds) = self.status else {
             return None;
         };
-        let bounds = SurfaceSize::try_from(suggested).ok()?;
         DesktopPosition::from_surface(self.pointer_position?, bounds, output)
     }
 }

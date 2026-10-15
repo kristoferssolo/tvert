@@ -40,20 +40,17 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for State {
             } => {
                 layer_surface.ack_configure(serial);
 
-                let size = SuggestedSurfaceSize { width, height };
+                let suggested = SuggestedSurfaceSize { width, height };
 
-                if overlay.buffer.is_none() {
-                    overlay.status = OverlayStatus::Configured(size);
-                    return;
-                }
-
-                let Ok(destination) = SurfaceSize::try_from(size) else {
-                    overlay.status = OverlayStatus::UnsupportedSize(size);
+                let Ok(size) = SurfaceSize::try_from(suggested) else {
+                    overlay.status = OverlayStatus::UnsupportedSize(suggested);
                     return;
                 };
 
-                overlay.set_destination(destination);
-                overlay.surface.commit();
+                if overlay.buffer.is_some() {
+                    overlay.set_destination(size);
+                    overlay.surface.commit();
+                }
                 overlay.status = OverlayStatus::Configured(size);
             }
             Event::Closed => {

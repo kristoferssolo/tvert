@@ -27,6 +27,15 @@ impl SurfaceSize {
     }
 }
 
+impl From<SurfaceSize> for SuggestedSurfaceSize {
+    fn from(size: SurfaceSize) -> Self {
+        Self {
+            width: size.width().unsigned_abs(),
+            height: size.height().unsigned_abs(),
+        }
+    }
+}
+
 impl TryFrom<SuggestedSurfaceSize> for SurfaceSize {
     type Error = Error;
 

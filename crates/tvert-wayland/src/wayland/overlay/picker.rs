@@ -63,10 +63,9 @@ impl Wayland {
                     .overlays
                     .get(&output_id)
                     .ok_or(Error::OverlayClosed)?;
-                let OverlayStatus::Configured(suggested) = overlay.status else {
+                let Some(size) = overlay.status.size()? else {
                     continue;
                 };
-                let size = SurfaceSize::try_from(suggested)?;
                 let hovered = self
                     .state
                     .pointer_surface

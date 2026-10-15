@@ -31,14 +31,14 @@ impl Wayland {
     /// Creates an overlay and waits for its initial configuration.
     ///
     /// Retains the surface without attaching a buffer or requesting keyboard focus. Replaces any
-    /// overlay already retained for the same output.
+    /// overlay already retained for the same output. Returns the raw suggested
+    /// dimensions, including zero dimensions the client would need to choose.
     ///
     /// # Errors
     ///
     /// Returns
     /// - [`Error::MissingGlobal`] if the compositor, layer-shell, or viewporter global is unavailable.
     /// - [`Error::UnknownOutput`] if the output is no longer tracked.
-    /// - [`Error::UnsupportedOverlaySize`] if the configured dimensions cannot be used.
     /// - [`Error::OverlayClosed`] if the compositor closes the overlay.
     /// - [`Error::Dispatch`] if communicating with the compositor fails.
     pub fn prepare_overlay(&mut self, output_id: OutputId) -> Result<SuggestedSurfaceSize, Error> {
@@ -110,7 +110,7 @@ impl Wayland {
                     self.event_queue.blocking_dispatch(&mut self.state)?;
                 }
                 OverlayStatus::Configured(configure) => {
-                    return Ok(configure);
+                    return Ok(configure.into());
                 }
                 OverlayStatus::UnsupportedSize(size) => {
                     drop(self.state.overlays.remove(&output_id));
@@ -164,6 +164,20 @@ impl Wayland {
         self.select(SelectionTarget::Screen)
     }
 
+    pub(super) fn prepare_selection_overlay(
+        &mut self,
+        output_id: OutputId,
+    ) -> Result<SurfaceSize, Error> {
+        self.prepare_overlay(output_id)?;
+        self.state
+            .overlays
+            .get(&output_id)
+            .ok_or(Error::OverlayClosed)?
+            .status
+            .size()?
+            .ok_or(Error::OverlayClosed)
+    }
+
     fn select(&mut self, target: SelectionTarget) -> Result<Option<CapturedImage>, Error> {
         self.state.pointer_surface = None;
         self.state.keyboard_surface = None;
@@ -202,7 +216,7 @@ impl Wayland {
         };
         let orientation = buffer_to_surface(transform)?;
 
-        let size = SurfaceSize::try_from(self.prepare_overlay(output_id)?)?;
+        let size = self.prepare_selection_overlay(output_id)?;
         self.display_preview(output_id, &image, size, transform, orientation, None)?;
         let mut displayed = (size, None);
 
@@ -211,19 +225,16 @@ impl Wayland {
                 return Ok(None);
             };
 
-            let size = match overlay.status {
-                OverlayStatus::Closed | OverlayStatus::Cancelled => return Ok(None),
-                OverlayStatus::UnsupportedSize(size) => {
-                    return Err(Error::UnsupportedOverlaySize {
-                        width: size.width,
-                        height: size.height,
-                    });
-                }
-                OverlayStatus::Waiting => {
-                    self.event_queue.blocking_dispatch(&mut self.state)?;
-                    continue;
-                }
-                OverlayStatus::Configured(size) => SurfaceSize::try_from(size)?,
+            if matches!(
+                overlay.status,
+                OverlayStatus::Closed | OverlayStatus::Cancelled
+            ) {
+                return Ok(None);
+            }
+
+            let Some(size) = overlay.status.size()? else {
+                self.event_queue.blocking_dispatch(&mut self.state)?;
+                continue;
             };
 
             let rectangle = overlay.selection_rectangle();

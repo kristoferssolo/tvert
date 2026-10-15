@@ -1,5 +1,6 @@
 mod buffer;
 mod crop;
+mod desktop;
 mod dispatch;
 mod geometry;
 mod picker;
@@ -12,6 +13,7 @@ mod size;
 mod state;
 
 pub use buffer::OverlayBuffer;
+pub use desktop::DesktopPosition;
 pub use position::SurfacePosition;
 pub use rectangle::SurfaceRect;
 pub use selection::SelectionState;

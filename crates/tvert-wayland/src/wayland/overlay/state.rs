@@ -1,6 +1,9 @@
-use crate::wayland::overlay::{
-    OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfacePosition, SurfaceRect,
-    size::SurfaceSize,
+use crate::{
+    LogicalRect,
+    wayland::overlay::{
+        DesktopPosition, OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfacePosition,
+        SurfaceRect, size::SurfaceSize,
+    },
 };
 use wayland_client::protocol::{wl_callback::WlCallback, wl_surface::WlSurface};
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
@@ -64,6 +67,14 @@ impl OverlayState {
 
         let bounds = SurfaceSize::try_from(suggested).ok()?;
         self.selection.rectangle(bounds)
+    }
+
+    pub fn desktop_pointer(&self, output: LogicalRect) -> Option<DesktopPosition> {
+        let OverlayStatus::Configured(suggested) = self.status else {
+            return None;
+        };
+        let bounds = SurfaceSize::try_from(suggested).ok()?;
+        DesktopPosition::from_surface(self.pointer_position?, bounds, output)
     }
 }
 

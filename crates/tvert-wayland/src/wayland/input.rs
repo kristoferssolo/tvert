@@ -63,6 +63,7 @@ impl State {
             y = position.y(),
             "overlay pointer position"
         );
+        self.trace_dekstop_pointer();
     }
 
     fn handle_overlay_button(&mut self, button: u32, button_state: ButtonState) {
@@ -122,6 +123,35 @@ impl State {
         let cursor = manager.get_pointer(pointer, qh, ());
         cursor.set_shape(serial, Shape::Crosshair);
         cursor.destroy();
+    }
+
+    fn trace_dekstop_pointer(&self) {
+        let Some(surface) = self.pointer_surface.as_ref() else {
+            return;
+        };
+        let Some((output_id, overlay)) = self
+            .overlays
+            .iter()
+            .find(|(_, overlay)| overlay.is_surface(surface))
+        else {
+            return;
+        };
+        let Some(area) = self
+            .outputs
+            .get(output_id)
+            .and_then(|output| output.logical)
+        else {
+            return;
+        };
+        let Some(position) = overlay.desktop_pointer(area) else {
+            return;
+        };
+        trace!(
+            ?output_id,
+            x = position.x(),
+            y = position.y(),
+            "desktop pointer position"
+        );
     }
 }
 

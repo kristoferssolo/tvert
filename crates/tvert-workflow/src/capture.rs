@@ -10,6 +10,7 @@ use tvert_wayland::{Output, OutputId, Wayland};
 trait Backend {
     fn outputs(&self) -> impl Iterator<Item = &Output>;
     fn capture_output(&mut self, output: OutputId) -> Result<CapturedImage, tvert_wayland::Error>;
+    fn select_screen(&mut self) -> Result<Option<CapturedImage>, tvert_wayland::Error>;
     fn select_region(
         &mut self,
         output: OutputId,
@@ -25,6 +26,10 @@ impl Backend for Wayland {
         self.capture_output(output)
     }
 
+    fn select_screen(&mut self) -> Result<Option<CapturedImage>, tvert_wayland::Error> {
+        self.select_screen()
+    }
+
     fn select_region(
         &mut self,
         output: OutputId,
@@ -35,7 +40,7 @@ impl Backend for Wayland {
 
 /// Connects to the compositor and captures `target` into an image.
 ///
-/// Region capture waits for the user's selection. Returns `None` if the user
+/// Screen and region capture can wait for selection. Returns `None` if the user
 /// cancels. Never touches the filesystem, and closes the connection before
 /// returning so the image can be handed to the editor.
 ///
@@ -53,9 +58,8 @@ fn capture_from(
     target: &Target,
 ) -> Result<Option<CapturedImage>, Error> {
     match target {
-        Target::Desktop | Target::Screen(OutputSelection::All) => {
-            capture_desktop(backend).map(Some)
-        }
+        Target::Desktop => capture_desktop(backend).map(Some),
+        Target::Screen(OutputSelection::All) => Ok(backend.select_screen()?),
         Target::Screen(output) => {
             let output = output.resolve(backend.outputs())?;
             Ok(Some(backend.capture_output(output)?))
@@ -111,6 +115,7 @@ mod tests {
     #[derive(Debug, PartialEq, Eq)]
     enum Call {
         Screen(OutputId),
+        ScreenPicker,
         Region(OutputId),
     }
 
@@ -192,6 +197,11 @@ mod tests {
             Ok(image(4, 4))
         }
 
+        fn select_screen(&mut self) -> Result<Option<CapturedImage>, tvert_wayland::Error> {
+            self.calls.push(Call::ScreenPicker);
+            Ok(self.selection.take())
+        }
+
         fn select_region(
             &mut self,
             output: OutputId,
@@ -219,11 +229,6 @@ mod tests {
         Target::Screen(named("HDMI-A-1")),
         &[Call::Screen(OutputId(2))],
         4
-    )]
-    #[case::all(
-        Target::Screen(OutputSelection::All),
-        &[Call::Screen(OutputId(1)), Call::Screen(OutputId(2))],
-        8
     )]
     #[case::desktop(
         Target::Desktop,
@@ -266,15 +271,29 @@ mod tests {
     }
 
     #[rstest]
-    #[case::selected(Some(image(2, 1)))]
-    #[case::cancelled(None)]
-    fn region_returns_the_selection_without_recapturing(#[case] selection: Option<CapturedImage>) {
+    #[case::region_selected(
+        Target::Region(named("DP-1")),
+        Some(image(2, 1)),
+        Call::Region(OutputId(1))
+    )]
+    #[case::region_cancelled(Target::Region(named("DP-1")), None, Call::Region(OutputId(1)))]
+    #[case::screen_selected(
+        Target::Screen(OutputSelection::All),
+        Some(image(4, 4)),
+        Call::ScreenPicker
+    )]
+    #[case::screen_cancelled(Target::Screen(OutputSelection::All), None, Call::ScreenPicker)]
+    fn returns_the_selection_without_recapturing(
+        #[case] target: Target,
+        #[case] selection: Option<CapturedImage>,
+        #[case] call: Call,
+    ) {
         let expected = selection.as_ref().map(CapturedImage::size);
         let mut backend = Fake::new(selection);
 
-        let captured = assert_ok!(capture_from(&mut backend, &Target::Region(named("DP-1"))));
+        let captured = assert_ok!(capture_from(&mut backend, &target));
 
         assert_eq!(captured.as_ref().map(CapturedImage::size), expected);
-        assert_eq!(backend.calls, [Call::Region(OutputId(1))]);
+        assert_eq!(backend.calls, [call]);
     }
 }

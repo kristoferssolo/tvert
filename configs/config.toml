@@ -1,5 +1,6 @@
 [capture]
-# Output to capture, such as "DP-1", or "all" for the whole desktop.
+# Output to capture, such as "DP-1", or "all" to choose a monitor.
+# Desktop capture always includes all outputs.
 # Region selection cannot span several outputs yet; on multi-monitor
 # setups, region capture requires an output name.
 output = "all"

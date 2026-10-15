@@ -21,6 +21,12 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{Anchor, KeyboardInteractivity},
 };
 
+#[derive(Debug, Clone, Copy)]
+enum SelectionTarget {
+    Screen,
+    Region(OutputId),
+}
+
 impl Wayland {
     /// Creates an overlay and waits for its initial configuration.
     ///
@@ -139,10 +145,33 @@ impl Wayland {
     /// outline or display buffer cannot be created. [`Error::Dispatch`] also
     /// covers overlay cleanup.
     pub fn select_region(&mut self, output_id: OutputId) -> Result<Option<CapturedImage>, Error> {
+        self.select(SelectionTarget::Region(output_id))
+    }
+
+    /// Captures all outputs, then waits for a monitor to be clicked.
+    ///
+    /// The hovered monitor is shown at normal brightness with a dashed outline.
+    /// Releasing the left button returns its original capture, oriented as
+    /// displayed. Right-clicking or closure after mapping returns `None`.
+    /// All selector surfaces are destroyed before returning, including on error.
+    ///
+    /// # Errors
+    ///
+    /// Returns any error from [`Self::select_region`], [`Error::NoOutputs`] if
+    /// no outputs exist, or [`Error::OutputsChanged`] if output metadata changes
+    /// while preparing or displaying the selector.
+    pub fn select_screen(&mut self) -> Result<Option<CapturedImage>, Error> {
+        self.select(SelectionTarget::Screen)
+    }
+
+    fn select(&mut self, target: SelectionTarget) -> Result<Option<CapturedImage>, Error> {
         self.state.pointer_surface = None;
         self.state.overlays.clear();
 
-        let result = self.run_selection(output_id);
+        let result = match target {
+            SelectionTarget::Screen => self.run_screen_selection(),
+            SelectionTarget::Region(output_id) => self.run_selection(output_id),
+        };
         self.state.overlays.clear();
 
         // Send destruction requests before handing the image to another stage.
@@ -215,7 +244,7 @@ impl Wayland {
         }
     }
 
-    fn display_preview(
+    pub(super) fn display_preview(
         &mut self,
         output_id: OutputId,
         image: &CapturedImage,

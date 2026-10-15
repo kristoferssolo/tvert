@@ -63,4 +63,10 @@ pub enum Error {
 
     #[error("failed to construct the captured image")]
     Image(#[from] tvert_image::Error),
+
+    #[error("no Wayland outputs are available")]
+    NoOutputs,
+
+    #[error("outputs changed during monitor selection")]
+    OutputsChanged,
 }

@@ -6,7 +6,7 @@ use tvert_wayland::{Output, OutputId};
 pub enum Target {
     /// Every output, combined without interactive selection
     Desktop,
-    /// An entire output
+    /// One monitor, chosen interactively when all outputs are eligible
     Screen(OutputSelection),
     /// A region the user drags out on an output
     Region(OutputSelection),
@@ -15,7 +15,7 @@ pub enum Target {
 /// The output a capture uses, parsed from `all` or an output name
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OutputSelection {
-    /// Every output, combined according to the desktop layout
+    /// Every output is eligible for screen selection.
     ///
     /// Region selection cannot span outputs yet, so it accepts this only when
     /// exactly one output exists.
@@ -27,7 +27,7 @@ pub enum OutputSelection {
 impl OutputSelection {
     /// Resolves a selection that requires exactly one output.
     ///
-    /// Combined capture handles `All` separately; this method never chooses an
+    /// Screen capture handles `All` through its picker; this never chooses an
     /// arbitrary output when several are available.
     ///
     /// # Errors

@@ -66,8 +66,14 @@ fn run_capture(outcome: Outcome, command: TargetCommand, config: &AppConfig) -> 
     init_tracing()?;
 
     let (target, destination) = command.resolve(&config.capture, &config.save);
-    if matches!(target, Target::Region(_)) {
-        println!("Drag to select a region. Release to accept; right-click to cancel.");
+    match &target {
+        Target::Screen(_) => {
+            println!("Click a monitor to capture it; right-click to canel.");
+        }
+        Target::Region(_) => {
+            println!("Drag to select a region. Release to accept; right-click to cancel.");
+        }
+        Target::Desktop => {}
     }
 
     let Some(image) = tvert_workflow::capture(&target).into_diagnostic()? else {

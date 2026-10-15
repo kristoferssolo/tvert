@@ -41,6 +41,14 @@ impl SurfaceRect {
         })
     }
 
+    pub fn full(bounds: SurfaceSize) -> Self {
+        Self {
+            left: 0.0,
+            top: 0.0,
+            right: f64::from(bounds.width()),
+            bottom: f64::from(bounds.height()),
+        }
+    }
     pub const fn left(self) -> f64 {
         self.left
     }

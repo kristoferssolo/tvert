@@ -2,6 +2,7 @@ mod buffer;
 mod crop;
 mod dispatch;
 mod geometry;
+mod picker;
 mod position;
 mod rectangle;
 mod render;

@@ -45,7 +45,7 @@ pub enum Command {
 pub enum TargetCommand {
     /// Capture all outputs in their desktop layout without selection
     Desktop(DestinationArgs),
-    /// Capture an entire screen
+    /// Click a monitor to capture it; a named --output bypasses selection
     Screen(TargetArgs),
     /// Drag to select part of the screen. Right-click to cancel
     Region(TargetArgs),

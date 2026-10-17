@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::{Error, LogicalRect};
 use std::{fmt::Display, num::NonZeroI32};
 
 /// Suggested dimensions in surface-local coordinates.
@@ -18,6 +18,18 @@ pub struct SurfaceSize {
 }
 
 impl SurfaceSize {
+    /// Returns a desktop area of this size at the origin.
+    ///
+    /// Stands in for a missing output placement, making desktop and surface
+    /// coordinates coincide. It cannot relate several outputs to each other.
+    pub const fn at_origin(self) -> LogicalRect {
+        LogicalRect {
+            x: 0,
+            y: 0,
+            width: self.width.unsigned_abs(),
+            height: self.height.unsigned_abs(),
+        }
+    }
     pub const fn width(self) -> i32 {
         self.width.get()
     }

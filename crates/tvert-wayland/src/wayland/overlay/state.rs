@@ -1,9 +1,7 @@
 use crate::{
-    Error, LogicalRect,
-    wayland::overlay::{
-        DesktopPosition, OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfacePosition,
-        SurfaceRect, size::SurfaceSize,
-    },
+    Error, LogicalRect, OutputId,
+    state::State,
+    wayland::overlay::{OverlayBuffer, SuggestedSurfaceSize, size::SurfaceSize},
 };
 use wayland_client::protocol::{wl_callback::WlCallback, wl_surface::WlSurface};
 use wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport;
@@ -39,8 +37,6 @@ pub struct OverlayState {
     pub viewport: WpViewport,
     pub status: OverlayStatus,
     pub buffer: Option<OverlayBuffer>,
-    pub pointer_position: Option<SurfacePosition>,
-    pub selection: SelectionState,
     pub frame_callback: Option<WlCallback>,
 }
 
@@ -65,27 +61,23 @@ impl OverlayState {
     pub const fn is_interactive(&self) -> bool {
         self.buffer.is_some() && matches!(self.status, OverlayStatus::Configured(_))
     }
+}
 
-    /// Returns the selection rectangle within the configured surface bounds.
+impl State {
+    /// Returns a selector surface's configured size and logical desktop area.
     ///
-    /// Returns `None` if the overlay is not interactive or the selection is empty.
-    pub fn selection_rectangle(&self) -> Option<SurfaceRect> {
-        if !self.is_interactive() {
-            return None;
-        }
-
-        let OverlayStatus::Configured(bounds) = self.status else {
+    /// Outputs without logical-output metadata use [`SurfaceSize::at_origin`].
+    /// Returns `None` if the overlay is unknown or not configured.
+    pub fn overlay_area(&self, output_id: OutputId) -> Option<(SurfaceSize, LogicalRect)> {
+        let OverlayStatus::Configured(size) = self.overlays.get(&output_id)?.status else {
             return None;
         };
-
-        self.selection.rectangle(bounds)
-    }
-
-    pub fn desktop_pointer(&self, output: LogicalRect) -> Option<DesktopPosition> {
-        let OverlayStatus::Configured(bounds) = self.status else {
-            return None;
-        };
-        DesktopPosition::from_surface(self.pointer_position?, bounds, output)
+        let area = self
+            .outputs
+            .get(&output_id)
+            .and_then(|output| output.logical)
+            .unwrap_or_else(|| size.at_origin());
+        Some((size, area))
     }
 }
 

@@ -9,7 +9,7 @@ mod screencopy;
 mod shm;
 
 pub use output::OutputState;
-pub use overlay::OverlayState;
+pub use overlay::{DesktopPosition, OverlayState, SelectionState};
 pub use screencopy::ScreencopyState;
 
 use crate::{Error, Output, global::Global, state::State};

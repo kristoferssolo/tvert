@@ -1,9 +1,11 @@
 use crate::{
-    Error, FrozenOutput, OutputId, Wayland,
+    Error, FrozenOutput, LogicalRect, OutputId, Wayland,
     wayland::overlay::{
-        SelectionState, SurfaceRect, crop, size::SurfaceSize, state::OverlayStatus,
+        SelectionState, SurfaceRect, crop, selection::Gesture, size::SurfaceSize,
+        state::OverlayStatus,
     },
 };
+use tracing::debug;
 use tvert_image::CapturedImage;
 use wayland_client::protocol::wl_output::Transform;
 
@@ -24,11 +26,12 @@ impl SelectionTarget {
         self,
         selection: SelectionState,
         size: SurfaceSize,
+        area: LogicalRect,
         hovered: bool,
     ) -> Option<SurfaceRect> {
         match self {
             Self::Screen => hovered.then(|| SurfaceRect::full(size)),
-            Self::Region(_) => selection.rectangle(size),
+            Self::Region(_) => selection.rectangle(size, area),
         }
     }
 }
@@ -104,38 +107,21 @@ impl Wayland {
                 overlay.status.size()?;
             }
 
-            for screen in &screens {
-                let overlay = self
-                    .state
-                    .overlays
-                    .get(&screen.frozen.output.id)
-                    .ok_or(Error::OverlayClosed)?;
-                let Some(size) = overlay.status.size()? else {
-                    continue;
-                };
-                if !matches!(overlay.selection, SelectionState::Complete { .. }) {
-                    continue;
-                }
+            if let Some(gesture) = self.state.selection.take_complete() {
                 match target {
                     SelectionTarget::Screen => {
-                        let output_id = screen.frozen.output.id;
+                        let origin = gesture.origin();
                         let selected = screens
                             .into_iter()
-                            .find(|screen| screen.frozen.output.id == output_id)
-                            .ok_or(Error::UnknownOutput(output_id))?;
+                            .find(|screen| screen.frozen.output.id == origin)
+                            .ok_or(Error::UnknownOutput(origin))?;
                         return Ok(Some(selected.frozen.into_parts()?.1));
                     }
-                    SelectionTarget::Region(_) => {
-                        if let Some(rectangle) = overlay.selection_rectangle()
-                            && let Some(image) = crop::selection(
-                                &screen.frozen.image,
-                                rectangle,
-                                size,
-                                screen.frozen.orientation,
-                            )?
-                        {
+                    SelectionTarget::Region(output_id) => {
+                        if let Some(image) = self.crop_region(output_id, gesture, &screens)? {
                             return Ok(Some(image));
                         }
+                        debug!("selection has no area on the output");
                     }
                 }
             }
@@ -143,6 +129,33 @@ impl Wayland {
             self.redraw_selection(target, &mut screens)?;
             self.event_queue.blocking_dispatch(&mut self.state)?;
         }
+    }
+
+    /// Crops a completed gesture from one output's frozen capture.
+    ///
+    /// Returns `None` if the gesture covers no pixels of that output.
+    fn crop_region(
+        &self,
+        output_id: OutputId,
+        gesture: Gesture,
+        screens: &[ScreenPreview],
+    ) -> Result<Option<CapturedImage>, Error> {
+        let sceen = screens
+            .iter()
+            .find(|screen| screen.frozen.output.id == output_id)
+            .ok_or(Error::UnknownOutput(output_id))?;
+        let Some((size, area)) = self.state.overlay_area(output_id) else {
+            return Ok(None);
+        };
+        let Some(rectangle) = gesture.rectangle(size, area) else {
+            return Ok(None);
+        };
+        crop::selection(
+            &sceen.frozen.image,
+            rectangle,
+            size,
+            sceen.frozen.orientation,
+        )
     }
 
     fn redraw_selection(
@@ -157,7 +170,7 @@ impl Wayland {
                 .overlays
                 .get(&output_id)
                 .ok_or(Error::OverlayClosed)?;
-            let Some(size) = overlay.status.size()? else {
+            let Some((size, area)) = self.state.overlay_area(output_id) else {
                 continue;
             };
             let hovered = self
@@ -165,7 +178,7 @@ impl Wayland {
                 .pointer_surface
                 .as_ref()
                 .is_some_and(|surface| overlay.is_surface(surface));
-            let rectangle = target.rectangle(overlay.selection, size, hovered);
+            let rectangle = target.rectangle(self.state.selection, size, area, hovered);
             let next = (size, rectangle);
             if screen.displayed == Some(next) || overlay.frame_callback.is_some() {
                 continue;
@@ -187,7 +200,7 @@ impl Wayland {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wayland::overlay::{SuggestedSurfaceSize, SurfacePosition};
+    use crate::wayland::overlay::{DesktopPosition, SuggestedSurfaceSize, SurfacePosition};
     use claims::{assert_none, assert_ok, assert_some};
 
     #[test]
@@ -196,22 +209,30 @@ mod tests {
             width: 4,
             height: 2,
         }));
+        let area = size.at_origin();
+        let desktop = |x, y| {
+            assert_some!(DesktopPosition::from_surface(
+                assert_some!(SurfacePosition::new(x, y)),
+                size,
+                area
+            ))
+        };
         let mut selection = SelectionState::Idle;
-        selection.begin(assert_some!(SurfacePosition::new(0.0, 0.0)));
-        selection.update(assert_some!(SurfacePosition::new(2.0, 2.0)));
+        selection.begin(OutputId(1), desktop(0.0, 0.0));
+        selection.update(desktop(2.0, 2.0));
         let screen = SelectionTarget::Screen;
         let region = SelectionTarget::Region(OutputId(1));
-        assert_none!(screen.rectangle(selection, size, false));
+        assert_none!(screen.rectangle(selection, size, area, false));
         assert_eq!(
-            screen.rectangle(selection, size, true),
+            screen.rectangle(selection, size, area, true),
             Some(SurfaceRect::full(size))
         );
         for hovered in [false, true] {
             assert_eq!(
-                region.rectangle(selection, size, hovered),
-                selection.rectangle(size)
+                region.rectangle(selection, size, area, hovered),
+                selection.rectangle(size, area)
             );
-            assert_none!(region.rectangle(SelectionState::Idle, size, hovered));
+            assert_none!(region.rectangle(SelectionState::Idle, size, area, hovered));
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     Output, OutputId,
     global::Global,
-    wayland::{OutputState, OverlayState, ScreencopyState},
+    wayland::{DesktopPosition, OutputState, OverlayState, ScreencopyState, SelectionState},
 };
 use std::collections::HashMap;
 use wayland_client::protocol::{
@@ -52,4 +52,7 @@ pub struct State {
 
     pub keyboard: Option<WlKeyboard>,
     pub keyboard_surface: Option<WlSurface>,
+
+    pub pointer_position: Option<DesktopPosition>,
+    pub selection: SelectionState,
 }

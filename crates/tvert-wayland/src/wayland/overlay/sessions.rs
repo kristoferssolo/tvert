@@ -2,7 +2,7 @@ use crate::{
     Error, OutputId, Wayland,
     wayland::{
         overlay::{
-            OverlayBuffer, SelectionState, SuggestedSurfaceSize, SurfaceRect, render,
+            OverlayBuffer, SuggestedSurfaceSize, SurfaceRect, render,
             selector::SelectionTarget,
             size::SurfaceSize,
             state::{OverlayState, OverlayStatus},
@@ -84,8 +84,6 @@ impl Wayland {
                 status: OverlayStatus::Waiting,
                 buffer: None,
                 frame_callback: None,
-                pointer_position: None,
-                selection: SelectionState::default(),
             },
         );
         drop(previous);
@@ -174,8 +172,7 @@ impl Wayland {
     }
 
     fn select(&mut self, target: SelectionTarget) -> Result<Option<CapturedImage>, Error> {
-        self.state.pointer_surface = None;
-        self.state.keyboard_surface = None;
+        self.state.reset_selector_input();
         self.state.overlays.clear();
 
         let result = self.run_selection(target);
@@ -184,8 +181,7 @@ impl Wayland {
         // Send destruction requests before handing the image to another stage.
         // Preserve the original error if both selection and cleanup fail.
         let cleanup = self.event_queue.roundtrip(&mut self.state);
-        self.state.pointer_surface = None;
-        self.state.keyboard_surface = None;
+        self.state.reset_selector_input();
 
         let selected = result?;
         cleanup?;

@@ -1,6 +1,7 @@
 use crate::{
+    OutputId,
     state::State,
-    wayland::{OverlayState, overlay::SurfacePosition},
+    wayland::{DesktopPosition, SelectionState, overlay::SurfacePosition},
 };
 use tracing::{debug, trace};
 use wayland_client::{
@@ -21,53 +22,70 @@ const BUTTON_RIGHT: u32 = 0x111;
 const BUTTON_LEFT: u32 = 0x110;
 
 impl State {
-    /// Clears pointer focus and releases the retained pointer object
+    /// Clears pointer focus, cancels an unfinished drag, and releases the pointer.
+    ///
+    /// Without a pointer, the drag's button release can never arrive.
     pub fn release_pointer(&mut self) {
         self.clear_pointer_focus();
+        self.selection.cancel_drag();
 
         if let Some(pointer) = self.pointer.take() {
             pointer.release();
         }
     }
 
-    fn focused_overlay(&mut self) -> Option<&mut OverlayState> {
+    /// Forgets focus and selection progress left by an earlier selector
+    pub fn reset_selector_input(&mut self) {
+        self.clear_pointer_focus();
+        self.keyboard_surface = None;
+        self.selection = SelectionState::Idle;
+    }
+
+    fn focused_output(&self) -> Option<OutputId> {
         let surface = self.pointer_surface.as_ref()?;
         self.overlays
-            .values_mut()
-            .find(|overlay| overlay.is_surface(surface))
+            .iter()
+            .find(|(_, overlay)| overlay.is_surface(surface))
+            .map(|(output_id, _)| *output_id)
     }
 
+    /// Forgets the focused surface without affecting the drag.
+    ///
+    /// Compositors that move focus mid-drag report later motion relative to
+    /// the newly focused selector surface, which maps to the same desktop.
     fn clear_pointer_focus(&mut self) {
-        if let Some(overlay) = self.focused_overlay() {
-            overlay.pointer_position = None;
-            overlay.selection.cancel_drag();
-        }
         self.pointer_surface = None;
+        self.pointer_position = None;
     }
 
-    fn update_overlay_pointer_position(&mut self, x: f64, y: f64) {
-        let Some(overlay) = self.focused_overlay() else {
+    fn update_pointer_position(&mut self, x: f64, y: f64) {
+        let mapped = self.focused_output().and_then(|output_id| {
+            let (size, area) = self.overlay_area(output_id)?;
+            let position = DesktopPosition::from_surface(SurfacePosition::new(x, y)?, size, area)?;
+            Some((output_id, position))
+        });
+        self.pointer_position = mapped.map(|(_, position)| position);
+
+        let Some((output_id, position)) = mapped else {
+            self.selection.cancel_drag();
             return;
         };
 
-        let Some(position) = SurfacePosition::new(x, y) else {
-            overlay.pointer_position = None;
-            overlay.selection.cancel_drag();
-            return;
-        };
-
-        overlay.pointer_position = Some(position);
-        overlay.selection.update(position);
+        self.selection.update(position);
         trace!(
+            ?output_id,
             x = position.x(),
             y = position.y(),
-            "overlay pointer position"
+            "desktop pointer position"
         );
-        self.trace_dekstop_pointer();
     }
 
     fn handle_overlay_button(&mut self, button: u32, button_state: ButtonState) {
-        let Some(overlay) = self.focused_overlay() else {
+        let Some(output_id) = self.focused_output() else {
+            return;
+        };
+
+        let Some(overlay) = self.overlays.get_mut(&output_id) else {
             return;
         };
 
@@ -77,28 +95,16 @@ impl State {
 
         match (button, button_state) {
             (BUTTON_LEFT, ButtonState::Pressed) => {
-                let Some(position) = overlay.pointer_position else {
+                let Some(position) = self.pointer_position else {
                     return;
                 };
 
-                overlay.selection.begin(position);
+                self.selection.begin(output_id, position);
                 debug!(?position, "selection drag started");
             }
             (BUTTON_LEFT, ButtonState::Released) => {
-                overlay.selection.finish();
-
-                let Some(rectangle) = overlay.selection_rectangle() else {
-                    debug!("selection drag has no area");
-                    return;
-                };
-
-                debug!(
-                    left = rectangle.left(),
-                    top = rectangle.top(),
-                    right = rectangle.right(),
-                    bottom = rectangle.bottom(),
-                    "selection drag complete"
-                );
+                self.selection.finish();
+                debug!(selection = ?self.selection, "selection drag released");
             }
             (BUTTON_RIGHT, ButtonState::Pressed) => overlay.cancel(),
             _ => {}
@@ -106,13 +112,7 @@ impl State {
     }
 
     fn set_overlay_cursor(&self, pointer: &WlPointer, serial: u32, qh: &QueueHandle<Self>) {
-        let on_overlay = self.pointer_surface.as_ref().is_some_and(|surface| {
-            self.overlays
-                .values()
-                .any(|overlay| overlay.is_surface(surface))
-        });
-
-        if !on_overlay {
+        if self.focused_output().is_none() {
             return;
         }
 
@@ -123,35 +123,6 @@ impl State {
         let cursor = manager.get_pointer(pointer, qh, ());
         cursor.set_shape(serial, Shape::Crosshair);
         cursor.destroy();
-    }
-
-    fn trace_dekstop_pointer(&self) {
-        let Some(surface) = self.pointer_surface.as_ref() else {
-            return;
-        };
-        let Some((output_id, overlay)) = self
-            .overlays
-            .iter()
-            .find(|(_, overlay)| overlay.is_surface(surface))
-        else {
-            return;
-        };
-        let Some(area) = self
-            .outputs
-            .get(output_id)
-            .and_then(|output| output.logical)
-        else {
-            return;
-        };
-        let Some(position) = overlay.desktop_pointer(area) else {
-            return;
-        };
-        trace!(
-            ?output_id,
-            x = position.x(),
-            y = position.y(),
-            "desktop pointer position"
-        );
     }
 }
 
@@ -212,9 +183,8 @@ impl Dispatch<WlPointer, ()> for State {
                 surface_x,
                 surface_y,
             } => {
-                state.clear_pointer_focus();
                 state.pointer_surface = Some(surface);
-                state.update_overlay_pointer_position(surface_x, surface_y);
+                state.update_pointer_position(surface_x, surface_y);
                 state.set_overlay_cursor(pointer, serial, qh);
             }
             PointerEvent::Motion {
@@ -222,7 +192,7 @@ impl Dispatch<WlPointer, ()> for State {
                 surface_y,
                 ..
             } => {
-                state.update_overlay_pointer_position(surface_x, surface_y);
+                state.update_pointer_position(surface_x, surface_y);
             }
             PointerEvent::Leave { surface, .. } => {
                 if state.pointer_surface.as_ref() != Some(&surface) {

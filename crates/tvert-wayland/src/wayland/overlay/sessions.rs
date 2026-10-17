@@ -1,8 +1,10 @@
 use crate::{
-    Error, OutputId, Wayland,
+    Error, OutputId, RegionSelection, Wayland,
     wayland::{
         overlay::{
-            OverlayBuffer, SuggestedSurfaceSize, SurfaceRect, render,
+            OverlayBuffer, SuggestedSurfaceSize, SurfaceRect,
+            complted::Selected,
+            render,
             selector::SelectionTarget,
             size::SurfaceSize,
             state::{OverlayState, OverlayStatus},
@@ -138,7 +140,10 @@ impl Wayland {
     /// outline or display buffer cannot be created. [`Error::Dispatch`] also
     /// covers overlay cleanup.
     pub fn select_region(&mut self, output_id: OutputId) -> Result<Option<CapturedImage>, Error> {
-        self.select(SelectionTarget::Region(output_id))
+        let Some(selected) = self.select(SelectionTarget::Region(output_id))? else {
+            return Ok(None);
+        };
+        selected.into_region()
     }
 
     /// Captures all outputs, then waits for a monitor to be clicked.
@@ -154,7 +159,28 @@ impl Wayland {
     /// no outputs exist, or [`Error::OutputsChanged`] if output metadata changes
     /// while preparing or displaying the selector.
     pub fn select_screen(&mut self) -> Result<Option<CapturedImage>, Error> {
-        self.select(SelectionTarget::Screen)
+        self.select(SelectionTarget::Screen)?
+            .map(Selected::into_screen)
+            .transpose()
+    }
+
+    /// Freezes all outputs and waits for a nonempty desktop region selection.
+    ///
+    /// Dims every monitor and restores normal brightness within the drag.
+    /// Returns original captures in buffer orientation and fractional logical
+    /// bounds for the caller to compose and crop. Empty drags keep waiting.
+    /// Escape, right-clicking, or closure after mapping returns `None`.
+    /// All selector surfaces are destroyed before returning, including on error.
+    ///
+    /// # Errors
+    ///
+    /// Returns any error from [`Self::select_screen`], or
+    /// [`Error::UnknownPlacement`] if any output lacks logical desktop metadata.
+    /// Layout changes during capture or selection return [`Error::OutputsChanged`].
+    pub fn select_desktop_region(&mut self) -> Result<Option<RegionSelection>, Error> {
+        Ok(self
+            .select(SelectionTarget::DesktopRegion)?
+            .and_then(Selected::into_desktop_region))
     }
 
     pub(super) fn prepare_selection_overlay(
@@ -171,7 +197,7 @@ impl Wayland {
             .ok_or(Error::OverlayClosed)
     }
 
-    fn select(&mut self, target: SelectionTarget) -> Result<Option<CapturedImage>, Error> {
+    fn select(&mut self, target: SelectionTarget) -> Result<Option<Selected>, Error> {
         self.state.reset_selector_input();
         self.state.overlays.clear();
 

@@ -1,5 +1,5 @@
 use crate::{
-    LogicalRect, OutputId,
+    LogicalRect, OutputId, RegionBounds,
     wayland::overlay::{DesktopPosition, SurfaceRect, size::SurfaceSize},
 };
 
@@ -14,10 +14,6 @@ pub struct Gesture {
 }
 
 impl Gesture {
-    pub const fn origin(self) -> OutputId {
-        self.origin
-    }
-
     /// Returns the nonempty part of this gesture covered by one selector surface.
     ///
     /// `area` is the surface's logical desktop area. Returns `None` if the
@@ -26,6 +22,15 @@ impl Gesture {
         let start = self.start.to_surface(size, area)?;
         let end = self.end.to_surface(size, area)?;
         SurfaceRect::from_position(start, end, size)
+    }
+
+    /// Returns normalized desktop bounds, or `None` for a gesture without area
+    pub fn bounds(self) -> Option<RegionBounds> {
+        RegionBounds::from_positions(self.start, self.end)
+    }
+
+    pub const fn origin(self) -> OutputId {
+        self.origin
     }
 }
 

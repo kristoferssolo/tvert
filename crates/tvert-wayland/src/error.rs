@@ -69,4 +69,7 @@ pub enum Error {
 
     #[error("outputs changed during capture or selection")]
     OutputsChanged,
+
+    #[error("logical desktop placement is unavailable for output {name:?}")]
+    UnknownPlacement { name: String },
 }

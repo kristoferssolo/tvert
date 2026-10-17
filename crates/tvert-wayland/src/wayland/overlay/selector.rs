@@ -1,18 +1,18 @@
 use crate::{
     Error, FrozenOutput, LogicalRect, OutputId, Wayland,
     wayland::overlay::{
-        SelectionState, SurfaceRect, crop, selection::Gesture, size::SurfaceSize,
-        state::OverlayStatus,
+        SelectionState, SurfaceRect, complted::Selected, geometry::PixelRect, selection::Gesture,
+        size::SurfaceSize, state::OverlayStatus,
     },
 };
 use tracing::debug;
-use tvert_image::CapturedImage;
 use wayland_client::protocol::wl_output::Transform;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum SelectionTarget {
     Screen,
     Region(OutputId),
+    DesktopRegion,
 }
 
 struct ScreenPreview {
@@ -31,7 +31,7 @@ impl SelectionTarget {
     ) -> Option<SurfaceRect> {
         match self {
             Self::Screen => hovered.then(|| SurfaceRect::full(size)),
-            Self::Region(_) => selection.rectangle(size, area),
+            Self::Region(_) | Self::DesktopRegion => selection.rectangle(size, area),
         }
     }
 }
@@ -39,7 +39,7 @@ impl SelectionTarget {
 impl Wayland {
     fn prepare_selection(&mut self, target: SelectionTarget) -> Result<Vec<ScreenPreview>, Error> {
         let outputs = match target {
-            SelectionTarget::Screen => self.freeze_outputs()?,
+            SelectionTarget::Screen | SelectionTarget::DesktopRegion => self.freeze_outputs()?,
             SelectionTarget::Region(output_id) => {
                 let image = self.capture_buffer(output_id)?;
                 let output = self
@@ -61,6 +61,9 @@ impl Wayland {
                 }]
             }
         };
+        if matches!(target, SelectionTarget::DesktopRegion) {
+            require_placements(&outputs)?;
+        }
         let screens = outputs
             .into_iter()
             .map(|frozen| {
@@ -88,7 +91,7 @@ impl Wayland {
     pub(super) fn run_selection(
         &mut self,
         target: SelectionTarget,
-    ) -> Result<Option<CapturedImage>, Error> {
+    ) -> Result<Option<Selected>, Error> {
         let mut screens = self.prepare_selection(target)?;
         loop {
             if matches!(target, SelectionTarget::Screen) {
@@ -108,54 +111,26 @@ impl Wayland {
             }
 
             if let Some(gesture) = self.state.selection.take_complete() {
-                match target {
-                    SelectionTarget::Screen => {
-                        let origin = gesture.origin();
-                        let selected = screens
-                            .into_iter()
-                            .find(|screen| screen.frozen.output.id == origin)
-                            .ok_or(Error::UnknownOutput(origin))?;
-                        return Ok(Some(selected.frozen.into_parts()?.1));
-                    }
-                    SelectionTarget::Region(output_id) => {
-                        if let Some(image) = self.crop_region(output_id, gesture, &screens)? {
-                            return Ok(Some(image));
-                        }
-                        debug!("selection has no area on the output");
-                    }
+                let Some((size, area)) = self.state.overlay_area(gesture.origin()) else {
+                    continue;
+                };
+                if !matches!(target, SelectionTarget::Screen)
+                    && !self.has_region(gesture, &screens)?
+                {
+                    debug!("selection has no area on the output");
+                    continue;
                 }
+                return Ok(Some(Selected {
+                    outputs: screens.into_iter().map(|screen| screen.frozen).collect(),
+                    gesture,
+                    size,
+                    area,
+                }));
             }
 
             self.redraw_selection(target, &mut screens)?;
             self.event_queue.blocking_dispatch(&mut self.state)?;
         }
-    }
-
-    /// Crops a completed gesture from one output's frozen capture.
-    ///
-    /// Returns `None` if the gesture covers no pixels of that output.
-    fn crop_region(
-        &self,
-        output_id: OutputId,
-        gesture: Gesture,
-        screens: &[ScreenPreview],
-    ) -> Result<Option<CapturedImage>, Error> {
-        let sceen = screens
-            .iter()
-            .find(|screen| screen.frozen.output.id == output_id)
-            .ok_or(Error::UnknownOutput(output_id))?;
-        let Some((size, area)) = self.state.overlay_area(output_id) else {
-            return Ok(None);
-        };
-        let Some(rectangle) = gesture.rectangle(size, area) else {
-            return Ok(None);
-        };
-        crop::selection(
-            &sceen.frozen.image,
-            rectangle,
-            size,
-            sceen.frozen.orientation,
-        )
     }
 
     fn redraw_selection(
@@ -195,13 +170,48 @@ impl Wayland {
         }
         Ok(())
     }
+
+    fn has_region(&self, gesture: Gesture, screens: &[ScreenPreview]) -> Result<bool, Error> {
+        for screen in screens {
+            let Some((size, area)) = self.state.overlay_area(screen.frozen.output.id) else {
+                continue;
+            };
+            let Some(rectangle) = gesture.rectangle(size, area) else {
+                continue;
+            };
+            if PixelRect::from_surface(
+                rectangle,
+                size,
+                screen.frozen.image.size(),
+                screen.frozen.orientation,
+            )?
+            .is_some()
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+fn require_placements(outputs: &[FrozenOutput]) -> Result<(), Error> {
+    for frozen in outputs {
+        if frozen.output.logical.is_none() {
+            return Err(Error::UnknownPlacement {
+                name: frozen.output.name.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::wayland::overlay::{DesktopPosition, SuggestedSurfaceSize, SurfacePosition};
-    use claims::{assert_none, assert_ok, assert_some};
+    use crate::{Output, PhysicalSize};
+    use claims::{assert_err, assert_none, assert_ok, assert_some};
+    use tvert_image::{CapturedImage, ImageTransform, PixelSize};
 
     #[test]
     fn monitor_feedback_follows_hover_and_region_feedback_follows_drag() {
@@ -227,12 +237,48 @@ mod tests {
             screen.rectangle(selection, size, area, true),
             Some(SurfaceRect::full(size))
         );
-        for hovered in [false, true] {
-            assert_eq!(
-                region.rectangle(selection, size, area, hovered),
-                selection.rectangle(size, area)
-            );
-            assert_none!(region.rectangle(SelectionState::Idle, size, area, hovered));
+        for region in [region, SelectionTarget::DesktopRegion] {
+            for hovered in [false, true] {
+                assert_eq!(
+                    region.rectangle(selection, size, area, hovered),
+                    selection.rectangle(size, area)
+                );
+                assert_none!(region.rectangle(SelectionState::Idle, size, area, hovered));
+            }
         }
+    }
+
+    #[test]
+    fn all_output_regions_require_every_placement() {
+        let size = assert_ok!(SurfaceSize::try_from(SuggestedSurfaceSize {
+            width: 4,
+            height: 2,
+        }));
+        let mut outputs = [1, 2]
+            .into_iter()
+            .map(|id| FrozenOutput {
+                output: Output {
+                    id: OutputId(id),
+                    name: format!("DP-{id}"),
+                    size: PhysicalSize {
+                        width: 1,
+                        height: 1,
+                    },
+                    scale: 1,
+                    logical: Some(size.at_origin()),
+                },
+                image: assert_ok!(CapturedImage::new(
+                    assert_ok!(PixelSize::try_from((1, 1))),
+                    vec![10, 20, 30, 255],
+                )),
+                orientation: ImageTransform::Normal,
+            })
+            .collect::<Vec<_>>();
+        assert_ok!(require_placements(&outputs));
+        assert_some!(outputs.last_mut()).output.logical = None;
+        assert!(matches!(
+            assert_err!(require_placements(&outputs)),
+            Error::UnknownPlacement { name } if name == "DP-2"
+        ));
     }
 }

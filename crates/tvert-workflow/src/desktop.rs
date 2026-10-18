@@ -1,13 +1,22 @@
 use crate::Error;
 use std::{cmp::Ordering, num::NonZeroU32, ops::Range};
 use tvert_image::{CapturedImage, PixelSize};
-use tvert_wayland::LogicalRect;
+use tvert_wayland::{LogicalRect, RegionBounds};
 
 /// A captured output, oriented as displayed, and its logical desktop area
+#[derive(Debug)]
 pub struct Screen {
     pub name: String,
     pub area: LogicalRect,
     pub image: CapturedImage,
+}
+
+/// A composed desktop image and the logical-to-pixel mapping that placed its outputs
+#[derive(Debug)]
+pub struct Desktop {
+    image: CapturedImage,
+    x: Axis,
+    y: Axis,
 }
 
 /// Combines captured outputs into one image of the desktop layout.
@@ -25,7 +34,7 @@ pub struct Screen {
 /// Returns [`Error::NoOutputs`] if `screens` is empty, [`Error::DesktopTooLarge`]
 /// if the layout cannot be mapped to image coordinates, or [`Error::Compose`]
 /// if allocating or painting the combined image fails.
-pub fn compose(mut screens: Vec<Screen>) -> Result<CapturedImage, Error> {
+pub fn compose(mut screens: Vec<Screen>) -> Result<Desktop, Error> {
     screens.sort_by(|left, right| {
         left.densities()
             .cmp(&right.densities())
@@ -47,7 +56,11 @@ pub fn compose(mut screens: Vec<Screen>) -> Result<CapturedImage, Error> {
             .map_err(Error::Compose)?;
     }
 
-    Ok(canvas)
+    Ok(Desktop {
+        image: canvas,
+        x,
+        y,
+    })
 }
 
 impl Screen {
@@ -63,6 +76,23 @@ impl Screen {
                 logical: self.area.height,
             },
         )
+    }
+}
+
+impl Desktop {
+    pub fn into_image(self) -> CapturedImage {
+        self.image
+    }
+
+    pub fn crop(&self, bounds: RegionBounds) -> Result<CapturedImage, Error> {
+        let size = self.image.size();
+        let columns = self
+            .x
+            .covering(bounds.left()..bounds.right(), size.width())?;
+        let rows = self
+            .y
+            .covering(bounds.top()..bounds.bottom(), size.height())?;
+        self.image.crop(columns, rows).map_err(Error::Crop)
     }
 }
 
@@ -109,6 +139,7 @@ impl PartialEq for Density {
 impl Eq for Density {}
 
 /// Maps one logical desktop axis onto image pixels
+#[derive(Debug)]
 struct Axis {
     bounds: Range<i64>,
     density: Density,
@@ -145,12 +176,43 @@ impl Axis {
             .and_then(|edge| usize::try_from(edge).ok())
             .ok_or(Error::DesktopTooLarge)
     }
+
+    fn covering(&self, span: Range<f64>, limit: NonZeroU32) -> Result<Range<usize>, Error> {
+        let start = self.position(span.start)? - 1.0;
+        let end = self.position(span.end)?;
+        let start = first_edge(limit.get(), |edge| edge > start);
+        let end = first_edge(limit.get(), |edge| edge >= end);
+        let index = |edge| usize::try_from(edge).map_err(|_| Error::DesktopTooLarge);
+
+        Ok(index(start)?..index(end)?)
+    }
+
+    fn position(&self, coordinate: f64) -> Result<f64, Error> {
+        let origin = i32::try_from(self.bounds.start).map_err(|_| Error::DesktopTooLarge)?;
+        let pixels = f64::from(self.density.pixels.get());
+        let logical = f64::from(self.density.logical.get());
+
+        Ok((coordinate - f64::from(origin)) * pixels / logical)
+    }
+}
+
+fn first_edge(limit: u32, reached: impl Fn(f64) -> bool) -> u32 {
+    let (mut low, mut high) = (0, limit);
+    while low < high {
+        let middle = low.midpoint(high);
+        if reached(f64::from(middle)) {
+            high = middle;
+        } else {
+            low = middle.saturating_add(1);
+        }
+    }
+    low
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_ok, assert_some};
+    use claims::{assert_err, assert_ok, assert_some};
 
     const RED: [u8; 4] = [255, 0, 0, 255];
     const GREEN: [u8; 4] = [0, 255, 0, 255];
@@ -187,6 +249,10 @@ mod tests {
         image.rgba().as_chunks::<4>().0.to_vec()
     }
 
+    fn bounds([left, top, right, bottom]: [f64; 4]) -> RegionBounds {
+        assert_some!(RegionBounds::new(left, top, right, bottom))
+    }
+
     // Desktop, one logical unit per character:
     //
     // -2 -1  0
@@ -200,7 +266,7 @@ mod tests {
             screen("below", [0, 1, 1, 2], filled(1, 2, GREEN)),
         ];
 
-        let desktop = assert_ok!(compose(screens));
+        let desktop = assert_ok!(compose(screens)).into_image();
 
         assert_eq!(desktop.size(), assert_ok!(PixelSize::try_from((3, 3))));
         assert_eq!(
@@ -220,7 +286,7 @@ mod tests {
             screen("dense", [0, 0, 2, 2], image(3, 3, &detail)),
         ];
 
-        let desktop = assert_ok!(compose(screens));
+        let desktop = assert_ok!(compose(screens)).into_image();
 
         assert_eq!(desktop.size(), assert_ok!(PixelSize::try_from((5, 5))));
         let pixels = pixels(&desktop);
@@ -248,7 +314,66 @@ mod tests {
             screen("DP-1", [0, 0, 1, 1], filled(1, 1, GREEN)),
         ];
 
-        assert_eq!(pixels(&assert_ok!(compose(mirrored))), [RED; 4]);
-        assert_eq!(pixels(&assert_ok!(compose(identical))), [GREEN]);
+        let mirrored = assert_ok!(compose(mirrored)).into_image();
+        let identical = assert_ok!(compose(identical)).into_image();
+        assert_eq!(pixels(&mirrored), [RED; 4]);
+        assert_eq!(pixels(&identical), [GREEN]);
+    }
+
+    #[test]
+    fn crops_a_region_spanning_outputs_left_of_the_origin() {
+        let left = [[1, 0, 0, 255], [2, 0, 0, 128]];
+        let right = [[3, 0, 0, 64], [4, 0, 0, 255]];
+        let screens = vec![
+            screen("left", [-2, 0, 2, 1], image(2, 1, &left)),
+            screen("right", [0, 0, 2, 1], image(2, 1, &right)),
+        ];
+
+        let desktop = assert_ok!(compose(screens));
+        let region = assert_ok!(desktop.crop(bounds([-1.0, 0.25, 1.0, 0.75])));
+
+        assert_eq!(region.size(), assert_ok!(PixelSize::try_from((2, 1))));
+        assert_eq!(pixels(&region), [left[1], right[0]]);
+    }
+
+    // The dense output sets 1.5 pixels per unit on a 5x5 image, as in
+    // scales_outputs_to_the_densest_output_without_seams. Logical x = 1.8..2.2
+    // spans pixels 2.7..3.3, so the crop covers columns 2..4. Rounding the
+    // bounds to logical units, rounding pixels to nearest, or deriving the
+    // density from the 5-pixel width for 3 logical units would differ.
+    #[test]
+    fn crops_fractional_bounds_outward_at_the_composed_density() {
+        let detail = (1..=9).map(|value| [value, 0, 0, 255]).collect::<Vec<_>>();
+        let screens = vec![
+            screen("portrait", [2, 0, 1, 3], filled(1, 3, BLUE)),
+            screen("dense", [0, 0, 2, 2], image(3, 3, &detail)),
+        ];
+
+        let desktop = assert_ok!(compose(screens));
+        let region = assert_ok!(desktop.crop(bounds([1.8, 0.5, 2.2, 1.5])));
+
+        assert_eq!(region.size(), assert_ok!(PixelSize::try_from((2, 3))));
+        let (detail, _) = detail.as_chunks::<3>();
+        let expected = detail.iter().flat_map(|row| [row[2], BLUE]);
+        assert_eq!(pixels(&region), expected.collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn clips_bounds_to_the_desktop_and_rejects_bounds_outside_it() {
+        let layout = || {
+            vec![
+                screen("left", [-2, 0, 2, 1], filled(2, 1, RED)),
+                screen("below", [0, 1, 1, 2], filled(1, 2, GREEN)),
+            ]
+        };
+        let whole = assert_ok!(compose(layout())).into_image();
+        let desktop = assert_ok!(compose(layout()));
+
+        let region = assert_ok!(desktop.crop(bounds([-9.5, -3.0, 4.0, 7.25])));
+        assert_eq!(region.size(), whole.size());
+        assert_eq!(region.rgba(), whole.rgba());
+
+        let error = assert_err!(desktop.crop(bounds([1.5, 0.0, 3.0, 2.0])));
+        assert!(matches!(error, Error::Crop(_)), "{error:?}");
     }
 }

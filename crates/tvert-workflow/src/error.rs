@@ -4,7 +4,7 @@ use std::{io, path::PathBuf};
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("failed to capture output")]
-    Capture(#[from] tvert_wayland::Error),
+    Capture(#[source] tvert_wayland::Error),
 
     #[error("the compositor reported no outputs")]
     NoOutputs,
@@ -15,12 +15,12 @@ pub enum Error {
         available: Vec<String>,
     },
 
+    /// A command that needs one output received `all` with several outputs
     #[error(
-        "selecting a region across several outputs is not implemented yet; \
-         choose one of {} with --output NAME or capture.output",
+        "several outputs are available; choose one of {} with --output NAME or capture.output",
         .available.join(", ")
     )]
-    CrossScreenRegion { available: Vec<String> },
+    AmbiguousOutput { available: Vec<String> },
 
     #[error(
         "the desktop position of output {name:?} is unknown; \
@@ -28,8 +28,8 @@ pub enum Error {
     )]
     UnknownPlacement { name: String },
 
-    /// Outputs were added, removed, or rearranged while capturing the desktop
-    #[error("outputs changed while capturing the desktop")]
+    /// Outputs were added, removed, or rearranged during capture or selection
+    #[error("outputs changed during capture or selection")]
     OutputsChanged,
 
     #[error("the desktop layout exceeds the supported image size")]
@@ -38,6 +38,10 @@ pub enum Error {
     /// Allocating or painting the combined desktop image failed
     #[error("failed to combine the captured outputs")]
     Compose(#[source] tvert_image::Error),
+
+    /// The selected region missed the combined desktop image, or copying it failed
+    #[error("failed to crop the selected desktop region")]
+    Crop(#[source] tvert_image::Error),
 
     #[error("failed to create PNG destination {path:?}")]
     CreateDestination {
@@ -110,4 +114,15 @@ pub enum PatternError {
 
     #[error("expanded path {path:?} is not a .png file")]
     NotPng { path: PathBuf },
+}
+
+impl From<tvert_wayland::Error> for Error {
+    fn from(error: tvert_wayland::Error) -> Self {
+        match error {
+            tvert_wayland::Error::NoOutputs => Self::NoOutputs,
+            tvert_wayland::Error::OutputsChanged => Self::OutputsChanged,
+            tvert_wayland::Error::UnknownPlacement { name } => Self::UnknownPlacement { name },
+            other => Self::Capture(other),
+        }
+    }
 }

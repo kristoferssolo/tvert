@@ -8,17 +8,14 @@ pub enum Target {
     Desktop,
     /// One monitor, chosen interactively when all outputs are eligible
     Screen(OutputSelection),
-    /// A region the user drags out on an output
+    /// A region the user drags out, across all outputs when all are eligible
     Region(OutputSelection),
 }
 
 /// The output a capture uses, parsed from `all` or an output name
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OutputSelection {
-    /// Every output is eligible for screen selection.
-    ///
-    /// Region selection cannot span outputs yet, so it accepts this only when
-    /// exactly one output exists.
+    /// Every output is eligible for screen or region selection
     All,
     /// The output with this name, such as `DP-1`
     Named(String),
@@ -27,14 +24,14 @@ pub enum OutputSelection {
 impl OutputSelection {
     /// Resolves a selection that requires exactly one output.
     ///
-    /// Screen capture handles `All` through its picker; this never chooses an
-    /// arbitrary output when several are available.
+    /// Screen and region capture handle `All` through their selectors; this
+    /// never chooses an arbitrary output when several are available.
     ///
     /// # Errors
     ///
     /// Returns [`Error::NoOutputs`] if `outputs` is empty,
     /// [`Error::UnknownOutput`] if no output has the requested name, or
-    /// [`Error::CrossScreenRegion`] if `All` spans several outputs.
+    /// [`Error::AmbiguousOutput`] if `All` spans several outputs.
     pub fn resolve<'a>(
         &self,
         outputs: impl IntoIterator<Item = &'a Output>,
@@ -52,7 +49,7 @@ impl OutputSelection {
         match (self, outputs.as_slice()) {
             (_, []) => Err(Error::NoOutputs),
             (Self::All, [output]) => Ok(output.id),
-            (Self::All, _) => Err(Error::CrossScreenRegion { available: names() }),
+            (Self::All, _) => Err(Error::AmbiguousOutput { available: names() }),
             (Self::Named(name), _) => outputs
                 .iter()
                 .find(|output| &output.name == name)
@@ -119,7 +116,7 @@ mod tests {
 
         assert_matches!(
             OutputSelection::All.resolve(&outputs),
-            Err(Error::CrossScreenRegion { available }) if available == names
+            Err(Error::AmbiguousOutput { available }) if available == names
         );
         assert_matches!(
             OutputSelection::Named("DP-2".to_owned()).resolve(&outputs),

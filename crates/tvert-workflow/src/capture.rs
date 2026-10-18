@@ -4,7 +4,7 @@ use crate::{
     target::Target,
 };
 use tvert_image::CapturedImage;
-use tvert_wayland::{FrozenOutput, Output, OutputId, Wayland};
+use tvert_wayland::{FrozenOutput, Output, OutputId, RegionSelection, Wayland};
 
 /// The compositor operations capture needs, separated for testing
 trait Backend {
@@ -16,6 +16,7 @@ trait Backend {
         &mut self,
         output: OutputId,
     ) -> Result<Option<CapturedImage>, tvert_wayland::Error>;
+    fn select_desktop_region(&mut self) -> Result<Option<RegionSelection>, tvert_wayland::Error>;
 }
 
 impl Backend for Wayland {
@@ -41,18 +42,25 @@ impl Backend for Wayland {
     ) -> Result<Option<CapturedImage>, tvert_wayland::Error> {
         self.select_region(output)
     }
+
+    fn select_desktop_region(&mut self) -> Result<Option<RegionSelection>, tvert_wayland::Error> {
+        self.select_desktop_region()
+    }
 }
 
 /// Connects to the compositor and captures `target` into an image.
 ///
 /// Screen and region capture can wait for selection. Returns `None` if the user
-/// cancels. Never touches the filesystem, and closes the connection before
-/// returning so the image can be handed to the editor.
+/// cancels. Region capture with [`OutputSelection::All`] on several outputs
+/// crops the desktop composed from the captures frozen for selection. Never
+/// touches the filesystem, and closes the connection before returning so the
+/// image can be handed to the editor.
 ///
 /// # Errors
 ///
-/// Returns any error from [`crate::OutputSelection::resolve`], or
-/// [`Error::Capture`] if connecting, capturing, or selecting fails.
+/// Returns any error from [`crate::OutputSelection::resolve`], desktop
+/// composition, or cropping, or [`Error::Capture`] if connecting, capturing,
+/// or selecting fails.
 pub fn capture(target: &Target) -> Result<Option<CapturedImage>, Error> {
     let mut wayland = Wayland::connect()?;
     capture_from(&mut wayland, target)
@@ -69,6 +77,9 @@ fn capture_from(
             let output = output.resolve(backend.outputs())?;
             Ok(Some(backend.capture_output(output)?))
         }
+        Target::Region(OutputSelection::All) if backend.outputs().count() > 1 => {
+            capture_desktop_region(backend)
+        }
         Target::Region(output) => {
             let output = output.resolve(backend.outputs())?;
             Ok(backend.select_region(output)?)
@@ -77,12 +88,21 @@ fn capture_from(
 }
 
 fn capture_desktop(backend: &mut impl Backend) -> Result<CapturedImage, Error> {
-    let frozen = backend.freeze_outputs().map_err(|error| match error {
-        tvert_wayland::Error::NoOutputs => Error::NoOutputs,
-        tvert_wayland::Error::OutputsChanged => Error::OutputsChanged,
-        other => Error::Capture(other),
-    })?;
-    let screens = frozen
+    let frozen = backend.freeze_outputs()?;
+    Ok(compose(screens(frozen)?)?.into_image())
+}
+
+fn capture_desktop_region(backend: &mut impl Backend) -> Result<Option<CapturedImage>, Error> {
+    let Some(selection) = backend.select_desktop_region()? else {
+        return Ok(None);
+    };
+    compose(screens(selection.outputs)?)?
+        .crop(selection.bounds)
+        .map(Some)
+}
+
+fn screens(frozen: Vec<FrozenOutput>) -> Result<Vec<Screen>, Error> {
+    frozen
         .into_iter()
         .map(|frozen| {
             let (output, image) = frozen.into_parts()?;
@@ -95,8 +115,7 @@ fn capture_desktop(backend: &mut impl Backend) -> Result<CapturedImage, Error> {
                 image,
             })
         })
-        .collect::<Result<Vec<_>, Error>>()?;
-    compose(screens)
+        .collect()
 }
 
 #[cfg(test)]
@@ -106,7 +125,7 @@ mod tests {
     use rstest::rstest;
     use std::num::NonZeroU32;
     use tvert_image::{ImageTransform, PixelSize};
-    use tvert_wayland::{LogicalRect, PhysicalSize};
+    use tvert_wayland::{LogicalRect, PhysicalSize, RegionBounds};
 
     #[derive(Debug, PartialEq, Eq)]
     enum Call {
@@ -114,6 +133,7 @@ mod tests {
         Freeze,
         ScreenPicker,
         Region(OutputId),
+        DesktopRegion,
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -126,6 +146,7 @@ mod tests {
     struct Fake {
         outputs: Vec<Output>,
         selection: Option<CapturedImage>,
+        region: Option<RegionSelection>,
         failure: Option<Failure>,
         calls: Vec<Call>,
     }
@@ -153,6 +174,7 @@ mod tests {
             Self {
                 outputs: vec![output(1, "DP-1", 0), output(2, "HDMI-A-1", 4)],
                 selection,
+                region: None,
                 failure: None,
                 calls: Vec::new(),
             }
@@ -167,6 +189,14 @@ mod tests {
             }
 
             fake
+        }
+
+        fn fail(&self) -> Result<(), tvert_wayland::Error> {
+            match self.failure {
+                Some(Failure::Capture) => Err(tvert_wayland::Error::ScreencopyFailed),
+                Some(Failure::Disconnect) => Err(tvert_wayland::Error::OutputsChanged),
+                _ => Ok(()),
+            }
         }
     }
 
@@ -186,11 +216,7 @@ mod tests {
 
         fn freeze_outputs(&mut self) -> Result<Vec<FrozenOutput>, tvert_wayland::Error> {
             self.calls.push(Call::Freeze);
-            match self.failure {
-                Some(Failure::Capture) => return Err(tvert_wayland::Error::ScreencopyFailed),
-                Some(Failure::Disconnect) => return Err(tvert_wayland::Error::OutputsChanged),
-                _ => {}
-            }
+            self.fail()?;
             Ok(self
                 .outputs
                 .iter()
@@ -215,6 +241,19 @@ mod tests {
             self.calls.push(Call::Region(output));
             Ok(self.selection.take())
         }
+
+        fn select_desktop_region(
+            &mut self,
+        ) -> Result<Option<RegionSelection>, tvert_wayland::Error> {
+            self.calls.push(Call::DesktopRegion);
+            self.fail()?;
+            if let Some(output) = self.outputs.iter().find(|output| output.logical.is_none()) {
+                return Err(tvert_wayland::Error::UnknownPlacement {
+                    name: output.name.clone(),
+                });
+            }
+            Ok(self.region.take())
+        }
     }
 
     fn image(width: u32, height: u32) -> CapturedImage {
@@ -224,6 +263,37 @@ mod tests {
         );
         let len = assert_ok!(size.rgba_len());
         assert_ok!(CapturedImage::new(size, vec![0; len]))
+    }
+
+    fn frozen(
+        name: &str,
+        [x, y, width, height]: [i32; 4],
+        image: CapturedImage,
+        orientation: ImageTransform,
+    ) -> FrozenOutput {
+        let len = |value| assert_some!(u32::try_from(value).ok().and_then(NonZeroU32::new));
+        let (buffer_width, buffer_height) = image.size().into();
+        let output = Output {
+            id: OutputId(0),
+            name: name.to_owned(),
+            size: PhysicalSize {
+                width: buffer_width,
+                height: buffer_height,
+            },
+            scale: 1,
+            logical: Some(LogicalRect {
+                x,
+                y,
+                width: len(width),
+                height: len(height),
+            }),
+        };
+
+        FrozenOutput {
+            output,
+            image,
+            orientation,
+        }
     }
 
     fn named(name: &str) -> OutputSelection {
@@ -251,13 +321,13 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Failure::Capture)]
-    #[case(Failure::Disconnect)]
-    #[case(Failure::Unplaced)]
-    fn desktop_capture_never_returns_a_partial_image(#[case] failure: Failure) {
+    fn desktop_capture_never_returns_a_partial_image(
+        #[values(Target::Desktop, Target::Region(OutputSelection::All))] target: Target,
+        #[values(Failure::Capture, Failure::Disconnect, Failure::Unplaced)] failure: Failure,
+    ) {
         let mut backend = Fake::failing(failure);
 
-        let error = assert_err!(capture_from(&mut backend, &Target::Desktop));
+        let error = assert_err!(capture_from(&mut backend, &target));
 
         let expected = match failure {
             Failure::Capture => matches!(
@@ -285,6 +355,11 @@ mod tests {
         Call::ScreenPicker
     )]
     #[case::screen_cancelled(Target::Screen(OutputSelection::All), None, Call::ScreenPicker)]
+    #[case::desktop_region_cancelled(
+        Target::Region(OutputSelection::All),
+        None,
+        Call::DesktopRegion
+    )]
     fn returns_the_selection_without_recapturing(
         #[case] target: Target,
         #[case] selection: Option<CapturedImage>,
@@ -297,5 +372,67 @@ mod tests {
 
         assert_eq!(captured.as_ref().map(CapturedImage::size), expected);
         assert_eq!(backend.calls, [call]);
+    }
+
+    #[test]
+    fn a_single_output_region_needs_no_desktop_placement() {
+        let mut backend = Fake::new(Some(image(2, 1)));
+        backend.outputs.truncate(1);
+        assert_some!(backend.outputs.first_mut()).logical = None;
+
+        let captured = assert_ok!(capture_from(
+            &mut backend,
+            &Target::Region(OutputSelection::All)
+        ));
+
+        assert_eq!(assert_some!(captured).size(), image(2, 1).size());
+        assert_eq!(backend.calls, [Call::Region(OutputId(1))]);
+    }
+
+    // Desktop, one logical unit per pixel; the crop is x = 1..4, y = 0..2:
+    //
+    // -2 -1  0  1
+    //  A  B  .  .   y = 0, "DP-1" is captured as a 1x2 column, rotated
+    //  .  .  .  C   y = 1, "HDMI-A-1"
+    #[test]
+    fn all_output_regions_crop_the_selected_captures_without_recapturing() {
+        const A: [u8; 4] = [10, 20, 30, 255];
+        const B: [u8; 4] = [40, 50, 60, 128];
+        const C: [u8; 4] = [70, 80, 90, 64];
+        const CLEAR: [u8; 4] = [0; 4];
+
+        let rgba = |width, height, pixels: &[[u8; 4]]| {
+            let size = assert_ok!(PixelSize::try_from((width, height)));
+            assert_ok!(CapturedImage::new(size, pixels.concat()))
+        };
+        let outputs = vec![
+            frozen(
+                "DP-1",
+                [-2, 0, 2, 1],
+                rgba(1, 2, &[B, A]),
+                ImageTransform::Rotate270,
+            ),
+            frozen(
+                "HDMI-A-1",
+                [1, 1, 1, 1],
+                rgba(1, 1, &[C]),
+                ImageTransform::Normal,
+            ),
+        ];
+        let mut backend = Fake::new(None);
+        backend.region = Some(RegionSelection {
+            outputs,
+            bounds: assert_some!(RegionBounds::new(-0.5, 0.5, 1.5, 1.5)),
+        });
+
+        let captured = assert_ok!(capture_from(
+            &mut backend,
+            &Target::Region(OutputSelection::All)
+        ));
+
+        let captured = assert_some!(captured);
+        assert_eq!(captured.size(), image(3, 2).size());
+        assert_eq!(captured.rgba(), [B, CLEAR, CLEAR, CLEAR, CLEAR, C].concat());
+        assert_eq!(backend.calls, [Call::DesktopRegion]);
     }
 }

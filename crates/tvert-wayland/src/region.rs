@@ -21,6 +21,19 @@ pub struct RegionBounds {
 }
 
 impl RegionBounds {
+    pub fn new(left: f64, top: f64, right: f64, bottom: f64) -> Option<Self> {
+        let finite = [left, top, right, bottom].into_iter().all(f64::is_finite);
+        if !finite || left >= right || top >= bottom {
+            return None;
+        }
+        Some(Self {
+            left,
+            top,
+            right,
+            bottom,
+        })
+    }
+
     pub(crate) fn from_positions(start: DesktopPosition, end: DesktopPosition) -> Option<Self> {
         let left = start.x().min(end.x());
         let top = start.y().min(end.y());

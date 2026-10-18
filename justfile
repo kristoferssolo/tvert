@@ -70,7 +70,7 @@ run-release *ARGS:
 preview-screen *ARGS:
     @just run-release preview screen "$@"
 
-# Select a region and open the editor; use --output NAME on multiple screens
+# Select a region and open the editor; pass --output NAME to restrict it
 [group("manual testing")]
 [positional-arguments]
 preview-region *ARGS:
@@ -82,7 +82,7 @@ preview-region *ARGS:
 save-screen *ARGS:
     @just run-release save screen "$@"
 
-# Select and save a region; use --output NAME on multiple screens
+# Select and save a region; pass --output NAME to restrict it
 [group("manual testing")]
 [positional-arguments]
 save-region *ARGS:

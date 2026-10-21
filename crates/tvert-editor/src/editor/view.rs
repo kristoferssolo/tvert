@@ -13,21 +13,26 @@ use std::error::Error as StdError;
 
 impl Editor {
     pub fn view(&self) -> Element<'_, Message> {
+        let tool = self.drawing_tool();
         let mut content = column![stack![
             self.image_preview(),
             toolbar::view(
-                self.drawing_tool(),
-                self.drawing_tool().and_then(|tool| toolbar::size_control(
+                tool,
+                tool.and_then(|tool| toolbar::color_control(
+                    tool,
+                    self.stroke_selection,
+                    self.color_palette_open,
+                    &self.color_hex,
+                )),
+                tool.and_then(|tool| toolbar::size_control(
                     tool,
                     self.selected_size(),
                     self.size_input.as_deref(),
                     self.initial_settings
                 )),
-                self.stroke_selection,
-                self.color_palette_open,
-                &self.color_hex,
                 self.document.can_undo(),
                 self.document.can_redo(),
+                self.initial_settings.export_bindings
             ),
         ]];
 

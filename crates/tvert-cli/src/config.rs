@@ -14,7 +14,7 @@ use toml::{
     Deserializer, Spanned,
     de::{DeTable, DeValue},
 };
-use tvert_editor::{Settings, ThemePreference, Tool};
+use tvert_editor::{ExportBindings, KeyBinding, Settings, ThemePreference, Tool};
 use tvert_workflow::{OutputSelection, PathPattern};
 
 type Result<T, E = ConfigError> = std::result::Result<T, E>;
@@ -50,6 +50,18 @@ struct EditorConfig {
     stroke_width: u16,
     pixelation_block_size: u16,
     blur_sigma: u16,
+    keybindings: KeyBindingsConfig,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KeyBindingsConfig {
+    #[serde(deserialize_with = "deserialize_from_str")]
+    copy: KeyBinding,
+    #[serde(deserialize_with = "deserialize_from_str")]
+    save: KeyBinding,
+    #[serde(deserialize_with = "deserialize_from_str")]
+    copy_and_save: KeyBinding,
 }
 
 /// Preferences for choosing what to capture
@@ -83,6 +95,11 @@ impl TryFrom<EditorConfig> for Settings {
             stroke_width: config.stroke_width,
             pixelation_block_size: config.pixelation_block_size,
             blur_sigma: config.blur_sigma,
+            export_bindings: ExportBindings {
+                copy: config.keybindings.copy,
+                save: config.keybindings.save,
+                copy_and_save: config.keybindings.copy_and_save,
+            },
         };
         settings.validate()?;
         Ok(settings)
@@ -178,28 +195,42 @@ fn parse(name: &str, source: &str) -> Result<AppConfig> {
     let defaults = parse_document(DEFAULT_CONFIG_NAME, DEFAULT_CONFIG)?;
 
     // Validate defaults before mixing spans from two different sources
-    let settings = decode(&defaults, DEFAULT_CONFIG_NAME, DEFAULT_CONFIG)?;
+    let settings = decode(
+        &defaults,
+        defaults.get_ref(),
+        DEFAULT_CONFIG_NAME,
+        DEFAULT_CONFIG,
+    )?;
     if source.is_empty() {
         return Ok(settings);
     }
 
     let mut overrides = parse_document(name, source)?;
+    // Inherited defaults keep spans into the embedded source
+    let explicit = overrides.get_ref().clone();
     fill_defaults(overrides.get_mut(), defaults.into_inner());
-    decode(&overrides, name, source)
+    decode(&overrides, &explicit, name, source)
 }
 
 fn parse_document<'a>(name: &str, source: &'a str) -> Result<Spanned<DeTable<'a>>> {
     DeTable::parse(source).map_err(|error| ConfigError::toml(name, source, error))
 }
 
-fn decode(document: &Spanned<DeTable<'_>>, name: &str, source: &str) -> Result<AppConfig> {
+/// Deserializes and validates `document`, locating validation errors among
+/// the settings `explicit` reads from `source`
+fn decode(
+    document: &Spanned<DeTable<'_>>,
+    explicit: &DeTable<'_>,
+    name: &str,
+    source: &str,
+) -> Result<AppConfig> {
     let config: Config = serde_path_to_error::deserialize(Deserializer::from(document.clone()))
         .map_err(|error| ConfigError::deserialize(name, source, error))?;
 
     let editor = config
         .editor
         .try_into()
-        .map_err(|error| ConfigError::setting(name, source, document.get_ref(), error))?;
+        .map_err(|error| ConfigError::setting(name, source, explicit, error))?;
 
     Ok(AppConfig {
         capture: config.capture,
@@ -258,6 +289,11 @@ mod tests {
     #[case("[capture]\noutput = ''", "''")]
     #[case("[capture]\nscreen = 'DP-1'", "screen")]
     #[case("[unknown]\nvalue = 1", "unknown")]
+    #[case("[editor.keybindings]\ncopy = 'Meta+C'", "'Meta+C'")]
+    #[case("[editor.keybindings]\nclose = 'Ctrl+Q'", "close")]
+    #[case("[editor.keybindings]\nsave = 'ctrl+C'", "'ctrl+C'")]
+    #[case("[editor.keybindings]\ncopy = 'Ctrl+X'\nsave = 'ctrl+x'", "'Ctrl+X'")]
+    #[case("editor.keybindings.copy = 'Shift+R'", "'Shift+R'")]
     #[case("[editor", "")]
     fn diagnostics_point_to_the_original_user_source_after_merging(
         #[case] source: &'static str,
@@ -276,6 +312,9 @@ mod tests {
     fn diagnostics_keep_the_original_error_causes() {
         let validation = assert_err!(parse("user.toml", "[editor]\nblur_sigma = 3"));
         assert!(assert_some!(std::error::Error::source(&validation)).is::<tvert_editor::Error>());
+
+        let conflict = assert_err!(parse("user.toml", "[editor.keybindings]\nsave = 'Ctrl+C'"));
+        assert!(assert_some!(std::error::Error::source(&conflict)).is::<tvert_editor::Error>());
 
         let toml = assert_err!(parse("user.toml", "[editor]\nstroke_width = 'wide'"));
         assert!(assert_some!(std::error::Error::source(&toml)).is::<toml::de::Error>());
@@ -311,6 +350,39 @@ mod tests {
         assert!(!message.contains("\nin `editor.tool`"));
     }
 
+    #[rstest]
+    #[case(
+        "[editor.keybindings]\nsave = 'ctrl+C'",
+        "editor.keybindings.copy and editor.keybindings.save use the same shortcut in user.toml",
+        &["Ctrl+C is also used by the inherited editor.keybindings.copy"]
+    )]
+    #[case(
+        "[editor.keybindings]\ncopy = 'Ctrl+X'\nsave = 'ctrl+x'",
+        "editor.keybindings.copy and editor.keybindings.save use the same shortcut in user.toml",
+        &[
+            "Ctrl+X is also used by editor.keybindings.save",
+            "Ctrl+X is also used by editor.keybindings.copy",
+        ]
+    )]
+    #[case(
+        "[editor.keybindings]\ncopy_and_save = 'ctrl+z'",
+        "editor.keybindings.copy_and_save uses a reserved shortcut in user.toml",
+        &["Ctrl+Z is reserved for undo"]
+    )]
+    fn keybinding_conflicts_name_the_settings_and_the_conflicting_action(
+        #[case] source: &str,
+        #[case] message: &str,
+        #[case] labels: &[&str],
+    ) {
+        let error = assert_err!(parse("user.toml", source));
+        let actual = assert_some!(error.labels())
+            .map(|label| assert_some!(label.label()).to_owned())
+            .collect::<Vec<_>>();
+
+        assert_eq!(error.to_string(), message);
+        assert_eq!(actual, labels);
+    }
+
     #[test]
     fn user_file_overrides_embedded_defaults() {
         let directory = assert_ok!(tempdir());
@@ -327,6 +399,8 @@ mod tests {
             tool = "pEnCiL"
             stroke_width = 7
             blur_sigma = 11
+            [editor.keybindings]
+            save = "alt+s"
             "#,
         ));
         let defaults = assert_ok!(parse("test.toml", ""));
@@ -342,6 +416,10 @@ mod tests {
                     tool: Tool::Pencil,
                     stroke_width: 7,
                     blur_sigma: 11,
+                    export_bindings: ExportBindings {
+                        save: assert_ok!("Alt+S".parse()),
+                        ..defaults.editor.export_bindings
+                    },
                     ..defaults.editor
                 },
                 save: SaveSettings {

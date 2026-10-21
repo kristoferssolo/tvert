@@ -16,3 +16,10 @@ stroke_color = "#FF4040"
 stroke_width = 4
 pixelation_block_size = 16
 blur_sigma = 8
+
+[editor.keybindings]
+# Ctrl, Alt, Shift, and Super, joined with + to one ASCII letter or digit.
+# Each must be distinct and unused by history, tool, and selection shortcuts.
+copy = "Ctrl+C"
+save = "Ctrl+S"
+copy_and_save = "Ctrl+Shift+C"

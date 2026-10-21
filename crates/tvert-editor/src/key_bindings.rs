@@ -1,4 +1,4 @@
-use iced::keyboard::{self, Key, Modifiers};
+use iced::keyboard::{self, Key, Modifiers, key};
 use std::{fmt::Display, str::FromStr};
 use strum::{Display, EnumString, VariantArray};
 
@@ -64,6 +64,21 @@ impl KeyBinding {
             return false;
         };
         *modifiers == self.modifiers && character(key) == Some(self.key)
+    }
+
+    /// A key press this binding matches, for asking which other shortcuts
+    /// would handle the same press
+    pub(crate) fn press(self) -> keyboard::Event {
+        let key = Key::Character(self.key.to_string().into());
+        keyboard::Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: key::Physical::Unidentified(key::NativeCode::Unidentified),
+            location: keyboard::Location::Standard,
+            modifiers: self.modifiers,
+            text: None,
+            repeat: false,
+        }
     }
 }
 

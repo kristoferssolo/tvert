@@ -1,4 +1,5 @@
 use crate::{
+    Tool,
     color::parse_hex,
     editor::Message,
     style::RED,
@@ -19,7 +20,20 @@ const COLORS: &[Color] = &[
     Color::BLACK,
 ];
 
-pub(super) fn view(selection: Selection, open: bool, hex: &str) -> Element<'static, Message> {
+/// Builds the stroke color control, or `None` for tools without strokes
+pub fn for_tool(
+    tool: Tool,
+    selection: Selection,
+    open: bool,
+    hex: &str,
+) -> Option<Element<'static, Message>> {
+    if matches!(tool, Tool::Pixelate | Tool::Blur) {
+        return None;
+    }
+    Some(view(selection, open, hex))
+}
+
+fn view(selection: Selection, open: bool, hex: &str) -> Element<'static, Message> {
     let selected = Color::from(selection);
     let trigger = button(
         row![

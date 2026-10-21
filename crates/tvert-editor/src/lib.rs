@@ -23,7 +23,7 @@ mod viewport;
 
 pub use color::parse_hex;
 pub use error::Error;
-pub use export::ExportAction;
+pub use export::{ExportAction, ExportBindings};
 pub use key_bindings::{KeyBinding, ParseKeyBindingError};
 pub use settings::Settings;
 pub use theme::ThemePreference;
@@ -34,7 +34,7 @@ use crate::{
     render::handle_from_image,
     toolbar::{HEIGHT, MIN_WIDTH},
 };
-use iced::{ContentFit, Size, Theme, event, window};
+use iced::{ContentFit, Size, Theme, window};
 use std::{error::Error as StdError, rc::Rc};
 use tvert_image::CapturedImage;
 
@@ -49,8 +49,8 @@ use tvert_image::CapturedImage;
 ///
 /// # Errors
 ///
-/// Returns [`Error::InvalidSetting`] if a setting is outside its supported range,
-/// or [`Error::Runtime`] if Iced cannot start or run the window.
+/// Returns the [`Settings::validate`] error for unsupported settings, or
+/// [`Error::Runtime`] if Iced cannot start or run the window.
 pub fn run<E>(
     image: CapturedImage,
     settings: Settings,
@@ -76,7 +76,7 @@ where
     .title("Tvert")
     .theme(move |_: &Editor| Option::<Theme>::from(settings.theme))
     .font(lucide_icons::LUCIDE_FONT_BYTES)
-    .subscription(|_| event::listen_with(|event, status, _| shortcuts::parse(&event, status)))
+    .subscription(move |_| shortcuts::subscription(settings.export_bindings))
     .window(window::Settings {
         platform_specific: window::settings::PlatformSpecific {
             application_id: "tvert".into(),

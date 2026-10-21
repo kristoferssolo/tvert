@@ -25,7 +25,7 @@ use crate::{
     viewport::Navigation,
 };
 #[cfg(test)]
-use crate::{ThemePreference, style::RED};
+use crate::{ThemePreference, export::ExportBindings, style::RED};
 use iced::{
     Size, Task,
     widget::{canvas::Cache, image::Handle},
@@ -210,6 +210,7 @@ impl Editor {
                 stroke_width: 4,
                 pixelation_block_size: 16,
                 blur_sigma: 8,
+                export_bindings: ExportBindings::parse("Ctrl+C", "Ctrl+S", "Ctrl+Shift+C"),
             },
             Rc::new(|_, _| Ok(())),
         )

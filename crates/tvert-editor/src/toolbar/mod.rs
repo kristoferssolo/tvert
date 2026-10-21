@@ -5,6 +5,7 @@ mod size;
 
 use std::iter;
 
+pub use color::for_tool as color_control;
 pub use size::for_tool as size_control;
 
 use crate::{
@@ -13,13 +14,13 @@ use crate::{
         Message,
         shortcuts::{SELECT_KEY, tool_key},
     },
+    export::ExportBindings,
     tool::Tool,
     toolbar::button::{icon_button, separator},
     viewport::Navigation,
 };
 use iced::widget::container;
 use iced::{Element, Fill, Font, alignment::Vertical, widget::Row};
-use iced_color_triangle::Selection;
 use lucide_icons::Icon;
 use strum::VariantArray;
 
@@ -31,12 +32,11 @@ pub const MIN_WIDTH: f32 = 800.0;
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
     selected: Option<Tool>,
+    color_control: Option<Element<'static, Message>>,
     size_control: Option<Element<'static, Message>>,
-    stroke_selection: Selection,
-    color_palette_open: bool,
-    color_hex: &str,
     can_undo: bool,
     can_redo: bool,
+    exports: ExportBindings,
 ) -> Element<'static, Message> {
     let select = icon_button(
         Icon::MousePointer2,
@@ -76,30 +76,16 @@ pub fn view(
             false,
         ))
         .push(separator())
-        .extend(
-            selected
-                .is_some_and(|tool| !matches!(tool, Tool::Pixelate | Tool::Blur))
-                .then(|| color::view(stroke_selection, color_palette_open, color_hex)),
-        )
+        .extend(color_control)
         .extend(size_control)
-        .push(icon_button(
-            Icon::Copy,
-            "Copy (Ctrl+C)".into(),
-            Some(Message::Export(ExportAction::Copy)),
-            false,
-        ))
-        .push(icon_button(
-            Icon::Save,
-            "Save (Ctrl+S)".into(),
-            Some(Message::Export(ExportAction::Save)),
-            false,
-        ))
-        .push(icon_button(
-            Icon::ClipboardCopy,
-            "Copy and save (Ctrl+Shift+C)".into(),
-            Some(Message::Export(ExportAction::CopyAndSave)),
-            false,
-        ));
+        .extend(ExportAction::VARIANTS.iter().map(|&action| {
+            icon_button(
+                export_icon(action),
+                export_tooltip(action, exports),
+                Some(Message::Export(action)),
+                false,
+            )
+        }));
 
     container(controls)
         .padding(4)
@@ -118,5 +104,45 @@ const fn tool_icon(tool: Tool) -> Icon {
         Tool::Highlighter => Icon::Highlighter,
         Tool::Pixelate => Icon::Grid2x2,
         Tool::Blur => Icon::CloudFog,
+    }
+}
+
+const fn export_icon(action: ExportAction) -> Icon {
+    match action {
+        ExportAction::Copy => Icon::Copy,
+        ExportAction::Save => Icon::Save,
+        ExportAction::CopyAndSave => Icon::ClipboardCopy,
+    }
+}
+
+fn export_tooltip(action: ExportAction, exports: ExportBindings) -> String {
+    let name = match action {
+        ExportAction::Copy => "Copy",
+        ExportAction::Save => "Save",
+        ExportAction::CopyAndSave => "Copy and save",
+    };
+    format!("{name} ({})", exports.get(action))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn export_tooltips_show_each_configured_binding_canonically() {
+        let exports = ExportBindings::parse(" alt + 1 ", "super+ctrl+s", "Shift+Ctrl+x");
+        let tooltips = ExportAction::VARIANTS
+            .iter()
+            .map(|&action| export_tooltip(action, exports))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            tooltips,
+            [
+                "Copy (Alt+1)",
+                "Save (Ctrl+Super+S)",
+                "Copy and save (Ctrl+Shift+X)"
+            ]
+        );
     }
 }

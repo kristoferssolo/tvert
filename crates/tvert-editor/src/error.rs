@@ -1,3 +1,5 @@
+use crate::{ExportAction, KeyBinding};
+
 /// An editor window failure
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -24,5 +26,28 @@ pub enum Error {
         value: u16,
         min: u16,
         max: u16,
+    },
+
+    #[error(
+        "export shortcuts {} and {} are both {binding}",
+        .first.setting_name(),
+        .second.setting_name()
+    )]
+    DuplicateKeyBinding {
+        binding: KeyBinding,
+        first: ExportAction,
+        second: ExportAction,
+    },
+
+    /// A history, tool, or selection shortcut already handles the binding
+    #[error(
+        "export shortcut {} is {binding}, which is reserved for {reserved}",
+        .action.setting_name()
+    )]
+    ReservedKeyBinding {
+        action: ExportAction,
+        binding: KeyBinding,
+        /// The built-in editor action the binding would trigger
+        reserved: String,
     },
 }

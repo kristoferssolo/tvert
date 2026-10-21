@@ -1,5 +1,6 @@
 use crate::{
     Error, ThemePreference, Tool,
+    export::ExportBindings,
     size::{SizeKind, Sizes},
 };
 use iced::Color;
@@ -20,14 +21,19 @@ pub struct Settings {
     pub pixelation_block_size: u16,
     /// Blur sigma in image pixels
     pub blur_sigma: u16,
+    /// Shortcuts for copying and saving
+    pub export_bindings: ExportBindings,
 }
 
 impl Settings {
-    /// Checks that each setting is within its supported slider range.
+    /// Checks that each size is within its supported slider range and that
+    /// export shortcuts are distinct and unused by other editor shortcuts.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidSetting`] for the first unsupported value.
+    /// Returns [`Error::InvalidSetting`] for the first unsupported size, or
+    /// [`Error::DuplicateKeyBinding`] or [`Error::ReservedKeyBinding`] for the
+    /// first conflicting export shortcut.
     pub fn validate(self) -> Result<(), Error> {
         let sizes = Sizes::from(self);
         for &kind in SizeKind::VARIANTS {
@@ -42,6 +48,6 @@ impl Settings {
             }
         }
 
-        Ok(())
+        self.export_bindings.validate()
     }
 }

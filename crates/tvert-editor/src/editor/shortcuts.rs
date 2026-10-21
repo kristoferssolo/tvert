@@ -1,6 +1,6 @@
-use crate::{ExportAction, Tool, editor::message::Message};
+use crate::{KeyBinding, Tool, editor::message::Message, export::ExportBindings};
 use iced::{
-    Event, event,
+    Event, Subscription, event,
     keyboard::{Event as KeyboardEvent, Key, Modifiers, key::Named},
 };
 use strum::VariantArray;
@@ -8,12 +8,40 @@ use strum::VariantArray;
 /// Switches to selecting existing edits
 pub const SELECT_KEY: char = 'V';
 
-pub fn parse(event: &Event, status: event::Status) -> Option<Message> {
+/// Publishes shortcut messages for keyboard events that no widget captured
+pub fn subscription(exports: ExportBindings) -> Subscription<Message> {
+    event::listen_with(|event, status, _| {
+        matches!(event, Event::Keyboard(_)).then_some((event, status))
+    })
+    .with(exports)
+    .filter_map(|(exports, (event, status))| parse(&event, status, exports))
+}
+
+pub fn parse(event: &Event, status: event::Status, exports: ExportBindings) -> Option<Message> {
     if status != event::Status::Ignored {
         return None;
     }
+    built_in(event).or_else(|| match event {
+        Event::Keyboard(event) => exports.action(event).map(Message::Export),
+        _ => None,
+    })
+}
+
+/// Names the history, tool, or selection action that already handles `binding`
+pub fn reserved_by(binding: KeyBinding) -> Option<String> {
+    let name = match built_in(&Event::Keyboard(binding.press()))? {
+        Message::Undo => "undo".to_owned(),
+        Message::Redo => "redo".to_owned(),
+        Message::SelectTool(tool) => format!("the {tool} tool"),
+        Message::SelectionMode => "selection mode".to_owned(),
+        // Delete, Backspace, and Escape, which bindings cannot express
+        _ => "the selection".to_owned(),
+    };
+    Some(name)
+}
+
+fn built_in(event: &Event) -> Option<Message> {
     history(event)
-        .or_else(|| export(event))
         .or_else(|| tool(event))
         .or_else(|| selection(event))
 }
@@ -76,17 +104,6 @@ fn selection(event: &Event) -> Option<Message> {
     }
 }
 
-fn export(event: &Event) -> Option<Message> {
-    let action = match control_key(event)? {
-        ('c', false) => ExportAction::Copy,
-        ('c', true) => ExportAction::CopyAndSave,
-        ('s', false) => ExportAction::Save,
-        _ => return None,
-    };
-
-    Some(Message::Export(action))
-}
-
 fn control_key(event: &Event) -> Option<(char, bool)> {
     let Event::Keyboard(KeyboardEvent::KeyPressed {
         key: Key::Character(character),
@@ -133,6 +150,7 @@ fn character_key(event: &Event) -> Option<(char, Modifiers)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ExportAction;
     use claims::{assert_none, assert_some_eq};
     use iced::keyboard::{self, key};
     use rstest::rstest;
@@ -152,6 +170,11 @@ mod tests {
     fn key_press(character: &str, modifiers: Modifiers, repeat: bool) -> Event {
         press(Key::Character(character.into()), modifiers, repeat)
     }
+
+    fn exports() -> ExportBindings {
+        ExportBindings::parse("Ctrl+C", "Ctrl+S", "Ctrl+Shift+C")
+    }
+
     #[rstest]
     #[case("z", Modifiers::CTRL, Message::Undo)]
     #[case("y", Modifiers::CTRL, Message::Redo)]
@@ -161,25 +184,7 @@ mod tests {
         #[case] expected: Message,
     ) {
         let event = key_press(character, modifiers, false);
-        assert_some_eq!(parse(&event, event::Status::Ignored), expected);
-    }
-
-    #[rstest]
-    #[case("c", Modifiers::CTRL, ExportAction::Copy)]
-    #[case("c", Modifiers::CTRL | Modifiers::SHIFT, ExportAction::CopyAndSave)]
-    #[case("s", Modifiers::CTRL, ExportAction::Save)]
-    fn parses_export(
-        #[case] character: &str,
-        #[case] modifiers: Modifiers,
-        #[case] expected: ExportAction,
-    ) {
-        assert_eq!(
-            parse(
-                &key_press(character, modifiers, false),
-                event::Status::Ignored,
-            ),
-            Some(Message::Export(expected)),
-        );
+        assert_some_eq!(parse(&event, event::Status::Ignored, exports()), expected);
     }
 
     #[test]
@@ -194,7 +199,8 @@ mod tests {
             assert_some_eq!(
                 parse(
                     &key_press(&character, Modifiers::empty(), false),
-                    event::Status::Ignored
+                    event::Status::Ignored,
+                    exports()
                 ),
                 expected,
             );
@@ -212,7 +218,8 @@ mod tests {
         assert_some_eq!(
             parse(
                 &key_press(character, modifiers, false),
-                event::Status::Ignored
+                event::Status::Ignored,
+                exports()
             ),
             expected,
         );
@@ -243,7 +250,7 @@ mod tests {
     #[case("x", Modifiers::CTRL)]
     fn ignores_unbound_keys(#[case] character: &str, #[case] modifiers: Modifiers) {
         let event = key_press(character, modifiers, false);
-        assert_none!(parse(&event, event::Status::Ignored));
+        assert_none!(parse(&event, event::Status::Ignored, exports()));
     }
 
     #[rstest]
@@ -253,6 +260,7 @@ mod tests {
         assert_none!(parse(
             &key_press(character, modifiers, false),
             event::Status::Captured,
+            exports()
         ));
     }
 
@@ -265,10 +273,43 @@ mod tests {
         #[case] expected: Message,
     ) {
         let key = press(Key::Named(named), Modifiers::empty(), false);
-        assert_some_eq!(parse(&key, event::Status::Ignored), expected);
-        assert_none!(parse(&key, event::Status::Captured));
+        assert_some_eq!(parse(&key, event::Status::Ignored, exports()), expected);
+        assert_none!(parse(&key, event::Status::Captured, exports()));
 
         let modified = press(Key::Named(named), Modifiers::CTRL, false);
-        assert_none!(parse(&modified, event::Status::Ignored));
+        assert_none!(parse(&modified, event::Status::Ignored, exports()));
+    }
+
+    #[rstest]
+    #[case("1", Modifiers::ALT, Some(ExportAction::Copy))]
+    #[case("X", Modifiers::CTRL | Modifiers::ALT, Some(ExportAction::Save))]
+    #[case("s", Modifiers::LOGO, Some(ExportAction::CopyAndSave))]
+    #[case("c", Modifiers::CTRL, None)]
+    fn configured_bindings_replace_the_default_exports(
+        #[case] character: &str,
+        #[case] modifiers: Modifiers,
+        #[case] expected: Option<ExportAction>,
+    ) {
+        let exports = ExportBindings::parse("Alt+1", "ctrl+alt+x", "Super+S");
+        assert_eq!(
+            parse(
+                &key_press(character, modifiers, false),
+                event::Status::Ignored,
+                exports,
+            ),
+            expected.map(Message::Export),
+        );
+    }
+
+    #[test]
+    fn exports_ignore_captured_and_repeated_presses() {
+        let copy = |repeat| key_press("c", Modifiers::CTRL, repeat);
+
+        assert_some_eq!(
+            parse(&copy(false), event::Status::Ignored, exports()),
+            Message::Export(ExportAction::Copy),
+        );
+        assert_none!(parse(&copy(false), event::Status::Captured, exports()));
+        assert_none!(parse(&copy(true), event::Status::Ignored, exports()));
     }
 }

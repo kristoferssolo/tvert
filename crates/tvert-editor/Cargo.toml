@@ -10,7 +10,6 @@ license.workspace = true
 tvert-image.workspace = true
 
 iced-color-triangle.workspace = true
-
 iced = { workspace = true, features = [
   "advanced",
   "canvas",

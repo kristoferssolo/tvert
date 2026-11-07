@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::{
     Error, OutputId, RegionSelection, Wayland,
     wayland::{
@@ -12,6 +14,7 @@ use crate::{
         shm::ShmBuffer,
     },
 };
+use tracing::debug;
 use tvert_image::{CapturedImage, ImageTransform};
 use wayland_client::{
     Proxy,
@@ -202,12 +205,14 @@ impl Wayland {
         self.state.overlays.clear();
 
         let result = self.run_selection(target);
+        let started = Instant::now();
         self.state.overlays.clear();
 
         // Send destruction requests before handing the image to another stage.
         // Preserve the original error if both selection and cleanup fail.
         let cleanup = self.event_queue.roundtrip(&mut self.state);
         self.state.reset_selector_input();
+        debug!(elapses = ?started.elapsed(), "selector cleanup finished");
 
         let selected = result?;
         cleanup?;

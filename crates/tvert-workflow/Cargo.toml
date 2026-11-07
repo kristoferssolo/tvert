@@ -12,6 +12,7 @@ tvert-wayland.workspace = true
 
 jiff.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 wl-clipboard-rs.workspace = true
 
 [lints]

@@ -1,8 +1,11 @@
+use std::time::Instant;
+
 use crate::{
     Error, OutputSelection,
     desktop::{Screen, compose},
     target::Target,
 };
+use tracing::debug;
 use tvert_image::CapturedImage;
 use tvert_wayland::{FrozenOutput, Output, OutputId, RegionSelection, Wayland};
 
@@ -63,7 +66,10 @@ impl Backend for Wayland {
 /// or selecting fails.
 pub fn capture(target: &Target) -> Result<Option<CapturedImage>, Error> {
     let mut wayland = Wayland::connect()?;
-    capture_from(&mut wayland, target)
+    let image = capture_from(&mut wayland, target)?;
+    drop(wayland);
+    debug!("capture finished; image ready for editor or saving");
+    Ok(image)
 }
 
 fn capture_from(
@@ -96,9 +102,20 @@ fn capture_desktop_region(backend: &mut impl Backend) -> Result<Option<CapturedI
     let Some(selection) = backend.select_desktop_region()? else {
         return Ok(None);
     };
-    compose(screens(selection.outputs)?)?
-        .crop(selection.bounds)
-        .map(Some)
+
+    let started = Instant::now();
+    let screens = screens(selection.outputs)?;
+    debug!(elapsed = ?&started.elapsed(), "output orientation finished");
+
+    let started = Instant::now();
+    let desktop = compose(screens)?;
+    debug!(elapsed = ?&started.elapsed(), "desktop composition finished");
+
+    let started = Instant::now();
+    let image = desktop.crop(selection.bounds)?;
+    debug!(elapsed = ?started.elapsed(), size = %image.size(), "region crop finished");
+
+    Ok(Some(image))
 }
 
 fn screens(frozen: Vec<FrozenOutput>) -> Result<Vec<Screen>, Error> {

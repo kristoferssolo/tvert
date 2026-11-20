@@ -75,7 +75,7 @@ mod tests {
     use iced::{
         Event, Padding, Rectangle, Size,
         mouse::{Button, Cursor, Event as MouseEvent},
-        widget::canvas::{Cache, Program},
+        widget::canvas::Cache,
     };
     use std::assert_matches;
 
@@ -102,8 +102,9 @@ mod tests {
             cache: &cache,
         };
         canvas
-            .update(
+            .handle_event(
                 state,
+                false,
                 &Event::Mouse(event),
                 BOUNDS,
                 Cursor::Available(cursor),

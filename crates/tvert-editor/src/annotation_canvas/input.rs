@@ -20,6 +20,7 @@ impl AnnotationCanvas<'_> {
     pub(super) fn handle_event(
         &self,
         state: &mut GestureState,
+        shift: bool,
         event: &Event,
         bounds: Rectangle,
         cursor: Cursor,
@@ -54,13 +55,13 @@ impl AnnotationCanvas<'_> {
             Event::Mouse(MouseEvent::CursorMoved { position }) => {
                 let local = Cursor::Available(*position).position_from(bounds.position())?;
                 match state.as_mut()? {
-                    Gesture::Draw(draft) => self.record_motion(draft, local, viewport),
+                    Gesture::Draw(draft) => self.record_motion(draft, local, viewport, shift),
                     Gesture::Move(gesture) => gesture.drag(local, viewport),
                     Gesture::Pan(gesture) => gesture.drag(local),
                 }
             }
             Event::Mouse(MouseEvent::ButtonReleased(button)) => {
-                self.release(state, *button, position, viewport)
+                self.release(state, *button, position, viewport, shift)
             }
             Event::Window(WindowEvent::RedrawRequested(_)) => {
                 let Some(Gesture::Move(gesture)) = state else {
@@ -72,7 +73,7 @@ impl AnnotationCanvas<'_> {
         }
     }
 
-    fn redraw(&self) -> Action<Message> {
+    pub(super) fn redraw(&self) -> Action<Message> {
         self.cache.clear();
         Action::request_redraw().and_capture()
     }
@@ -119,27 +120,18 @@ impl AnnotationCanvas<'_> {
         })
     }
 
-    fn record_motion(
-        &self,
-        draft: &mut AnnotationDraft,
-        point: Point,
-        viewport: Viewport,
-    ) -> Option<Action<Message>> {
-        draft.record(viewport.clamped_image_position(point)?);
-        Some(self.redraw())
-    }
-
     fn release(
         &self,
         state: &mut GestureState,
         button: Button,
         position: Option<Point>,
         viewport: Viewport,
+        shift: bool,
     ) -> Option<Action<Message>> {
         match (state.take()?, button) {
             (Gesture::Draw(mut draft), Button::Left) => {
                 if let Some(point) =
-                    position.and_then(|point| viewport.clamped_image_position(point))
+                    position.and_then(|point| self.draft_position(&draft, point, viewport, shift))
                 {
                     draft.record(point);
                 }
@@ -163,7 +155,7 @@ mod tests {
     use iced::{
         Color, Padding, Size, event,
         keyboard::{self, Modifiers},
-        widget::canvas::{Cache, Program},
+        widget::canvas::Cache,
     };
     use rstest::rstest;
 
@@ -191,7 +183,7 @@ mod tests {
 
     fn capture_status(draft: &mut GestureState, event: &Event) -> event::Status {
         canvas(&Cache::new(), Tool::Rectangle)
-            .update(draft, event, BOUNDS, Cursor::Unavailable)
+            .handle_event(draft, false, event, BOUNDS, Cursor::Unavailable)
             .map_or(event::Status::Ignored, |action| action.into_inner().2)
     }
 
@@ -202,8 +194,9 @@ mod tests {
         position: Option<Point>,
     ) -> Option<Message> {
         canvas
-            .update(
+            .handle_event(
                 draft,
+                false,
                 event,
                 BOUNDS,
                 position.map_or(Cursor::Unavailable, Cursor::Available),

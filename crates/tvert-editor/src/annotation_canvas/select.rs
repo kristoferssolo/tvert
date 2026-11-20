@@ -112,7 +112,7 @@ mod tests {
         Event, Padding, Rectangle, Size, event,
         keyboard::{self, Event as KeyboardEvent, Key, Modifiers, key},
         mouse::{Button, Cursor, Event as MouseEvent},
-        widget::canvas::{Cache, Program},
+        widget::canvas::Cache,
         window::Event as WindowEvent,
     };
     use rstest::rstest;
@@ -158,8 +158,9 @@ mod tests {
         let edits = edits();
         let cache = Cache::new();
         canvas(&edits, &cache)
-            .update(
+            .handle_event(
                 state,
+                false,
                 event,
                 BOUNDS,
                 cursor.map_or(Cursor::Unavailable, Cursor::Available),
@@ -188,8 +189,13 @@ mod tests {
         let canvas = canvas(&edits, &cache);
         let mut state = None;
 
-        let action =
-            assert_some!(canvas.update(&mut state, &PRESS, BOUNDS, Cursor::Available(click)));
+        let action = assert_some!(canvas.handle_event(
+            &mut state,
+            false,
+            &PRESS,
+            BOUNDS,
+            Cursor::Available(click)
+        ));
         let (message, _, status) = action.into_inner();
 
         assert_some_eq!(message, Message::SelectEdit(expected));
@@ -197,8 +203,9 @@ mod tests {
         assert_eq!(state.is_some(), expected.is_some());
         assert_none!(dispatch(&mut state, &RELEASE, Some(click)));
         assert_none!(&state);
-        assert_none!(canvas.update(
+        assert_none!(canvas.handle_event(
             &mut state,
+            false,
             &PRESS,
             BOUNDS,
             Cursor::Available(Point::new(5.0, 5.0))

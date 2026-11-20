@@ -1,3 +1,4 @@
+mod draw;
 mod input;
 mod navigate;
 mod select;
@@ -12,7 +13,7 @@ use crate::{
     viewport::{Navigation, Viewport},
 };
 use iced::{
-    Color, Padding, Rectangle, Renderer, Size, Theme,
+    Color, Padding, Rectangle, Renderer, Size, Theme, keyboard,
     mouse::{self, Cursor},
     widget::canvas::{Cache, Program},
 };
@@ -33,6 +34,14 @@ pub enum Gesture {
 
 type GestureState = Option<Gesture>;
 
+/// Canvas state retained between events
+#[derive(Debug, Default)]
+pub struct CanvasState {
+    gesture: GestureState,
+    /// Whether Shift is held, tracked before a draft begins
+    shift: bool,
+}
+
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
     pub navigation: Navigation,
@@ -46,7 +55,7 @@ pub struct AnnotationCanvas<'a> {
 }
 
 impl Program<Message> for AnnotationCanvas<'_> {
-    type State = GestureState;
+    type State = CanvasState;
 
     fn update(
         &self,
@@ -55,7 +64,11 @@ impl Program<Message> for AnnotationCanvas<'_> {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> Option<iced::widget::Action<Message>> {
-        self.handle_event(state, event, bounds, cursor)
+        if let iced::Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = event {
+            state.shift = modifiers.shift();
+            return self.constrain_draft(&mut state.gesture, state.shift, bounds, cursor);
+        }
+        self.handle_event(&mut state.gesture, state.shift, event, bounds, cursor)
     }
 
     fn draw(
@@ -73,7 +86,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         let geometry = self
             .cache
             .draw_with_bounds(renderer, viewport.bounds, |frame| {
-                if let Some(Gesture::Draw(draft)) = state
+                if let Some(Gesture::Draw(draft)) = &state.gesture
                     && let Ok(edit) = Edit::try_from(draft.clone())
                 {
                     edit.draw_draft(frame, viewport);
@@ -90,7 +103,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> mouse::Interaction {
-        if matches!(state, Some(Gesture::Pan(_))) {
+        if matches!(state.gesture, Some(Gesture::Pan(_))) {
             return mouse::Interaction::Grabbing;
         }
         let over_image = self
@@ -99,7 +112,7 @@ impl Program<Message> for AnnotationCanvas<'_> {
             .and_then(|(viewport, point)| viewport.image_position(point))
             .is_some();
 
-        if self.mode == Mode::Draw && (over_image || state.is_some()) {
+        if self.mode == Mode::Draw && (over_image || state.gesture.is_some()) {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::None

@@ -40,7 +40,7 @@ impl Constraint {
     /// constrained direction instead of being clamped per axis, so it keeps
     /// its shape. `start` must lie within the image.
     pub fn apply(self, start: Point, end: Point, image_size: Size) -> Point {
-        let delta = end - start;
+        let delta = Vector::new(end.x - start.x, end.y - start.y);
         let (direction, length) = match self {
             Self::Square => (
                 Vector::new(delta.x.signum(), delta.y.signum()),
@@ -61,7 +61,10 @@ impl Constraint {
             .min(room(start.x, direction.x, image_size.width))
             .min(room(start.y, direction.y, image_size.height));
 
-        start + direction * length
+        Point::new(
+            direction.x.mul_add(length, start.x),
+            direction.y.mul_add(length, start.y),
+        )
     }
 }
 

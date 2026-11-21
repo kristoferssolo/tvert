@@ -92,6 +92,8 @@ mod tests {
         let cache = Cache::new();
         let canvas = AnnotationCanvas {
             image_size: IMAGE,
+            visible: None,
+            crop: None,
             padding: Padding::ZERO,
             navigation,
             tool: Tool::Rectangle,
@@ -115,6 +117,7 @@ mod tests {
     fn viewport(navigation: Navigation) -> Viewport {
         assert_some!(Viewport::navigated(
             IMAGE,
+            None,
             BOUNDS,
             Padding::ZERO,
             navigation

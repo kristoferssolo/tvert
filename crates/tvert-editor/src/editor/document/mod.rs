@@ -4,20 +4,23 @@ pub(super) use change::Change;
 
 use crate::{
     Error,
+    crop::Crop,
     edit::Edit,
     render::{handle_from_image, render_edits},
 };
 use iced::widget::image::Handle;
 
-/// Retained edits, their undo history, and their full-resolution rendering
-/// from an untouched source.
+/// Retained edits, the export crop, their undo history, and their
+/// full-resolution rendering from an untouched source.
 ///
 /// Applying a change commits both edits and preview or leaves both unchanged.
 /// Cancelling a gesture restores its geometry even when rendering fails.
+/// The preview is never cropped; only exports are.
 pub(super) struct Document {
     original: Handle,
     preview: Handle,
     edits: Vec<Edit>,
+    crop: Option<Crop>,
     undo: Vec<Change>,
     redo: Vec<Change>,
 }
@@ -37,6 +40,7 @@ impl Document {
             preview: original.clone(),
             original,
             edits: Vec::new(),
+            crop: None,
             undo: Vec::new(),
             redo: Vec::new(),
         }
@@ -48,6 +52,10 @@ impl Document {
 
     pub(super) fn edits(&self) -> &[Edit] {
         &self.edits
+    }
+
+    pub(super) const fn crop(&self) -> Option<Crop> {
+        self.crop
     }
 
     pub(super) const fn can_undo(&self) -> bool {
@@ -120,12 +128,16 @@ impl Document {
 
     // Returns the unapplied change on failure so history can keep it.
     fn try_apply(&mut self, change: Change) -> Result<Change, (Change, ApplyError)> {
+        let changes_pixels = change.changes_pixels();
         let inverse = change
-            .apply(&mut self.edits)
+            .apply(&mut self.edits, &mut self.crop)
             .map_err(|change| (change, ApplyError::Rejected))?;
+        if !changes_pixels {
+            return Ok(inverse);
+        }
         if let Err(error) = self.refresh_preview() {
             let change = inverse
-                .apply(&mut self.edits)
+                .apply(&mut self.edits, &mut self.crop)
                 .unwrap_or_else(|inverse| inverse);
             return Err((change, ApplyError::Render(error)));
         }

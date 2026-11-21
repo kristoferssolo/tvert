@@ -15,12 +15,12 @@ impl AnnotationCanvas<'_> {
         viewport: Viewport,
         shift: bool,
     ) -> Option<Action<Message>> {
-        draft.record(self.draft_position(draft, point, viewport, shift)?);
+        draft.record(draft_position(draft, point, viewport, shift)?);
         Some(self.redraw())
     }
 
-    /// Applies or releases a draft's Shift constraint without waiting for
-    /// the pointer to move
+    /// Applies or releases a draft's or crop's Shift constraint without
+    /// waiting for the pointer to move
     pub(super) fn constrain_draft(
         &self,
         state: &mut GestureState,
@@ -28,33 +28,37 @@ impl AnnotationCanvas<'_> {
         bounds: Rectangle,
         cursor: Cursor,
     ) -> Option<Action<Message>> {
-        let Some(Gesture::Draw(draft)) = state else {
-            return None;
-        };
-        Constraint::for_tool(draft.tool)?;
         let viewport = self.viewport(bounds)?;
         let point = cursor.position_from(bounds.position())?;
-        draft.record(self.draft_position(draft, point, viewport, shift)?);
+        match state.as_mut()? {
+            Gesture::Draw(draft) => {
+                Constraint::for_tool(draft.tool)?;
+                draft.record(draft_position(draft, point, viewport, shift)?);
+            }
+            Gesture::Crop(draft) => {
+                self.drag_crop(draft, point, viewport, shift)?;
+            }
+            Gesture::Move(_) | Gesture::Pan(_) => return None,
+        }
         self.cache.clear();
         Some(Action::request_redraw())
     }
+}
 
-    /// Maps a canvas `point` to the draft's next image position, constrained
-    /// relative to its start while Shift is held
-    pub(super) fn draft_position(
-        &self,
-        draft: &AnnotationDraft,
-        point: Point,
-        viewport: Viewport,
-        shift: bool,
-    ) -> Option<Point> {
-        let end = viewport.clamped_image_position(point)?;
-        let constraint = Constraint::for_tool(draft.tool).filter(|_| shift);
-        Some(match (constraint, draft.points.first()) {
-            (Some(constraint), Some(&start)) => constraint.apply(start, end, self.image_size),
-            _ => end,
-        })
-    }
+/// Maps a canvas `point` to the draft's next image position, constrained
+/// relative to its start while Shift is held
+pub(super) fn draft_position(
+    draft: &AnnotationDraft,
+    point: Point,
+    viewport: Viewport,
+    shift: bool,
+) -> Option<Point> {
+    let end = viewport.clamped_image_position(point)?;
+    let constraint = Constraint::for_tool(draft.tool).filter(|_| shift);
+    Some(match (constraint, draft.points.first()) {
+        (Some(constraint), Some(&start)) => constraint.apply(start, end, viewport.area()),
+        _ => end,
+    })
 }
 
 #[cfg(test)]
@@ -82,6 +86,8 @@ mod tests {
     fn canvas(cache: &Cache, tool: Tool) -> AnnotationCanvas<'_> {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
+            visible: None,
+            crop: None,
             navigation: Navigation::Fit,
             padding: Padding::ZERO,
             tool,

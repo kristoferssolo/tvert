@@ -3,8 +3,6 @@ mod color;
 mod input;
 mod size;
 
-use std::iter;
-
 pub use color::for_tool as color_control;
 pub use size::for_tool as size_control;
 
@@ -12,9 +10,10 @@ use crate::{
     ExportAction,
     editor::{
         Message,
-        shortcuts::{SELECT_KEY, tool_key},
+        shortcuts::{CROP_KEY, SELECT_KEY, tool_key},
     },
     export::ExportBindings,
+    mode::Mode,
     tool::Tool,
     toolbar::button::{icon_button, separator},
     viewport::Navigation,
@@ -32,6 +31,7 @@ pub const MIN_WIDTH: f32 = 800.0;
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
     selected: Option<Tool>,
+    mode: Mode,
     color_control: Option<Element<'static, Message>>,
     size_control: Option<Element<'static, Message>>,
     can_undo: bool,
@@ -42,7 +42,13 @@ pub fn view(
         Icon::MousePointer2,
         format!("Select ({SELECT_KEY})"),
         Some(Message::SelectionMode),
-        selected.is_none(),
+        matches!(mode, Mode::Select(_)),
+    );
+    let crop = icon_button(
+        Icon::Crop,
+        format!("Crop ({CROP_KEY}, Enter to apply)"),
+        Some(Message::CropMode),
+        matches!(mode, Mode::Crop(_)),
     );
     let tools = Tool::VARIANTS.iter().map(|&tool| {
         icon_button(
@@ -53,7 +59,7 @@ pub fn view(
         )
     });
 
-    let controls = Row::with_children(iter::once(select).chain(tools))
+    let controls = Row::with_children([select, crop].into_iter().chain(tools))
         .spacing(4)
         .align_y(Vertical::Center)
         .push(separator())

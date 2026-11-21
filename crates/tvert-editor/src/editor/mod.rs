@@ -102,6 +102,13 @@ impl Editor {
                     self.update_document(|document| document.record(Change::Remove(index)));
                 }
             }
+            Message::CropMode => self.enter_crop_mode(),
+            Message::Crop(crop) => {
+                if let Mode::Crop(proposed) = &mut self.mode {
+                    *proposed = Some(crop);
+                }
+            }
+            Message::ApplyCrop => self.apply_crop(),
             Message::Move(message) => self.update_move(message),
             Message::Navigate(navigation) => {
                 self.navigation = navigation;
@@ -143,9 +150,13 @@ impl Editor {
         Task::none()
     }
 
-    /// Returns the committed image at full resolution.
+    /// Returns the committed image at full resolution, cropped for export.
     fn render_image(&self) -> Result<CapturedImage, Error> {
-        render_image(self.document.preview(), &[])
+        let image = render_image(self.document.preview(), &[])?;
+        match self.document.crop() {
+            Some(crop) => crop.apply(&image),
+            None => Ok(image),
+        }
     }
 
     fn export(&mut self, action: ExportAction) -> Task<Message> {
@@ -220,9 +231,10 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{annotation::AnnotationDraft, size::SizeKind, style::RED};
+    use crate::{annotation::AnnotationDraft, crop::Crop, size::SizeKind, style::RED};
     use claims::{assert_ok, assert_some};
     use iced::{Color, Point};
+    use tvert_image::PixelSize;
 
     fn editor() -> Editor {
         Editor::for_test(32, 16, [20, 40, 60, 255].repeat(512))
@@ -294,6 +306,46 @@ mod tests {
             Color::from(editor.stroke_selection).into_rgba8(),
             green.into_rgba8()
         );
+    }
+
+    #[test]
+    fn enter_applies_the_proposed_crop_to_exports_as_one_step() {
+        let mut editor = editor();
+        let _ = editor.update(line(2, RED));
+        let preview = editor.document.preview().id();
+        let full = assert_ok!(editor.render_image());
+        let crop = assert_some!(Crop::from_drag(
+            Point::new(4.0, 2.0),
+            Point::new(20.0, 12.0),
+            editor.image_size
+        ));
+
+        let _ = editor.update(Message::Crop(crop));
+        assert_eq!(editor.document.crop(), None);
+
+        for message in [
+            Message::CropMode,
+            Message::Crop(crop),
+            Message::ApplyCrop,
+            Message::CropMode,
+            Message::Crop(crop),
+            Message::ApplyCrop,
+        ] {
+            let _ = editor.update(message);
+        }
+        let cropped = assert_ok!(editor.render_image());
+
+        assert_eq!(editor.mode, Mode::Draw);
+        assert_eq!(editor.document.preview().id(), preview);
+        assert_eq!(cropped.size(), assert_ok!(PixelSize::try_from((16, 10))));
+        assert_eq!(cropped.rgba(), assert_ok!(full.crop(4..20, 2..12)).rgba());
+
+        let _ = editor.update(Message::Undo);
+        assert_eq!(assert_ok!(editor.render_image()).size(), full.size());
+        assert_eq!(editor.document.edits().len(), 1);
+
+        let _ = editor.update(Message::Redo);
+        assert_eq!(assert_ok!(editor.render_image()).size(), cropped.size());
     }
 
     #[test]

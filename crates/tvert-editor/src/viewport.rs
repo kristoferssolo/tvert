@@ -23,6 +23,8 @@ pub struct Viewport {
     /// Displayed image in canvas coordinates, where the renderer places its pixels
     pub bounds: Rectangle,
     image_size: Size,
+    /// The shown part of the image in captured-image coordinates
+    area: Rectangle,
     canvas: Rectangle,
     view: Rectangle,
     fit: f32,
@@ -33,37 +35,45 @@ pub struct Viewport {
 impl Viewport {
     /// Fits the whole image in `canvas`
     pub fn new(image_size: Size, canvas: Rectangle) -> Option<Self> {
-        Self::navigated(image_size, canvas, Padding::ZERO, Navigation::Fit)
+        Self::navigated(image_size, None, canvas, Padding::ZERO, Navigation::Fit)
     }
 
     /// Places the image in `canvas`, given in window coordinates, as `navigation` requests.
     ///
+    /// `area` limits the shown part of the image, in captured-image
+    /// coordinates; `None` shows all of it. Fitting, positions, and the
+    /// reachable view center stay within that area. Callers hide what lies
+    /// outside [`Self::visible`].
+    ///
     /// Returns `None` for empty or non-finite sizes and placements.
     pub fn navigated(
         image_size: Size,
+        area: Option<Rectangle>,
         canvas: Rectangle,
         padding: Padding,
         navigation: Navigation,
     ) -> Option<Self> {
         let view = Rectangle::with_size(canvas.size()).shrink(padding);
+        let area = area.unwrap_or_else(|| Rectangle::with_size(image_size));
         if ![
             image_size.width,
             image_size.height,
+            area.width,
+            area.height,
             canvas.width,
             canvas.height,
         ]
         .into_iter()
-        .all(|value| value.is_finite() && value > 0.0)
+        .all(is_positive)
+            || !area.x.is_finite()
+            || !area.y.is_finite()
         {
             return None;
         }
 
-        let fit = (canvas.width / image_size.width).min(canvas.height / image_size.height);
+        let fit = (canvas.width / area.width).min(canvas.height / area.height);
         let (scale, center) = match navigation {
-            Navigation::Fit => (
-                fit,
-                Point::new(image_size.width / 2.0, image_size.height / 2.0),
-            ),
+            Navigation::Fit => (fit, area.center()),
             Navigation::Manual { scale, center } => (scale, center),
         };
         let placement = place(image_size, view, scale, center);
@@ -86,12 +96,23 @@ impl Viewport {
                 placement.size(),
             ),
             image_size,
+            area,
             canvas,
             view,
             fit,
             scale,
             center,
         })
+    }
+
+    /// The shown part of the image in captured-image coordinates
+    pub const fn area(self) -> Rectangle {
+        self.area
+    }
+
+    /// The shown part of the image in canvas coordinates
+    pub fn visible(self) -> Rectangle {
+        self.canvas_rectangle(self.area)
     }
 
     /// Returns the image rectangle to request from the renderer, in canvas coordinates.
@@ -143,22 +164,25 @@ impl Viewport {
         )
     }
 
+    /// Maps a canvas `point` within the shown area to image pixels
     pub fn image_position(self, point: Point) -> Option<Point> {
-        if !self.bounds.contains(point) {
+        if !self.visible().contains(point) {
             return None;
         }
         self.clamped_image_position(point)
     }
 
+    /// Maps a canvas `point` to image pixels, clamped to the shown area
     pub fn clamped_image_position(self, point: Point) -> Option<Point> {
         if !point.x.is_finite() || !point.y.is_finite() {
             return None;
         }
 
         Some(Point::new(
-            ((point.x - self.bounds.x) / self.bounds.width).clamp(0.0, 1.0) * self.image_size.width,
-            ((point.y - self.bounds.y) / self.bounds.height).clamp(0.0, 1.0)
-                * self.image_size.height,
+            ((point.x - self.bounds.x) / self.bounds.width * self.image_size.width)
+                .clamp(self.area.x, self.area.x + self.area.width),
+            ((point.y - self.bounds.y) / self.bounds.height * self.image_size.height)
+                .clamp(self.area.y, self.area.y + self.area.height),
         ))
     }
 
@@ -186,11 +210,11 @@ impl Viewport {
         pixels * self.bounds.width / self.image_size.width
     }
 
-    /// Keeps the view center over the image, so it stays reachable
+    /// Keeps the view center over the shown area, so it stays reachable
     fn manual(self, scale: f32, center: Point) -> Option<Navigation> {
         let center = Point::new(
-            center.x.clamp(0.0, self.image_size.width),
-            center.y.clamp(0.0, self.image_size.height),
+            center.x.clamp(self.area.x, self.area.x + self.area.width),
+            center.y.clamp(self.area.y, self.area.y + self.area.height),
         );
         [scale, center.x, center.y]
             .into_iter()
@@ -239,4 +263,64 @@ fn snap(origin: f32, scale: f32) -> f32 {
 
 fn is_positive(value: f32) -> bool {
     value.is_finite() && value > 0.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::{assert_none, assert_some, assert_some_eq};
+
+    const IMAGE: Size = Size::new(200.0, 100.0);
+    const CANVAS: Rectangle = Rectangle::new(Point::ORIGIN, Size::new(400.0, 400.0));
+    /// Fits at four canvas pixels per image pixel, shown at (0, 100)–(400, 300)
+    const AREA: Rectangle = Rectangle::new(Point::new(50.0, 25.0), Size::new(100.0, 50.0));
+
+    fn viewport(navigation: Navigation) -> Viewport {
+        assert_some!(Viewport::navigated(
+            IMAGE,
+            Some(AREA),
+            CANVAS,
+            Padding::ZERO,
+            navigation
+        ))
+    }
+
+    #[test]
+    fn fits_the_shown_area_instead_of_the_image() {
+        let viewport = viewport(Navigation::Fit);
+
+        assert_eq!(
+            viewport.visible(),
+            Rectangle::new(Point::new(0.0, 100.0), Size::new(400.0, 200.0))
+        );
+        assert_eq!(viewport.canvas_length(1.0), 4.0);
+    }
+
+    #[test]
+    fn positions_stay_within_the_shown_area() {
+        let viewport = viewport(Navigation::Fit);
+
+        assert_some_eq!(
+            viewport.image_position(Point::new(200.0, 200.0)),
+            Point::new(100.0, 50.0)
+        );
+        assert_none!(viewport.image_position(Point::new(200.0, 50.0)));
+        assert_some_eq!(
+            viewport.clamped_image_position(Point::new(-40.0, 380.0)),
+            Point::new(50.0, 75.0)
+        );
+    }
+
+    #[test]
+    fn panning_keeps_the_center_over_the_shown_area() {
+        let navigation = assert_some!(viewport(Navigation::Fit).pan(Vector::new(4000.0, -4000.0)));
+
+        assert_eq!(
+            navigation,
+            Navigation::Manual {
+                scale: 4.0,
+                center: Point::new(50.0, 75.0),
+            }
+        );
+    }
 }

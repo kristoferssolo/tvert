@@ -1,7 +1,7 @@
-use crate::edit::Edit;
+use crate::{crop::Crop, edit::Edit};
 use std::mem;
 
-/// A reversible change to the ordered edits.
+/// A reversible change to the ordered edits or the export crop.
 ///
 /// The history stacks hold the inverse of each applied change, so undoing
 /// a deletion reinserts the edit at its original position.
@@ -10,14 +10,26 @@ pub enum Change {
     Insert(usize, Edit),
     Remove(usize),
     Replace(usize, Edit),
+    /// Sets or clears the crop, which changes exports but not the preview
+    Crop(Option<Crop>),
 }
 
 impl Change {
+    /// Whether applying the change requires rendering the preview again
+    pub(super) const fn changes_pixels(&self) -> bool {
+        !matches!(self, Self::Crop(_))
+    }
+
     /// Applies the change and returns its inverse.
     ///
     /// An invalid index returns the rejected change without modifying edits.
-    pub(super) fn apply(self, edits: &mut Vec<Edit>) -> Result<Self, Self> {
+    pub(super) fn apply(
+        self,
+        edits: &mut Vec<Edit>,
+        crop: &mut Option<Crop>,
+    ) -> Result<Self, Self> {
         match self {
+            Self::Crop(next) => Ok(Self::Crop(mem::replace(crop, next))),
             Self::Insert(index, edit) if index <= edits.len() => {
                 edits.insert(index, edit);
                 Ok(Self::Remove(index))
@@ -60,7 +72,7 @@ mod tests {
     fn invalid_indices_leave_edits_unchanged(#[case] change: Change) {
         let mut edits = vec![edit()];
 
-        let _ = assert_err!(change.apply(&mut edits));
+        let _ = assert_err!(change.apply(&mut edits, &mut None));
 
         let [Edit::Annotation(annotation)] = edits.as_slice() else {
             panic!("the retained annotation changed");

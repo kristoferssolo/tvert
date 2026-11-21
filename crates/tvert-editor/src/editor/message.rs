@@ -1,5 +1,5 @@
 use crate::{
-    annotation::AnnotationDraft, export::ExportAction, size::SizeKind, tool::Tool,
+    annotation::AnnotationDraft, crop::Crop, export::ExportAction, size::SizeKind, tool::Tool,
     viewport::Navigation,
 };
 use iced::{Color, Vector};
@@ -12,6 +12,11 @@ pub enum Message {
     SelectionMode,
     SelectEdit(Option<usize>),
     DeleteSelected,
+    CropMode,
+    /// Proposes a crop while in crop mode
+    Crop(Crop),
+    /// Records the proposed crop as one history entry and leaves crop mode
+    ApplyCrop,
     Move(MoveMessage),
     Navigate(Navigation),
     Size(SizeMessage),

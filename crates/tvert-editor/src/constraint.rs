@@ -1,5 +1,5 @@
 use crate::Tool;
-use iced::{Point, Size, Vector};
+use iced::{Point, Rectangle, Vector};
 use std::f32::consts::FRAC_1_SQRT_2;
 
 /// Unit directions at every multiple of 45 degrees, in image coordinates
@@ -36,10 +36,10 @@ impl Constraint {
 
     /// Moves `end` so the drag from `start` satisfies the constraint.
     ///
-    /// Near an edge of an image of `image_size`, the drag shortens along its
-    /// constrained direction instead of being clamped per axis, so it keeps
-    /// its shape. `start` must lie within the image.
-    pub fn apply(self, start: Point, end: Point, image_size: Size) -> Point {
+    /// Near an edge of `area`, in image coordinates, the drag shortens along
+    /// its constrained direction instead of being clamped per axis, so it
+    /// keeps its shape. `start` must lie within `area`.
+    pub fn apply(self, start: Point, end: Point, area: Rectangle) -> Point {
         let delta = Vector::new(end.x - start.x, end.y - start.y);
         let (direction, length) = match self {
             Self::Square => (
@@ -58,8 +58,8 @@ impl Constraint {
                 .unwrap_or_default(),
         };
         let length = length
-            .min(room(start.x, direction.x, image_size.width))
-            .min(room(start.y, direction.y, image_size.height));
+            .min(room(start.x - area.x, direction.x, area.width))
+            .min(room(start.y - area.y, direction.y, area.height));
 
         Point::new(
             direction.x.mul_add(length, start.x),
@@ -81,9 +81,10 @@ fn room(start: f32, direction: f32, extent: f32) -> f32 {
 mod tests {
     use super::*;
     use claims::{assert_none, assert_some_eq};
+    use iced::Size;
     use rstest::rstest;
 
-    const IMAGE: Size = Size::new(200.0, 100.0);
+    const IMAGE: Rectangle = Rectangle::new(Point::ORIGIN, Size::new(200.0, 100.0));
 
     #[rstest]
     #[case::wider(Point::new(40.0, 20.0), Point::new(40.0, 40.0))]
@@ -112,6 +113,16 @@ mod tests {
         assert!(
             actual.distance(expected) < 0.001,
             "{actual:?} != {expected:?}"
+        );
+    }
+
+    #[test]
+    fn an_offset_area_shortens_the_drag_at_its_own_edge() {
+        let crop = Rectangle::new(Point::new(50.0, 20.0), Size::new(100.0, 50.0));
+        let start = Point::new(60.0, 30.0);
+        assert_eq!(
+            Constraint::Square.apply(start, Point::new(40.0, 40.0), crop),
+            Point::new(50.0, 40.0)
         );
     }
 

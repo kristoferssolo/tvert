@@ -20,19 +20,7 @@ pub struct EffectRegion {
 
 impl EffectRegion {
     pub fn pixel_ranges(&self, size: PixelSize) -> Result<(Range<usize>, Range<usize>), Error> {
-        let (width, height) = size.into();
-        let left = pixel_edge(f64::from(self.bounds.x).floor(), width)?;
-        let top = pixel_edge(f64::from(self.bounds.y).floor(), height)?;
-        let right = pixel_edge(
-            (f64::from(self.bounds.x) + f64::from(self.bounds.width)).ceil(),
-            width,
-        )?;
-        let bottom = pixel_edge(
-            (f64::from(self.bounds.y) + f64::from(self.bounds.height)).ceil(),
-            height,
-        )?;
-
-        Ok((left..right, top..bottom))
+        pixel_ranges(self.bounds, size)
     }
 
     pub fn draw_selection(&self, frame: &mut Frame, viewport: Viewport) {
@@ -71,6 +59,27 @@ impl EffectRegion {
 /// Limits a one-axis `offset` to keep `start..start + length` within `0..extent`
 fn shift(offset: f32, start: f32, length: f32, extent: f32) -> f32 {
     offset.min(extent - length - start).max(-start)
+}
+
+/// Covers `bounds`, in captured-image coordinates, with whole pixels of an
+/// image of `size`, clipped to the image
+pub fn pixel_ranges(
+    bounds: Rectangle,
+    size: PixelSize,
+) -> Result<(Range<usize>, Range<usize>), Error> {
+    let (width, height) = size.into();
+    let left = pixel_edge(f64::from(bounds.x).floor(), width)?;
+    let top = pixel_edge(f64::from(bounds.y).floor(), height)?;
+    let right = pixel_edge(
+        (f64::from(bounds.x) + f64::from(bounds.width)).ceil(),
+        width,
+    )?;
+    let bottom = pixel_edge(
+        (f64::from(bounds.y) + f64::from(bounds.height)).ceil(),
+        height,
+    )?;
+
+    Ok((left..right, top..bottom))
 }
 
 fn pixel_edge(value: f64, extent: u32) -> Result<usize, Error> {

@@ -18,6 +18,7 @@ impl Editor {
             self.image_preview(),
             toolbar::view(
                 tool,
+                self.mode,
                 tool.and_then(|tool| toolbar::color_control(
                     tool,
                     self.stroke_selection,
@@ -45,9 +46,11 @@ impl Editor {
 
     fn image_preview(&self) -> Element<'_, Message> {
         let padding = Padding::ZERO.top(toolbar::HEIGHT);
+        let visible = self.visible_area();
         let picture = canvas(ImageCanvas {
             preview: self.document.preview(),
             image_size: self.image_size,
+            visible,
             navigation: self.navigation,
             padding,
         })
@@ -56,6 +59,8 @@ impl Editor {
 
         let annotations = canvas(AnnotationCanvas {
             image_size: self.image_size,
+            visible,
+            crop: self.document.crop(),
             navigation: self.navigation,
             padding,
             tool: self.tool,

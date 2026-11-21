@@ -3,7 +3,7 @@ use crate::{
     viewport::{Navigation, Viewport},
 };
 use iced::{
-    Padding, Renderer, Size, Theme,
+    Padding, Rectangle, Renderer, Size, Theme,
     advanced::graphics::geometry::Frame,
     widget::{
         canvas::{Image, Program},
@@ -15,6 +15,8 @@ use iced::{
 pub struct ImageCanvas<'a> {
     pub preview: &'a Handle,
     pub image_size: Size,
+    /// The shown part of the image, or `None` for all of it
+    pub visible: Option<Rectangle>,
     pub navigation: Navigation,
     pub padding: Padding,
 }
@@ -29,9 +31,13 @@ impl Program<Message> for ImageCanvas<'_> {
         bounds: iced::Rectangle,
         _cursor: iced::advanced::mouse::Cursor,
     ) -> Vec<iced::widget::canvas::Geometry<Renderer>> {
-        let Some(viewport) =
-            Viewport::navigated(self.image_size, bounds, self.padding, self.navigation)
-        else {
+        let Some(viewport) = Viewport::navigated(
+            self.image_size,
+            self.visible,
+            bounds,
+            self.padding,
+            self.navigation,
+        ) else {
             return Vec::new();
         };
 

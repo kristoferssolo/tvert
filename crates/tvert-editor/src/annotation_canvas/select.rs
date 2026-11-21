@@ -71,7 +71,12 @@ impl AnnotationCanvas<'_> {
         viewport: Viewport,
         point: Point,
     ) -> Action<Message> {
-        let index = edit::topmost_hit(self.edits, viewport, point);
+        // Edits outside the crop are hidden, so they cannot be picked
+        let index = if viewport.visible().contains(point) {
+            edit::topmost_hit(self.edits, viewport, point)
+        } else {
+            None
+        };
         *state = index
             .and_then(|_| viewport.clamped_image_position(point))
             .map(|grab| {
@@ -143,6 +148,8 @@ mod tests {
     fn canvas<'a>(edits: &'a [Edit], cache: &'a Cache) -> AnnotationCanvas<'a> {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
+            visible: None,
+            crop: None,
             padding: Padding::ZERO,
             navigation: Navigation::Fit,
             tool: Tool::Rectangle,
@@ -174,6 +181,32 @@ mod tests {
 
     fn frame() -> Event {
         Event::Window(WindowEvent::RedrawRequested(Instant::now()))
+    }
+
+    #[rstest]
+    #[case::shown(Point::new(220.0, 240.0), Some(0))]
+    #[case::hidden_by_the_crop(Point::new(320.0, 240.0), None)]
+    fn only_edits_within_the_shown_area_can_be_selected(
+        #[case] click: Point,
+        #[case] expected: Option<usize>,
+    ) {
+        let edits = edits();
+        let cache = Cache::new();
+        let mut canvas = canvas(&edits, &cache);
+        // Shows image (0, 0)–(40, 100) at (140, 40)–(300, 440) on screen,
+        // over the full-image highlighter
+        canvas.visible = Some(Rectangle::new(Point::ORIGIN, Size::new(40.0, 100.0)));
+        let mut state = None;
+
+        let action = assert_some!(canvas.handle_event(
+            &mut state,
+            false,
+            &PRESS,
+            BOUNDS,
+            Cursor::Available(click)
+        ));
+
+        assert_some_eq!(action.into_inner().0, Message::SelectEdit(expected));
     }
 
     #[rstest]

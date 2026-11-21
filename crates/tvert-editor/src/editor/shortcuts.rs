@@ -8,6 +8,9 @@ use strum::VariantArray;
 /// Switches to selecting existing edits
 pub const SELECT_KEY: char = 'V';
 
+/// Switches to cropping the export
+pub const CROP_KEY: char = 'K';
+
 /// Publishes shortcut messages for keyboard events that no widget captured
 pub fn subscription(exports: ExportBindings) -> Subscription<Message> {
     event::listen_with(|event, status, _| {
@@ -34,7 +37,8 @@ pub fn reserved_by(binding: KeyBinding) -> Option<String> {
         Message::Redo => "redo".to_owned(),
         Message::SelectTool(tool) => format!("the {tool} tool"),
         Message::SelectionMode => "selection mode".to_owned(),
-        // Delete, Backspace, and Escape, which bindings cannot express
+        Message::CropMode => "crop mode".to_owned(),
+        // Delete, Backspace, Escape, and Enter, which bindings cannot express
         _ => "the selection".to_owned(),
     };
     Some(name)
@@ -61,6 +65,9 @@ pub fn tool(event: &Event) -> Option<Message> {
     }
     if SELECT_KEY.eq_ignore_ascii_case(&character) {
         return Some(Message::SelectionMode);
+    }
+    if CROP_KEY.eq_ignore_ascii_case(&character) {
+        return Some(Message::CropMode);
     }
     Tool::VARIANTS
         .iter()
@@ -99,6 +106,7 @@ fn selection(event: &Event) -> Option<Message> {
 
     match named {
         Named::Delete | Named::Backspace => Some(Message::DeleteSelected),
+        Named::Enter => Some(Message::ApplyCrop),
         Named::Escape => Some(Message::SelectEdit(None)),
         _ => None,
     }
@@ -192,7 +200,10 @@ mod tests {
         let bindings = Tool::VARIANTS
             .iter()
             .map(|&tool| (tool_key(tool), Message::SelectTool(tool)))
-            .chain([(SELECT_KEY, Message::SelectionMode)]);
+            .chain([
+                (SELECT_KEY, Message::SelectionMode),
+                (CROP_KEY, Message::CropMode),
+            ]);
 
         for (character, expected) in bindings {
             let character = character.to_ascii_lowercase().to_string();
@@ -268,6 +279,7 @@ mod tests {
     #[case(key::Named::Delete, Message::DeleteSelected)]
     #[case(key::Named::Backspace, Message::DeleteSelected)]
     #[case(key::Named::Escape, Message::SelectEdit(None))]
+    #[case(key::Named::Enter, Message::ApplyCrop)]
     fn acts_on_the_selection_only_with_uncaptured_keys(
         #[case] named: key::Named,
         #[case] expected: Message,

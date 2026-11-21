@@ -1,7 +1,7 @@
 use crate::{
     annotation::AnnotationDraft,
     annotation_canvas::{
-        AnnotationCanvas, Gesture, GestureState,
+        AnnotationCanvas, Gesture, GestureState, draw,
         navigate::{self, PanGesture},
     },
     editor::{Message, MoveMessage, shortcuts},
@@ -50,6 +50,7 @@ impl AnnotationCanvas<'_> {
                         Some(self.redraw())
                     }
                     Mode::Select(_) => Some(self.select_at(state, viewport, point)),
+                    Mode::Crop(_) => self.begin_crop(state, viewport, point),
                 }
             }
             Event::Mouse(MouseEvent::CursorMoved { position }) => {
@@ -58,6 +59,7 @@ impl AnnotationCanvas<'_> {
                     Gesture::Draw(draft) => self.record_motion(draft, local, viewport, shift),
                     Gesture::Move(gesture) => gesture.drag(local, viewport),
                     Gesture::Pan(gesture) => gesture.drag(local),
+                    Gesture::Crop(draft) => self.drag_crop(draft, local, viewport, shift),
                 }
             }
             Event::Mouse(MouseEvent::ButtonReleased(button)) => {
@@ -110,7 +112,7 @@ impl AnnotationCanvas<'_> {
         let gesture = state.take()?;
         self.cache.clear();
         let action = match gesture {
-            Gesture::Draw(_) | Gesture::Pan(_) => Action::request_redraw(),
+            Gesture::Draw(_) | Gesture::Pan(_) | Gesture::Crop(_) => Action::request_redraw(),
             Gesture::Move(_) => Action::publish(Message::Move(MoveMessage::Cancel)),
         };
         Some(if captured {
@@ -131,13 +133,16 @@ impl AnnotationCanvas<'_> {
         match (state.take()?, button) {
             (Gesture::Draw(mut draft), Button::Left) => {
                 if let Some(point) =
-                    position.and_then(|point| self.draft_position(&draft, point, viewport, shift))
+                    position.and_then(|point| draw::draft_position(&draft, point, viewport, shift))
                 {
                     draft.record(point);
                 }
                 Some(self.finish_draft(draft))
             }
             (Gesture::Move(gesture), Button::Left) => Some(gesture.release(position, viewport)),
+            (Gesture::Crop(draft), Button::Left) => {
+                Some(self.finish_crop(draft, position, viewport, shift))
+            }
             (Gesture::Pan(_), Button::Middle) => Some(Action::capture()),
             (gesture, _) => {
                 *state = Some(gesture);
@@ -170,6 +175,8 @@ mod tests {
     fn canvas(cache: &Cache, tool: Tool) -> AnnotationCanvas<'_> {
         AnnotationCanvas {
             image_size: Size::new(200.0, 100.0),
+            visible: None,
+            crop: None,
             navigation: Navigation::Fit,
             padding: Padding::ZERO,
             tool,

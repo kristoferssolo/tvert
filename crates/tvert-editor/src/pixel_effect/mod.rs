@@ -4,7 +4,7 @@ mod region;
 
 pub use blur::Blur;
 pub use pixelation::Pixelation;
-pub use region::EffectRegion;
+pub use region::{EffectRegion, pixel_ranges};
 
 use crate::{Error, viewport::Viewport};
 use iced::{Vector, widget::canvas::Frame};

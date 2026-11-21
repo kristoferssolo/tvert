@@ -2,6 +2,7 @@ mod annotation;
 mod annotation_canvas;
 mod color;
 mod constraint;
+mod crop;
 mod edit;
 mod editor;
 mod error;

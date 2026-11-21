@@ -1,3 +1,4 @@
+mod crop;
 mod draw;
 mod input;
 mod navigate;
@@ -5,7 +6,8 @@ mod select;
 
 use crate::{
     annotation::AnnotationDraft,
-    annotation_canvas::{navigate::PanGesture, select::MoveGesture},
+    annotation_canvas::{crop::CropDraft, navigate::PanGesture, select::MoveGesture},
+    crop::Crop,
     edit::Edit,
     editor::Message,
     mode::Mode,
@@ -15,7 +17,7 @@ use crate::{
 use iced::{
     Color, Padding, Rectangle, Renderer, Size, Theme, keyboard,
     mouse::{self, Cursor},
-    widget::canvas::{Cache, Program},
+    widget::canvas::{Cache, Frame, Program},
 };
 
 /// A pointer gesture in progress on the canvas.
@@ -30,6 +32,8 @@ pub enum Gesture {
     Move(MoveGesture),
     /// Dragging the view with the middle button
     Pan(PanGesture),
+    /// Dragging a replacement crop
+    Crop(CropDraft),
 }
 
 type GestureState = Option<Gesture>;
@@ -44,6 +48,9 @@ pub struct CanvasState {
 
 pub struct AnnotationCanvas<'a> {
     pub image_size: Size,
+    /// The shown part of the image, or `None` for all of it
+    pub visible: Option<Rectangle>,
+    pub crop: Option<Crop>,
     pub navigation: Navigation,
     pub padding: Padding,
     pub tool: Tool,
@@ -94,7 +101,10 @@ impl Program<Message> for AnnotationCanvas<'_> {
                 self.draw_selection(frame, viewport, theme);
             });
 
-        vec![geometry]
+        let mut overlay = Frame::new(renderer, bounds.size());
+        self.draw_crop(&mut overlay, viewport, state.gesture.as_ref(), theme);
+
+        vec![geometry, overlay.into_geometry()]
     }
 
     fn mouse_interaction(
@@ -112,7 +122,9 @@ impl Program<Message> for AnnotationCanvas<'_> {
             .and_then(|(viewport, point)| viewport.image_position(point))
             .is_some();
 
-        if self.mode == Mode::Draw && (over_image || state.gesture.is_some()) {
+        if matches!(self.mode, Mode::Draw | Mode::Crop(_))
+            && (over_image || state.gesture.is_some())
+        {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::None
@@ -122,6 +134,12 @@ impl Program<Message> for AnnotationCanvas<'_> {
 
 impl AnnotationCanvas<'_> {
     fn viewport(&self, bounds: Rectangle) -> Option<Viewport> {
-        Viewport::navigated(self.image_size, bounds, self.padding, self.navigation)
+        Viewport::navigated(
+            self.image_size,
+            self.visible,
+            bounds,
+            self.padding,
+            self.navigation,
+        )
     }
 }

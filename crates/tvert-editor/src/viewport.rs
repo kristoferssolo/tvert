@@ -3,6 +3,9 @@ use iced::{Padding, Point, Rectangle, Size, Vector};
 /// Largest zoom in viewport pixels per image pixel, unless fitting needs more
 const MAX_SCALE: f32 = 32.0;
 
+/// Smallest zoom, as a fraction of the fitted scale or of 1:1 if that is smaller
+const MIN_SCALE_FRACTION: f32 = 0.1;
+
 /// How the image is placed in the canvas.
 ///
 /// Session state: it never enters configuration, history, or retained geometry.
@@ -136,7 +139,10 @@ impl Viewport {
     }
 
     pub fn zoom(self, anchor: Point, factor: f32) -> Option<Navigation> {
-        let scale = (self.scale * factor).clamp(self.fit.min(1.0), self.fit.max(MAX_SCALE));
+        let scale = (self.scale * factor).clamp(
+            self.fit.min(1.0) * MIN_SCALE_FRACTION,
+            self.fit.max(MAX_SCALE),
+        );
         if scale.total_cmp(&self.scale).is_eq() {
             return None;
         }
@@ -322,5 +328,20 @@ mod tests {
                 center: Point::new(50.0, 75.0),
             }
         );
+    }
+
+    #[test]
+    fn zooming_out_stops_at_a_tenth_of_the_smaller_of_fit_and_one_to_one() {
+        let anchor = CANVAS.center();
+        let navigation = assert_some!(viewport(Navigation::Fit).zoom(anchor, 0.001));
+
+        assert_eq!(
+            navigation,
+            Navigation::Manual {
+                scale: 0.1,
+                center: AREA.center(),
+            }
+        );
+        assert_none!(viewport(navigation).zoom(anchor, 0.5));
     }
 }

@@ -122,12 +122,13 @@ impl Program<Message> for AnnotationCanvas<'_> {
             .and_then(|(viewport, point)| viewport.image_position(point))
             .is_some();
 
-        if matches!(self.mode, Mode::Draw | Mode::Crop(_))
-            && (over_image || state.gesture.is_some())
-        {
-            mouse::Interaction::Crosshair
-        } else {
-            mouse::Interaction::None
+        if !(over_image || state.gesture.is_some()) {
+            return mouse::Interaction::None;
+        }
+        match self.mode {
+            Mode::Draw if self.tool == Tool::Text => mouse::Interaction::Text,
+            Mode::Draw | Mode::Crop(_) => mouse::Interaction::Crosshair,
+            Mode::Select(_) => mouse::Interaction::None,
         }
     }
 }

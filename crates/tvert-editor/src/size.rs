@@ -8,6 +8,7 @@ pub enum SizeKind {
     StrokeWidth,
     BlockSize,
     BlurSigma,
+    FontSize,
 }
 
 impl SizeKind {
@@ -15,6 +16,7 @@ impl SizeKind {
         match self {
             Self::StrokeWidth => 1..=32,
             Self::BlockSize | Self::BlurSigma => 4..=64,
+            Self::FontSize => 8..=128,
         }
     }
 
@@ -24,6 +26,7 @@ impl SizeKind {
             Self::StrokeWidth => "stroke_width",
             Self::BlockSize => "pixelation_block_size",
             Self::BlurSigma => "blur_sigma",
+            Self::FontSize => "font_size",
         }
     }
 
@@ -32,6 +35,7 @@ impl SizeKind {
             Self::StrokeWidth => "Stroke width",
             Self::BlockSize => "Pixelation block size",
             Self::BlurSigma => "Blur strength",
+            Self::FontSize => "Font size",
         }
     }
 
@@ -50,6 +54,7 @@ impl Tool {
         match self {
             Self::Pixelate => SizeKind::BlockSize,
             Self::Blur => SizeKind::BlurSigma,
+            Self::Text => SizeKind::FontSize,
             _ => SizeKind::StrokeWidth,
         }
     }
@@ -61,6 +66,7 @@ pub struct Sizes {
     stroke_width: u16,
     block_size: u16,
     blur_sigma: u16,
+    font_size: u16,
 }
 
 impl Sizes {
@@ -69,6 +75,7 @@ impl Sizes {
             SizeKind::StrokeWidth => self.stroke_width,
             SizeKind::BlockSize => self.block_size,
             SizeKind::BlurSigma => self.blur_sigma,
+            SizeKind::FontSize => self.font_size,
         }
     }
 
@@ -80,6 +87,7 @@ impl Sizes {
             SizeKind::StrokeWidth => self.stroke_width = value,
             SizeKind::BlockSize => self.block_size = value,
             SizeKind::BlurSigma => self.blur_sigma = value,
+            SizeKind::FontSize => self.font_size = value,
         }
     }
 }
@@ -90,6 +98,7 @@ impl From<Settings> for Sizes {
             stroke_width: settings.stroke_width,
             block_size: settings.pixelation_block_size,
             blur_sigma: settings.blur_sigma,
+            font_size: settings.font_size,
         }
     }
 }

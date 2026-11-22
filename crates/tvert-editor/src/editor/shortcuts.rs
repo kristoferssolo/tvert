@@ -84,6 +84,7 @@ pub const fn tool_key(tool: Tool) -> char {
         Tool::Arrow => 'A',
         Tool::Pencil => 'P',
         Tool::Highlighter => 'H',
+        Tool::Text => 'T',
         Tool::Pixelate => 'X',
         Tool::Blur => 'B',
     }

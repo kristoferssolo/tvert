@@ -2,7 +2,7 @@ use crate::{
     annotation::AnnotationDraft, crop::Crop, export::ExportAction, size::SizeKind, tool::Tool,
     viewport::Navigation,
 };
-use iced::{Color, Vector};
+use iced::{Color, Point, Vector, widget::text_editor};
 use iced_color_triangle::Selection;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -20,6 +20,7 @@ pub enum Message {
     /// Clears the applied crop as one history entry, along with any proposal
     ResetCrop,
     Move(MoveMessage),
+    Text(TextMessage),
     Navigate(Navigation),
     Size(SizeMessage),
     ToggleColorPalette,
@@ -40,6 +41,17 @@ pub enum SizeMessage {
     Edit(SizeKind, String),
     /// Enter in the size field, which discards any unapplied text
     Submit,
+}
+
+/// Typing a text annotation in place
+#[derive(Debug, Clone, PartialEq)]
+pub enum TextMessage {
+    /// A click with the text tool, at its image position when over the image.
+    /// Records text being typed, or otherwise starts typing there.
+    Place(Option<Point>),
+    Edit(text_editor::Action),
+    /// Records the typed text as one history entry, discarding empty text
+    Commit,
 }
 
 /// Dragging the selected edit by offsets in captured-image pixels

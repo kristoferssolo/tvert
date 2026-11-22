@@ -5,9 +5,10 @@ mod movement;
 mod selection;
 pub mod shortcuts;
 mod size;
+mod text;
 mod view;
 
-pub use message::{Message, MoveMessage, SizeMessage};
+pub use message::{Message, MoveMessage, SizeMessage, TextMessage};
 
 use crate::{
     Error, Settings,
@@ -16,6 +17,7 @@ use crate::{
     editor::{
         document::{ApplyError, Change, Document},
         movement::Movement,
+        text::TextDraft,
     },
     export::ExportAction,
     mode::Mode,
@@ -52,6 +54,7 @@ pub struct Editor {
     export: ExportHandler,
     error: Option<Error>,
     movement: Option<Movement>,
+    text: Option<TextDraft>,
     cache: Cache,
 }
 
@@ -77,6 +80,7 @@ impl Editor {
             export,
             error: None,
             movement: None,
+            text: None,
             cache: Cache::new(),
         }
     }
@@ -84,6 +88,10 @@ impl Editor {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         if !matches!(message, Message::Move(_)) {
             self.cancel_move();
+        }
+        // Text being typed belongs before whatever acts on the document next
+        if !matches!(message, Message::Text(_) | Message::Navigate(_)) {
+            self.commit_text();
         }
         match message {
             Message::AddEdit(draft) => {
@@ -111,6 +119,7 @@ impl Editor {
             Message::ApplyCrop => self.apply_crop(),
             Message::ResetCrop => self.reset_crop(),
             Message::Move(message) => self.update_move(message),
+            Message::Text(message) => return self.update_text(message),
             Message::Navigate(navigation) => {
                 self.navigation = navigation;
                 return Task::none();
@@ -222,6 +231,7 @@ impl Editor {
                 stroke_width: 4,
                 pixelation_block_size: 16,
                 blur_sigma: 8,
+                font_size: 24,
                 export_bindings: ExportBindings::parse("Ctrl+C", "Ctrl+S", "Ctrl+Shift+C"),
             },
             Rc::new(|_, _| Ok(())),

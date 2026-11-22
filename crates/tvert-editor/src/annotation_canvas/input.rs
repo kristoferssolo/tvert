@@ -4,8 +4,9 @@ use crate::{
         AnnotationCanvas, Gesture, GestureState, draw,
         navigate::{self, PanGesture},
     },
-    editor::{Message, MoveMessage, shortcuts},
+    editor::{Message, MoveMessage, TextMessage, shortcuts},
     mode::Mode,
+    tool::Tool,
     viewport::Viewport,
 };
 use iced::{
@@ -44,6 +45,12 @@ impl AnnotationCanvas<'_> {
             {
                 let point = cursor.position_in(bounds)?;
                 match self.mode {
+                    Mode::Draw if self.tool == Tool::Text => Some(
+                        Action::publish(Message::Text(TextMessage::Place(
+                            viewport.image_position(point),
+                        )))
+                        .and_capture(),
+                    ),
                     Mode::Draw => {
                         let start = viewport.image_position(point)?;
                         *state = Some(Gesture::Draw(self.new_draft(start)));

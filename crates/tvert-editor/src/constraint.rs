@@ -30,7 +30,7 @@ impl Constraint {
                 Some(Self::Square)
             }
             Tool::Line | Tool::Arrow => Some(Self::Octant),
-            Tool::Pencil => None,
+            Tool::Pencil | Tool::Text => None,
         }
     }
 

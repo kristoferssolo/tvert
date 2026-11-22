@@ -18,6 +18,8 @@ pub enum Tool {
     Arrow,
     Pencil,
     Highlighter,
+    /// Places typed text at a click instead of drawing from a drag
+    Text,
     Pixelate,
     Blur,
 }
@@ -46,7 +48,7 @@ impl Tool {
             Self::Arrow => Box::new(ArrowFigure::new(start, end)),
             Self::Pencil => Box::new(PencilFigure::new(points)),
             Self::Highlighter => Box::new(HighlighterFigure::from(rectangle_between(start, end)?)),
-            Self::Pixelate | Self::Blur => return None,
+            Self::Text | Self::Pixelate | Self::Blur => return None,
         };
 
         Some(figure)

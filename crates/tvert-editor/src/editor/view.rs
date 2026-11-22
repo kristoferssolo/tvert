@@ -6,7 +6,7 @@ use crate::{
 };
 use iced::{
     Color, Padding,
-    widget::{canvas, column, container, opaque, space, stack, text},
+    widget::{canvas, column, container, opaque, responsive, space, stack, text},
 };
 use iced::{Element, Fill};
 use std::error::Error as StdError;
@@ -83,6 +83,10 @@ impl Editor {
             .height(Fill)
             .clip(true);
 
+        if self.text.is_some() {
+            preview = preview.push(responsive(move |size| self.typing_overlay(size, padding)));
+        }
+
         // Dismissing the palette must not start a drag on the image
         if self.color_palette_open {
             preview = preview.push(opaque(space().width(Fill).height(Fill)));
@@ -108,6 +112,7 @@ fn error_message(error: &dyn StdError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Tool, editor::TextMessage};
     use iced::advanced::{Layout, Shell, clipboard, layout, widget::Tree};
     use iced::mouse::{Button, Cursor, Event as MouseEvent};
     use iced::{Event, Font, Pixels, Point, Renderer, Size};
@@ -158,5 +163,16 @@ mod tests {
             [Message::AddEdit(_)]
         );
         assert_eq!(drag_across_preview(&editor(true)), []);
+    }
+
+    #[test]
+    fn the_text_tool_places_text_instead_of_drawing() {
+        let mut editor = editor(false);
+        let _ = editor.update(Message::SelectTool(Tool::Text));
+
+        assert_matches!(
+            drag_across_preview(&editor).as_slice(),
+            [Message::Text(TextMessage::Place(Some(_)))]
+        );
     }
 }

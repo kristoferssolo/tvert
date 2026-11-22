@@ -50,6 +50,7 @@ struct EditorConfig {
     stroke_width: u16,
     pixelation_block_size: u16,
     blur_sigma: u16,
+    font_size: u16,
     keybindings: KeyBindingsConfig,
 }
 
@@ -95,6 +96,7 @@ impl TryFrom<EditorConfig> for Settings {
             stroke_width: config.stroke_width,
             pixelation_block_size: config.pixelation_block_size,
             blur_sigma: config.blur_sigma,
+            font_size: config.font_size,
             export_bindings: ExportBindings {
                 copy: config.keybindings.copy,
                 save: config.keybindings.save,
@@ -280,6 +282,7 @@ mod tests {
     #[case("editor.blur_sigma = 3", "3")]
     #[case("['editor']\n'blur_sigma' = 3", "3")]
     #[case("[editor]\nstroke_width = 'wide'", "'wide'")]
+    #[case("[editor]\nfont_size = 200", "200")]
     #[case("[editor]\nstorke_width = 4", "storke_width")]
     #[case("editor = false", "false")]
     #[case("[save]\npath = ''", "''")]

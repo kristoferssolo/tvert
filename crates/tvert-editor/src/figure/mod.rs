@@ -4,6 +4,7 @@ mod highlighter;
 mod line;
 mod pencil;
 mod rectangle;
+mod text;
 
 pub use arrow::ArrowFigure;
 pub use ellipse::EllipseFigure;
@@ -11,6 +12,7 @@ pub use highlighter::HighlighterFigure;
 pub use line::LineFigure;
 pub use pencil::PencilFigure;
 pub use rectangle::RectangleFigure;
+pub use text::{FONT, LINE_HEIGHT, TextFigure, measure};
 
 use crate::viewport::Viewport;
 use iced::{

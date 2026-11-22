@@ -21,6 +21,8 @@ pub struct Settings {
     pub pixelation_block_size: u16,
     /// Blur sigma in image pixels
     pub blur_sigma: u16,
+    /// Text annotation font size in image pixels
+    pub font_size: u16,
     /// Shortcuts for copying and saving
     pub export_bindings: ExportBindings,
 }

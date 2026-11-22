@@ -121,6 +121,7 @@ const fn tool_icon(tool: Tool) -> Icon {
         Tool::Arrow => Icon::ArrowRight,
         Tool::Pencil => Icon::Pencil,
         Tool::Highlighter => Icon::Highlighter,
+        Tool::Text => Icon::Type,
         Tool::Pixelate => Icon::Grid2x2,
         Tool::Blur => Icon::CloudFog,
     }

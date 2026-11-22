@@ -28,14 +28,21 @@ const ICON_FONT: Font = Font::with_name("lucide");
 pub const HEIGHT: f32 = 44.0;
 pub const MIN_WIDTH: f32 = 800.0;
 
+/// Toolbar actions that currently apply; the others render disabled
+#[derive(Debug, Clone, Copy)]
+pub struct Actions {
+    pub undo: bool,
+    pub redo: bool,
+    pub reset_crop: bool,
+}
+
 /// Builds the editor's drawing, history, appearance, and export controls
 pub fn view(
     selected: Option<Tool>,
     mode: Mode,
     color_control: Option<Element<'static, Message>>,
     size_control: Option<Element<'static, Message>>,
-    can_undo: bool,
-    can_redo: bool,
+    actions: Actions,
     exports: ExportBindings,
 ) -> Element<'static, Message> {
     let select = icon_button(
@@ -66,19 +73,25 @@ pub fn view(
         .push(icon_button(
             Icon::Undo2,
             "Undo (Ctrl+Z)".into(),
-            can_undo.then_some(Message::Undo),
+            actions.undo.then_some(Message::Undo),
             false,
         ))
         .push(icon_button(
             Icon::Redo2,
             "Redo (Ctrl+Y / Ctrl+Shift+Z)".into(),
-            can_redo.then_some(Message::Redo),
+            actions.redo.then_some(Message::Redo),
             false,
         ))
         .push(icon_button(
             Icon::Maximize,
             "Fit image (scroll to zoom, middle-drag to pan)".into(),
             Some(Message::Navigate(Navigation::Fit)),
+            false,
+        ))
+        .push(icon_button(
+            Icon::Expand,
+            "Reset crop".into(),
+            actions.reset_crop.then_some(Message::ResetCrop),
             false,
         ))
         .push(separator())

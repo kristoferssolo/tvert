@@ -17,6 +17,8 @@ pub enum Message {
     Crop(Crop),
     /// Records the proposed crop as one history entry and leaves crop mode
     ApplyCrop,
+    /// Clears the applied crop as one history entry, along with any proposal
+    ResetCrop,
     Move(MoveMessage),
     Navigate(Navigation),
     Size(SizeMessage),

@@ -31,8 +31,11 @@ impl Editor {
                     self.size_input.as_deref(),
                     self.initial_settings
                 )),
-                self.document.can_undo(),
-                self.document.can_redo(),
+                toolbar::Actions {
+                    undo: self.document.can_undo(),
+                    redo: self.document.can_redo(),
+                    reset_crop: self.document.crop().is_some(),
+                },
                 self.initial_settings.export_bindings
             ),
         ]];

@@ -109,6 +109,7 @@ impl Editor {
                 }
             }
             Message::ApplyCrop => self.apply_crop(),
+            Message::ResetCrop => self.reset_crop(),
             Message::Move(message) => self.update_move(message),
             Message::Navigate(navigation) => {
                 self.navigation = navigation;

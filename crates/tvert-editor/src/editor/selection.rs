@@ -43,6 +43,20 @@ impl Editor {
         self.set_mode(Mode::Draw);
     }
 
+    /// Clears the crop as one history entry, drops any proposal, and fits
+    /// the whole image. Does nothing without a crop.
+    pub(super) fn reset_crop(&mut self) {
+        if self.document.crop().is_none()
+            || !self.update_document(|document| document.record(Change::Crop(None)))
+        {
+            return;
+        }
+        if let Mode::Crop(proposed) = &mut self.mode {
+            *proposed = None;
+        }
+        self.navigation = Navigation::Fit;
+    }
+
     /// Crop mode shows the whole image and other modes show only the crop,
     /// so crossing that boundary with a crop set refits the view
     fn set_mode(&mut self, mode: Mode) {
@@ -223,5 +237,60 @@ mod tests {
 
         assert_none!(editor.document.crop());
         assert!(!editor.document.can_undo());
+    }
+
+    #[test]
+    fn resetting_clears_the_crop_as_one_undoable_step() {
+        let mut editor = Editor::for_test(4, 4, vec![0; 64]);
+        let crop = assert_some!(Crop::from_drag(
+            Point::new(1.0, 1.0),
+            Point::new(3.0, 3.0),
+            editor.image_size
+        ));
+        let proposal = assert_some!(Crop::from_drag(
+            Point::ORIGIN,
+            Point::new(2.0, 2.0),
+            editor.image_size
+        ));
+
+        for message in [
+            Message::CropMode,
+            Message::Crop(crop),
+            Message::ApplyCrop,
+            Message::CropMode,
+            Message::Crop(proposal),
+            Message::Navigate(Navigation::Manual {
+                scale: 8.0,
+                center: Point::new(2.0, 2.0),
+            }),
+            Message::ResetCrop,
+        ] {
+            let _ = editor.update(message);
+        }
+
+        assert_none!(editor.document.crop());
+        assert_eq!(editor.mode, Mode::Crop(None));
+        assert_eq!(editor.navigation, Navigation::Fit);
+
+        let _ = editor.update(Message::Undo);
+        assert_some_eq!(editor.document.crop(), crop);
+        let _ = editor.update(Message::Undo);
+        assert_none!(editor.document.crop());
+        assert!(!editor.document.can_undo());
+    }
+
+    #[test]
+    fn resetting_without_a_crop_records_nothing() {
+        let mut editor = Editor::for_test(4, 4, vec![0; 64]);
+        let zoomed = Navigation::Manual {
+            scale: 8.0,
+            center: Point::new(2.0, 2.0),
+        };
+
+        let _ = editor.update(Message::Navigate(zoomed));
+        let _ = editor.update(Message::ResetCrop);
+
+        assert!(!editor.document.can_undo());
+        assert_eq!(editor.navigation, zoomed);
     }
 }

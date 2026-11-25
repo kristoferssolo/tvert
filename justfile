@@ -145,7 +145,11 @@ audit:
 clean:
     cargo clean
 
-# Install development tools used by this Justfile
+# Recipes need the pinned tools first on PATH: activate mise
+# (https://mise.jdx.dev/getting-started.html#activate-mise) or run
+# `mise exec -- just <recipe>`
+
+# Install the development tools pinned in mise.toml
 [group("maintenance")]
 setup:
     mise install

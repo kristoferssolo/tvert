@@ -148,4 +148,4 @@ clean:
 # Install development tools used by this Justfile
 [group("maintenance")]
 setup:
-    cargo install cargo-nextest bacon cargo-audit
+    mise install

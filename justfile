@@ -15,11 +15,11 @@ alias t := test
 default:
     @just --list
 
-# Run local pre-commit checks, formatting the workspace first
+# Run the full pre-commit workflow
 [group("checks")]
-ci: fmt clippy test doc
+ci: fmt check
 
-# Run the same checks as CI without modifying files
+# Run formatting, Clippy, test, and documentation checks
 [group("checks")]
 check: fmt-check clippy test doc
 
@@ -145,7 +145,11 @@ audit:
 clean:
     cargo clean
 
-# Install development tools used by this Justfile
+# Recipes need the pinned tools first on PATH: activate mise
+# (https://mise.jdx.dev/getting-started.html#activate-mise) or run
+# `mise exec -- just <recipe>`
+
+# Install the development tools pinned in mise.toml
 [group("maintenance")]
 setup:
-    cargo install cargo-nextest bacon cargo-audit
+    mise install

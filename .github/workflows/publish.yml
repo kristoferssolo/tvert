@@ -25,6 +25,8 @@ jobs:
       version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-tags: true
       - name: Install Rust toolchain from rust-toolchain.toml
         run: rustup toolchain install
       - name: Resolve and validate release metadata
@@ -53,6 +55,13 @@ jobs:
           )"
           if [[ "$manifest_version" != "$version" ]]; then
               echo "::error::tvert-cli is version $manifest_version, not $version"
+              exit 1
+          fi
+
+          # Builds use this commit, and GitHub releases an existing tag as it is
+          if tag_commit="$(git rev-parse --quiet --verify "refs/tags/v$version^{commit}")" &&
+              [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+              echo "::error::v$version points to $tag_commit, not $GITHUB_SHA"
               exit 1
           fi
 
@@ -142,9 +151,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # A manual run can release a tag that does not exist yet
+          # A manual run can release a tag that does not exist yet. An existing tag
+          # is HEAD, as the metadata job checked
           if git rev-parse --quiet --verify "refs/tags/$TAG" >/dev/null; then
-              git checkout --quiet --detach "$TAG"
               git cliff --current --strip all --output "$NOTES_PATH"
           else
               git cliff --unreleased --tag "$TAG" --strip all --output "$NOTES_PATH"

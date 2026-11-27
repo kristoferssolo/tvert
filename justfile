@@ -144,7 +144,7 @@ audit:
 # Regenerate CHANGELOG.md; pass --tag vX.Y.Z to name unreleased changes
 [group("release")]
 changelog *ARGS:
-    origin="$(git remote get-url origin 2>/dev/null || true)"; repo="${origin#*github.com[:/]}"; \
+    origin="$(git remote get-url origin 2>/dev/null || true)"; repo="${origin#*github.com[:/]}"; repo="${repo#443/}"; \
         GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-${repo%.git}}" git cliff --output CHANGELOG.md {{ ARGS }}
 
 # Remove build artifacts

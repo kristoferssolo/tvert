@@ -1,0 +1,46 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  check:
+    name: ${{ matrix.recipe }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        recipe: [fmt-check, clippy, test, doc]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install Rust toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - name: Install just and nextest
+        uses: jdx/mise-action@v5
+        with:
+          version: 2026.11.14
+          install_args: --locked just cargo-nextest
+      - name: Populate target directory from cache
+        uses: Swatinem/rust-cache@v2
+      - name: Verify Cargo.lock is up to date
+        run: cargo fetch --locked
+      - name: Run just ${{ matrix.recipe }}
+        run: just ${{ matrix.recipe }}
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/audit@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

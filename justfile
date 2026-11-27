@@ -156,7 +156,10 @@ clean:
 # (https://mise.jdx.dev/getting-started.html#activate-mise) or run
 # `mise exec -- just <recipe>`
 
-# Install the development tools pinned in mise.toml
+# mise builds cargo tools outside the checkout, where rust-toolchain.toml does not apply,
+# so RUSTUP_TOOLCHAIN passes the repository toolchain to them.
+# Install the Rust toolchain and the tools pinned in mise.toml
 [group("maintenance")]
 setup:
-    mise install
+    rustup toolchain install
+    toolchain="$(rustup show active-toolchain)"; RUSTUP_TOOLCHAIN="${toolchain%% *}" mise install

@@ -102,7 +102,7 @@ jobs:
           archive="tvert-$VERSION-$TARGET"
           mkdir -p "dist/$archive"
           install -m 0755 "target/$TARGET/release/tvert" "dist/$archive/tvert"
-          cp LICENSE-APACHE LICENSE-MIT "dist/$archive/"
+          cp LICENSE-APACHE LICENSE-MIT README.md "dist/$archive/"
           tar -C dist -czf "dist/$archive.tar.gz" "$archive"
           (
               cd dist

@@ -44,3 +44,5 @@ jobs:
       - uses: actions-rust-lang/audit@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # The job summary reports findings; the token cannot write issues
+          createIssues: false

@@ -125,11 +125,6 @@ watch:
 bench *ARGS:
     cargo bench --workspace -- {{ ARGS }}
 
-# Preview release notes for unreleased commits, e.g. `just changelog --tag v0.1.0`
-[group("release")]
-changelog *ARGS:
-    git cliff --unreleased {{ ARGS }}
-
 # Show dependency updates without modifying Cargo.lock
 [group("dependencies")]
 outdated:
@@ -144,6 +139,13 @@ update:
 [group("dependencies")]
 audit:
     cargo audit
+
+# cliff.toml falls back to GITHUB_REPOSITORY for links when the branch has no upstream
+# Regenerate CHANGELOG.md; pass --tag vX.Y.Z to name unreleased changes
+[group("release")]
+changelog *ARGS:
+    origin="$(git remote get-url origin 2>/dev/null || true)"; repo="${origin#*github.com[:/]}"; \
+        GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-${repo%.git}}" git cliff --output CHANGELOG.md {{ ARGS }}
 
 # Remove build artifacts
 [group("maintenance")]

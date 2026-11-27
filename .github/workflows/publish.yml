@@ -143,11 +143,11 @@ jobs:
           set -euo pipefail
 
           # A manual run can release a tag that does not exist yet
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-              git checkout -q --detach "$TAG"
-              git cliff --current --output "$NOTES_PATH"
+          if git rev-parse --quiet --verify "refs/tags/$TAG" >/dev/null; then
+              git checkout --quiet --detach "$TAG"
+              git cliff --current --strip all --output "$NOTES_PATH"
           else
-              git cliff --unreleased --tag "$TAG" --output "$NOTES_PATH"
+              git cliff --unreleased --tag "$TAG" --strip all --output "$NOTES_PATH"
           fi
       - name: Download tvert binaries
         uses: actions/download-artifact@v8

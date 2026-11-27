@@ -1,0 +1,52 @@
+# https://git-cliff.org/docs/configuration
+# Links use the upstream remote of the current branch, or GITHUB_REPOSITORY in GitHub Actions,
+# where the release checks out a detached tag. Neither makes git-cliff call the GitHub API
+
+[changelog]
+header = """
+# Changelog\n
+"""
+body = """
+{%- if remote.github.owner -%}
+    {%- set repo = "https://github.com/" ~ remote.github.owner ~ "/" ~ remote.github.repo -%}
+{%- else -%}
+    {%- set repo = get_env(name="GITHUB_SERVER_URL", default="https://github.com") ~ "/" ~ get_env(name="GITHUB_REPOSITORY", default="") -%}
+{%- endif -%}
+{% if version -%}
+    ## [{{ version | trim_start_matches(pat="v") }}]({{ repo }}/releases/tag/{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+    ## Unreleased
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim }}
+    {% for commit in commits %}
+        - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+            {{ commit.message | upper_first }} \
+            ([{{ commit.id | truncate(length=7, end="") }}]({{ repo }}/commit/{{ commit.id }}))\
+    {% endfor %}
+{% endfor %}
+{%- if previous.version %}
+    **Full changelog:** {{ repo }}/compare/{{ previous.version }}...{{ version | default(value="HEAD") }}
+{% endif %}\n
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+# Groups sort by the leading HTML comment, which `striptags` removes from headings
+commit_parsers = [
+    # A merge commit repeats its pull request title, which is already listed
+    { field = "merge_commit", pattern = "true", skip = true },
+    # First, so a breaking change is listed whatever its type
+    { field = "breaking", pattern = "true", group = "<!-- 0 -->Breaking changes" },
+    { message = "^feat", group = "<!-- 1 -->Features" },
+    { message = "^fix", group = "<!-- 2 -->Bug fixes" },
+    { message = "^perf", group = "<!-- 3 -->Performance" },
+    { message = "^refactor", group = "<!-- 4 -->Refactoring" },
+    { message = "^docs", group = "<!-- 5 -->Documentation" },
+    { message = ".*", skip = true },
+]
+# Matches the tags that publish.yml releases
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+sort_commits = "oldest"

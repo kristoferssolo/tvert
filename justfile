@@ -125,6 +125,11 @@ watch:
 bench *ARGS:
     cargo bench --workspace -- {{ ARGS }}
 
+# Preview release notes for unreleased commits, e.g. `just changelog --tag v0.1.0`
+[group("release")]
+changelog *ARGS:
+    git cliff --unreleased {{ ARGS }}
+
 # Show dependency updates without modifying Cargo.lock
 [group("dependencies")]
 outdated:

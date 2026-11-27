@@ -1,5 +1,6 @@
 [tools]
 just = "1.59.0"
 cargo-nextest = "0.9.152"
+git-cliff = "2.14.2"
 "cargo:bacon" = "3.26.0"
 "cargo:cargo-audit" = "0.23.0"
